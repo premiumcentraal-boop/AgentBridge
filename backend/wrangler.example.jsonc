@@ -1,0 +1,12 @@
+{
+  "name": "agentbridge-api",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-11-08",
+  "workers_dev": false,
+  "d1_databases": [{"binding":"DB","database_name":"agentbridge-prototype","database_id":"REPLACE_WITH_YOUR_D1_DATABASE_ID"}],
+  "vars": {
+    "PUBLIC_BASE_URL": "https://api.example.com",
+    "US_BRIDGE_DID": "+12025550123",
+    "TEST_DESTINATION_E164": "+31201234567"
+  }
+}
