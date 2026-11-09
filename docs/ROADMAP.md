@@ -19,6 +19,7 @@ Last revised: 2026-11-09. Read [NORTH_STAR.md](NORTH_STAR.md) first.
 - [x] Strict MCP JSON-RPC envelope and tool argument validation (PR #5; branch CI passed before merge)
 - [x] SignalWire BYO read-only number inventory, signed SWML fail-closed webhook with streaming byte cap and strict UTF-8 validation, offline phone bridge serializer and regression tests (proposed; **paid routing disabled**)
 - [x] MCP read-only chat-number cards: truthful setup, scoped SignalWire DID check, five-candidate lookup and optional MCP Apps resource (PR under review; host compatibility unverified, not deployed, no purchases)
+- [ ] Review and verify single-operator read-only local stdio MCP adapter on an actual compatible host (PR pending; no Grok Bot compatibility claim)
 - [ ] Provider-linked multi-user onboarding, exact number quotes, signed one-use chat purchase approvals and carrier purchase reconciliation
 - [ ] Secure multi-user SignalWire project credentials, DID ownership, cryptographic call authorization, verified quotes/billing and reliable carrier callbacks
 - [x] Strict reservation expiry boundaries and terminal idempotent retries; no stale access number after expiry (PR pending)
