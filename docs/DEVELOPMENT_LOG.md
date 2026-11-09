@@ -14,3 +14,12 @@ Append one dated entry for each substantial incremental development session. Lin
 - Added the [P1 native Grok Bot international test call acceptance issue](https://github.com/premiumcentraal-boop/AgentBridge/issues/1).
 - Verified through the GitHub connector that the source files, North Star, CI workflow and deployment workflow exist in main.
 - Not verified: actual automated CI success, deployment URL accessibility, live telecom integration, and real native Grok Bot international call.
+
+## 2026-11-09 — MCP request validation hardening (review pending)
+- Inspected North Star, roadmap, log, README, main backend/tests and open PRs #2 and #4 plus issues #1 and #3.
+- Added a standalone strict JSON-RPC 2.0 envelope validator and integrated it before MCP tool dispatch.
+- Malformed batches/scalars, missing or invalid IDs, incorrect protocol versions, unknown methods/tools, malformed tool arguments and unexpected arguments are now rejected before any call reservation or cancellation.
+- Added dedicated Node regression tests for accepted and denied requests.
+- Independent of open inbound caller security PR #2 and website quality PR #4; no telephony routing, pricing, carrier integration or public site changes.
+- Verification limitation: attempted `git clone` and `npm run ci` locally, but DNS resolution of github.com failed before cloning; CI results must be checked before merge.
+- No real calls, provider secrets, public deployment, payments or merges.
