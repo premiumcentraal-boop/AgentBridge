@@ -59,3 +59,8 @@ Append one dated entry for each substantial incremental development session. Lin
 - Audited signed dial-complete handling: any status other than `completed`, including missing and intermediate values, previously released a `connecting` reservation as `failed` even without proof of carrier termination.
 - Added an explicit terminal-status allowlist, strict parent CallSid shape check and duplicate-sensitive-field rejection. Unknown/ambiguous callbacks now preserve the active lock for future reconciliation instead of prematurely permitting another chargeable leg.
 - Added offline signed-webhook regression tests for malformed, missing, intermediate, duplicate and known terminal statuses. Durable event replay protection, provider-state reconciliation and cryptographic per-call origin proof remain P0 blockers (issue #3). No carrier calls or public deployment.
+
+## 2026-11-09 — Reject ambiguous signed Twilio inbound identities (PR #13 extension)
+- Hardened the inbound Twilio handler to require exactly one `To`, `From`, and `CallSid` form value after signature validation, before any reservation lookup. Even correctly signed duplicate fields cannot select an ambiguous identity and consume a routing reservation.
+- Added offline signed-webhook tests for identical and conflicting duplicates, missing identity fields, and the legitimate single-value private-test route.
+- This is defense in depth; Twilio signatures and caller ID do not establish cryptographic per-call authorization. Paid routing stays default-deny and issue #3 remains a production blocker. No live calls or deployment.
