@@ -3,6 +3,8 @@ import {SIGNALWIRE_SWML_PATH,handleSignalWireSwml} from './signalwire.mjs';
 import {readBoundedWebhookBody} from './bounded-body.mjs';
 import {getBridgeSetup,listMyNumbers,searchAvailableNumbers} from './chat-number-tools.mjs';
 import {NUMBER_CARD_URI,numberCardResource,readNumberCardResource} from './chat-card.mjs';
+import {blockedReason,destinationDecision,reservationTtlSeconds,maxCostCents,routingCaps,signalWireReservationsConfigured} from './routing-policy.mjs';
+import {callerProofMode,generatePin,pinHash} from './caller-proof.mjs';
 /**
  * AgentBridge reference backend — intentionally fail-closed.
  * This is NOT a publicly deployable calling reseller: it only routes to one
@@ -11,7 +13,6 @@ import {NUMBER_CARD_URI,numberCardResource,readNumberCardResource} from './chat-
  */
 const JSON_HEADERS={'content-type':'application/json; charset=utf-8','cache-control':'no-store'};
 const E164=/^\+[1-9]\d{7,14}$/;
-const MAX_TTL_SECONDS=90;
 const MAX_CALL_SECONDS=180;
 
 export function validateE164(value){return typeof value==='string'&&E164.test(value);}
@@ -26,6 +27,8 @@ function json(data,status=200){return new Response(JSON.stringify(data),{status,
 function twiml(body){return new Response(body,{status:200,headers:{'content-type':'application/xml; charset=utf-8','cache-control':'no-store'}});}
 function error(code,message,status=400){return json({error:{code,message}},status);}
 function requireMcpEnv(env){return Boolean(env.DB&&validateE164(env.US_BRIDGE_DID));}
+/** Reservation REST/MCP needs either the legacy Twilio config or a SignalWire-only config. Neither enables routing by itself. */
+function reservationApiReady(env){return Boolean(env.DB&&validateE164(env.US_BRIDGE_DID)&&(requireEnv(env)||signalWireReservationsConfigured(env)));}
 function requireEnv(env){return Boolean(env.DB&&env.PUBLIC_BASE_URL?.startsWith('https://')&&validateE164(env.US_BRIDGE_DID)&&validateE164(env.TEST_DESTINATION_E164)&&validateE164(env.TEST_CALLER_E164)&&env.TWILIO_AUTH_TOKEN);}
 function rawHex(bytes){return [...new Uint8Array(bytes)].map(x=>x.toString(16).padStart(2,'0')).join('');}
 export async function sha256(text){return rawHex(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)));}
@@ -68,7 +71,10 @@ export async function prepareReservation(account,requestData,env){
   if(destination===env.US_BRIDGE_DID)return {status:422,body:{error:{code:'INVALID_DESTINATION',message:'Cannot call the access number itself'}}};
   // Deliberately only a consenting, preapproved test number until billing,
   // anti-fraud and country-by-country regulatory approval are complete.
-  if(destination!==env.TEST_DESTINATION_E164)return {status:403,body:{error:{code:'TEST_DESTINATION_ONLY',message:'Prototype permits only the configured test destination'}}};
+  if(blockedReason(destination,env))return {status:403,body:{error:{code:'DESTINATION_BLOCKED',message:'Emergency, premium, special-service and non-allowlisted ranges cannot be reserved'}}};
+  const swRouting=signalWireReservationsConfigured(env);
+  const policy=swRouting?destinationDecision(destination,env):null;
+  if(!(policy?.ok||destination===env.TEST_DESTINATION_E164))return {status:403,body:{error:{code:'TEST_DESTINATION_ONLY',message:'Prototype permits only owner-allowlisted test destinations'}}};
   const key=requestData?.idempotency_key;
   if(typeof key!=='string'||!/^[A-Za-z0-9_.:-]{8,96}$/.test(key))return {status:422,body:{error:{code:'INVALID_IDEMPOTENCY_KEY',message:'Supply a unique 8–96 character request key'}}};
   const now=Math.floor(Date.now()/1000);
@@ -80,9 +86,25 @@ export async function prepareReservation(account,requestData,env){
   const count=await env.DB.prepare('SELECT COUNT(*) AS n FROM reservations WHERE account_id=? AND created_at >= ?').bind(account.id,now-3600).first();
   if(Number(count?.n||0)>=10)return {status:429,body:{error:{code:'RATE_LIMIT',message:'Prototype hourly request limit reached'}}};
   const id=crypto.randomUUID();
-  try{await env.DB.prepare("INSERT INTO reservations (id,account_id,destination,idempotency_key,status,created_at,expires_at) VALUES (?,?,?,?, 'ready',?,?)").bind(id,account.id,destination,key,now,now+MAX_TTL_SECONDS).run();}
+  const ttl=reservationTtlSeconds(env);
+  const mode=swRouting&&policy?.ok?callerProofMode(env):'none';
+  const pin=mode==='dtmf_pin'?generatePin():null;
+  try{
+    if(swRouting&&policy?.ok)await env.DB.prepare("INSERT INTO reservations (id,account_id,destination,idempotency_key,status,created_at,expires_at,pin_sha256) VALUES (?,?,?,?, 'ready',?,?,?)").bind(id,account.id,destination,key,now,now+ttl,pin?await pinHash(id,pin):null).run();
+    else await env.DB.prepare("INSERT INTO reservations (id,account_id,destination,idempotency_key,status,created_at,expires_at) VALUES (?,?,?,?, 'ready',?,?)").bind(id,account.id,destination,key,now,now+ttl).run();
+  }
   catch{return {status:409,body:{error:{code:'BRIDGE_BUSY',message:'A reservation is already active. Retry after it is closed'}}};}
-  return {status:201,body:reservationView({id,destination,status:'ready',expires_at:now+MAX_TTL_SECONDS},account.did,now)};
+  const body=reservationView({id,destination,status:'ready',expires_at:now+ttl},account.did,now);
+  if(swRouting&&policy?.ok){
+    const caps=routingCaps(env,mode);
+    body.owner_approval_required=true;
+    body.caller_proof=mode;
+    body.estimate={rate_cents_per_min:policy.entry.rate_cents_per_min,rate_source:policy.entry.rate_source,
+      max_call_seconds:caps?.maxSeconds??null,max_cost_cents:caps?maxCostCents(policy.entry,caps.maxSeconds):null,price_verified:false};
+    if(pin){body.dtmf_pin=pin;body.dtmf_instructions='After the call connects, send these 8 digits followed by #. Shown once; single use.';}
+    body.warning='Not routable until the owner approves it out-of-band. Routing also requires both owner flags. Estimate uses the owner-recorded rate, not a live quote.';
+  }
+  return {status:201,body};
 }
 function reservationView(item,did,now=Math.floor(Date.now()/1000)){const status=item.status==='ready'&&item.expires_at<=now?'expired':item.status;return {id:item.id,destination:item.destination,us_access_number:status==='ready'?did:null,status,expires_at:new Date(item.expires_at*1000).toISOString(),max_call_seconds:MAX_CALL_SECONDS,warning:status==='ready'?'Verify destination and obtain user approval before Grok Bot places its native US call. Prototype only; no live quote or billing.':'This reservation cannot be used to place a call. Create a new reservation with a new idempotency key.'};}
 async function getReservation(account,id,env){const row=await env.DB.prepare('SELECT id,destination,status,expires_at FROM reservations WHERE id=? AND account_id=?').bind(id,account.id).first();return row?json(reservationView(row,account.did)):error('NOT_FOUND','Reservation not found',404);}
@@ -110,7 +132,8 @@ async function incoming(request,env){
   // unknown caller IDs BEFORE reading or consuming a reservation.
   if(to!==env.US_BRIDGE_DID||!approvedTestCaller(from,env)||!/^CA[a-f0-9]{32}$/i.test(sid||''))return twiml(hangupXml());
   const now=Math.floor(Date.now()/1000);
-  const row=await env.DB.prepare("SELECT r.id,r.destination FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE a.did=? AND a.status='active' AND r.status='ready' AND r.expires_at>? ORDER BY r.created_at DESC LIMIT 1").bind(to,now).first();
+  const approval=OWNER_HASH.test(env.OWNER_APPROVAL_TOKEN_SHA256||'')?" AND r.approved_at IS NOT NULL":'';
+  const row=await env.DB.prepare("SELECT r.id,r.destination FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE a.did=? AND a.status='active' AND r.status='ready' AND r.expires_at>?"+approval+" ORDER BY r.created_at DESC LIMIT 1").bind(to,now).first();
   if(!row||row.destination!==env.TEST_DESTINATION_E164)return twiml(hangupXml());
   // Explicit private-test kill switch: a deployed prototype must NEVER
   // originate an international leg simply because a valid reservation exists.
@@ -138,6 +161,29 @@ async function dialComplete(request,env){
   await env.DB.prepare("UPDATE reservations SET status=?,completed_at=? WHERE call_sid=? AND status='connecting'").bind(final,Math.floor(Date.now()/1000),sid).run();
   return twiml(hangupXml());
 }
+const OWNER_HASH=/^[a-f0-9]{64}$/;
+/**
+ * Owner-only, out-of-band approval (two-step). Authenticated with a separate
+ * owner token whose SHA-256 is OWNER_APPROVAL_TOKEN_SHA256. The account/MCP
+ * bearer token used by the chat agent can never approve its own reservation.
+ */
+async function ownerRoute(request,url,env){
+  if(!env.DB||!OWNER_HASH.test(env.OWNER_APPROVAL_TOKEN_SHA256||''))return error('NOT_CONFIGURED','Owner approval is not configured',503);
+  if(request.method!=='POST')return error('METHOD_NOT_ALLOWED','POST required',405);
+  const auth=request.headers.get('authorization')||'';
+  const token=auth.startsWith('Bearer ')?auth.slice(7).trim():'';
+  if(token.length<32||token.length>256||!safeEqual(await sha256(token),env.OWNER_APPROVAL_TOKEN_SHA256))return error('UNAUTHORIZED','Owner approval token required',401);
+  const m=url.pathname.match(/^\/v1\/owner\/reservations\/([a-f0-9-]{36})\/(approve|mark-ended)$/i);
+  if(!m)return error('NOT_FOUND','Route not found',404);
+  const now=Math.floor(Date.now()/1000);
+  if(m[2]==='approve'){
+    const r=await env.DB.prepare("UPDATE reservations SET approved_at=? WHERE id=? AND status='ready' AND expires_at>? AND approved_at IS NULL").bind(now,m[1],now).run();
+    return r.meta?.changes?json({id:m[1],status:'ready',owner_approved:true}):error('CANNOT_APPROVE','Reservation is not ready, already approved, or expired',409);
+  }
+  // Owner confirms in the SignalWire call log that the call ended (no signed status callback yet).
+  const r=await env.DB.prepare("UPDATE reservations SET status='completed',completed_at=? WHERE id=? AND status='connecting' AND provider='signalwire'").bind(now,m[1]).run();
+  return r.meta?.changes?json({id:m[1],status:'completed'}):error('CANNOT_MARK_ENDED','Reservation is not an active SignalWire call',409);
+}
 async function routeRest(request,url,env,account){
   if(url.pathname==='/v1/reservations'&&request.method==='POST'){const input=await parseJson(request);if(!input)return error('INVALID_JSON','Expected a small JSON request');const r=await prepareReservation(account,input,env);return json(r.body,r.status);}
   const match=url.pathname.match(/^\/v1\/reservations\/([a-f0-9-]{36})(\/cancel)?$/i);
@@ -162,7 +208,7 @@ async function handleMcp(request,account,env){
   const fault=(code,message)=>json({jsonrpc:'2.0',id:rpc.id??null,error:{code,message}});
   if(rpc.method==='initialize')return response({protocolVersion:'2025-03-26',capabilities:{tools:{},resources:{}},serverInfo:{name:'AgentBridge',version:'0.1.0'}});
   if(rpc.method==='ping')return response({});
-  if(rpc.method==='tools/list')return response({tools:requireEnv(env)?TOOLS:NUMBER_CARD_TOOLS});
+  if(rpc.method==='tools/list')return response({tools:reservationApiReady(env)?TOOLS:NUMBER_CARD_TOOLS});
   if(rpc.method==='resources/list')return response({resources:[numberCardResource()]});
   if(rpc.method==='resources/read')return response(readNumberCardResource(rpc.params.uri));
   if(rpc.method==='tools/call'){
@@ -170,7 +216,7 @@ async function handleMcp(request,account,env){
     if(name==='get_bridge_setup')result=getBridgeSetup(account,env);
     else if(name==='list_my_numbers')result=await listMyNumbers(account,env);
     else if(name==='search_available_numbers')result=await searchAvailableNumbers(account,args,env);
-    else if(!requireEnv(env))result={status:503,body:{error:{code:'NOT_CONFIGURED',message:'Calling is not configured; read-only tools remain available.'}}};
+    else if(!reservationApiReady(env))result={status:503,body:{error:{code:'NOT_CONFIGURED',message:'Calling is not configured; read-only tools remain available.'}}};
     else if(name==='prepare_international_call')result=await prepareReservation(account,args,env);
     else if(name==='get_call_status'){if(!/^[a-f0-9-]{36}$/i.test(args.reservation_id||''))result={status:422,body:{error:'Invalid reservation ID'}};else {const row=await env.DB.prepare('SELECT id,destination,status,expires_at FROM reservations WHERE id=? AND account_id=?').bind(args.reservation_id,account.id).first();result={status:row?200:404,body:row?reservationView(row,account.did):{error:'Not found'}};}}
     else if(name==='cancel_international_call'){if(!/^[a-f0-9-]{36}$/i.test(args.reservation_id||''))result={status:422,body:{error:'Invalid reservation ID'}};else {const r=await env.DB.prepare("UPDATE reservations SET status='cancelled' WHERE id=? AND account_id=? AND status='ready' AND expires_at> ?").bind(args.reservation_id,account.id,Math.floor(Date.now()/1000)).run();result={status:r.meta?.changes?200:409,body:r.meta?.changes?{status:'cancelled'}:{error:'Not ready or not found'}};}}
@@ -193,8 +239,9 @@ export default {async fetch(request,env){
     if(url.pathname==='/telephony/twilio/dial-complete')return dialComplete(request,env);
     return new Response('Not found',{status:404});
   }
+  if(url.pathname.startsWith('/v1/owner/'))return ownerRoute(request,url,env);
   if((url.pathname==='/mcp'&&!requireMcpEnv(env))||
-     (url.pathname!=='/mcp'&&!requireEnv(env)))return error('NOT_CONFIGURED','Bridge backend is not configured',503);
+     (url.pathname!=='/mcp'&&!reservationApiReady(env)))return error('NOT_CONFIGURED','Bridge backend is not configured',503);
   if(!['/mcp','/v1/reservations'].includes(url.pathname)&&!url.pathname.startsWith('/v1/reservations/'))return error('NOT_FOUND','Route not found',404);
   const account=await findAccount(request,env);
   if(!account)return error('UNAUTHORIZED','A valid scoped bearer token is required',401);
