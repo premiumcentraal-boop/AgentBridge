@@ -21,3 +21,8 @@ Append one dated entry for each substantial incremental development session. Lin
 - Added regression tests for permitted/unknown/malformed/missing callers and missing caller configuration.
 - Updated private setup instructions and explicitly documented caller-ID spoofability. This is a **defense-in-depth private-test guard**, not cryptographic authentication; a carrier-verified origin or per-call challenge is still a release blocker.
 - GitHub Actions validation pending; local repository clone unavailable due to runtime network DNS restrictions. No live calls placed.
+
+## 2026-11-09 — Website structural integrity gate (PR #4)
+- Integrated a dependency-free audit of six static pages, navigation, local assets, anchors, duplicate IDs, labels and essential landmarks, including GitHub Pages project paths.
+- Added negative regression tests, quality gate and pre-deploy project-site audit, retaining the previous caller-authentication work.
+- Original PR #4 GitHub quality gate succeeded: https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/42550759009 . Browser accessibility/contrast and visual screenshots are not verified.

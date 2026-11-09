@@ -11,7 +11,8 @@ Last revised: 2026-11-08. Read [NORTH_STAR.md](NORTH_STAR.md) first.
 - [x] Node tests for validation, signing and destination restrictions
 - [x] Hourly CI quality pulse and development protocol
 - [ ] Run actual GitHub Actions and validate all checks
-- [ ] Accessibility audit across mobile and desktop; resolve contrast/keyboard issues
+- [x] Automated static link, label, landmark and project-path audit (GitHub PR #4 quality gate passed)
+- [ ] Browser accessibility audit across mobile and desktop; resolve contrast/keyboard issues
 - [ ] Real browser screenshots and visual quality checks
 - [ ] Structured errors, trace IDs and webhook idempotent event ledger
 - [ ] Carrier-verified caller authentication or per-call challenge before any public routing (caller ID alone is spoofable)
