@@ -38,3 +38,10 @@ Append one dated entry for each substantial incremental development session. Lin
 - Fixed original PR #6 failed quality gate: typography test required explicit `system-ui` fallback, which is now present in the CSS stack.
 - Combined PR #4's separate `test:site` post-build audit with new static-security regression tests; protected execution order to prevent auditing before `dist/` exists.
 - Security remains subject to hosting limits: GitHub Pages ignores `_headers`; inline styles still require `style-src 'unsafe-inline'`. No verified browser screenshots or telecom backend changes.
+
+## 2026-11-09 — SignalWire BYO project and SWML adapter (PR pending)
+- Verified SignalWire's official Numbers inventory API and read-only Project ID + API Token authentication. Added an environment-only preflight that cannot purchase, reconfigure or dial any phone number.
+- Added an independent signed SWML JSON webhook using the SignalWire project signing key, exact HTTPS webhook URL, HMAC-SHA256 on raw request data, matched project/DID/origin, strict input size limits and no D1 reservation side effects.
+- Added an offline SWML `connect` serializer for future phone bridging, plus tests for malicious Space names, credential leakage, request tampering, cross-project and wrong-origin calls and no outbound connection.
+- Actual outbound routing remains DISABLED: caller ID is spoofable, native Grok Bot dialing is unverified, per-call cryptographic authentication, verified rates, spending caps and callback reconciliation are not complete. No SignalWire credentials were used, no carrier calls or changes were made.
+- Detailed operator instructions: [SignalWire integration](SIGNALWIRE.md). Await GitHub Actions test verification and PR review.
