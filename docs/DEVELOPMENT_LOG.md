@@ -14,3 +14,9 @@ Append one dated entry for each substantial incremental development session. Lin
 - Added the [P1 native Grok Bot international test call acceptance issue](https://github.com/premiumcentraal-boop/AgentBridge/issues/1).
 - Verified through the GitHub connector that the source files, North Star, CI workflow and deployment workflow exist in main.
 - Not verified: actual automated CI success, deployment URL accessibility, live telecom integration, and real native Grok Bot international call.
+
+## 2026-11-08 — Independent website integrity and accessibility checks (PR pending)
+- Built a dependency-free static-site audit covering all six published pages, internal navigation/assets, broken fragments, duplicate IDs, accessible form labels, image alternatives, landmarks, and basic document metadata.
+- Added automated negative regression tests and integrated the audit with CI and GitHub Pages project-site deployment. This is intentionally separate from open PR #2's inbound telephony security changes.
+- Test execution status: not verified locally because the execution container cannot resolve github.com to clone the repository; GitHub Actions must validate before merge.
+- Browser WCAG checks, color contrast, keyboard interaction, responsive layout and screen-reader testing remain open; static checks are not a WCAG certification.
