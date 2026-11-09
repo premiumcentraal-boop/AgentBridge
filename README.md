@@ -50,6 +50,10 @@ The \`backend/\` directory is a deliberately bounded **test-only reference**:
 
 Authenticated MCP and REST JSON request bodies are byte-limited to 4096 bytes before parsing (pending PR #13), with strict UTF-8 and early stream cancellation. This protects request parsing; it does not make carrier routing production-ready.
 
+### Private-test outbound kill switch
+
+The Twilio inbound webhook **hangs up by default**, even for signed calls with a matching reservation, and does not consume that reservation. To explicitly allow a one-off, authorized private test on a **non-public staging Worker**, the operator must set server-side `PRIVATE_TEST_OUTBOUND_ENABLED=true` and keep all existing signed-webhook, exact DID, caller, destination and expiry checks. **Do not enable this in public production:** caller ID is spoofable, and this opt-in is not cryptographic per-call authorization. Remove the flag after testing; no real call was placed in development.
+
 ### Security rules
 Never put real carrier credentials into public site code or the Git repo. No authorization fallback or arbitrary forwarding. Never turn off webhook validation to make a test pass. No premium/emergency/short-code destinations. Avoid recording or transcribing calls. Do not present made-up telecom prices as live quotations.
 
