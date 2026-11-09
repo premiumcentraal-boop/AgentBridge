@@ -136,3 +136,35 @@ test('Worker rejects forged, mismatched or misconfigured SignalWire inbound requ
     headers:{'content-type':'application/json'},body:'X'.repeat(17000)}),config);
   assert.equal(oversized.status,413);
 });
+
+test('streaming SWML parser rejects chunked over-limit bodies without reading remaining chunks',async()=>{
+  let reads=0,cancelled=false;
+  const stream=new ReadableStream({
+    pull(controller){
+      reads++;
+      if(reads===1)controller.enqueue(new Uint8Array(10000).fill(65));
+      else if(reads===2)controller.enqueue(new Uint8Array(7000).fill(66));
+      else controller.enqueue(new Uint8Array(10000).fill(67));
+    },
+    cancel(){cancelled=true;}
+  });
+  const request=new Request(webUrl,{method:'POST',duplex:'half',
+    headers:{'content-type':'application/json'},body:stream});
+  const result=await worker.fetch(request,config);
+  assert.equal(result.status,413);
+  assert.equal(reads,2);
+  assert.equal(cancelled,true);
+});
+test('streaming SWML parser rejects invalid UTF-8 before JSON handling',async()=>{
+  const request=new Request(webUrl,{method:'POST',
+    headers:{'content-type':'application/json'},body:new Uint8Array([0xff,0xfe])});
+  const result=await worker.fetch(request,config);
+  assert.equal(result.status,400);
+});
+test('SWML body exactly at byte cap passes the size gate and reaches signature check',async()=>{
+  const body=' '.repeat(16384);
+  const request=new Request(webUrl,{method:'POST',
+    headers:{'content-type':'application/json'},body});
+  const result=await worker.fetch(request,config);
+  assert.equal(result.status,403);
+});
