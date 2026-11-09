@@ -80,3 +80,7 @@ The private MCP prototype now has three **read-only** tools for conversational n
 - **search_available_numbers** — searches up to five voice-capable US local number candidates by three-digit area code. Results have **no verified price and cannot be purchased**.
 
 These tools return structured JSON for future host-native cards and equivalent text for ordinary MCP hosts. Read [docs/CHAT_FIRST_MCP.md](docs/CHAT_FIRST_MCP.md) for private operator setup and the security architecture. A private D1-backed bearer-authenticated MCP endpoint can use these **read-only** number tools without configuring Twilio call forwarding; a customer credential vault, live Grok Bot connector interoperability, number purchasing, payments and chargeable routing are still **unimplemented and unverified**. A self-contained standards-based **MCP Apps read-only card** is included, but actual Grok Bot rendering and compatibility have not been tested. Never paste provider credentials into a model conversation. Only the server's secret manager can hold the SignalWire Project token.
+
+## Local command-based MCP preview (review pending)
+
+A private single-operator, read-only stdio adapter is proposed for compatible command-launched MCP hosts. Run `npm run mcp:local` with Node 22+ and private environment credentials; see [docs/LOCAL_MCP.md](docs/LOCAL_MCP.md). No Grok Bot cloud-computer compatibility, number purchase, carrier webhook or live routing is verified. **This change is pending PR review and CI, not deployed.**
