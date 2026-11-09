@@ -17,6 +17,7 @@ Last revised: 2026-11-08. Read [NORTH_STAR.md](NORTH_STAR.md) first.
 - [ ] Real browser screenshots and visual quality checks
 - [x] Strict MCP JSON-RPC envelope and tool argument validation (PR #5; branch CI passed before merge)
 - [x] Bound both Twilio webhook bodies to 16,000 bytes before signature verification, with strict UTF-8 and streamed oversize rejection (PR pending)
+- [x] Byte-bound authenticated MCP/REST JSON request parsing (4 KiB) with early stream cancellation, strict UTF-8 and no reservation writes on malformed bodies (PR #13)
 - [ ] Structured errors, trace IDs and webhook idempotent event ledger
 - [ ] Carrier-verified caller authentication or per-call challenge before any public routing (caller ID alone is spoofable)
 
