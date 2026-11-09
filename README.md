@@ -48,6 +48,8 @@ The \`backend/\` directory is a deliberately bounded **test-only reference**:
 
 **Important:** This is not approved for public paid use. Shared phone numbers, fluctuating AI caller IDs, caller-ID based access, stuck connecting calls, missing callback retries, exact carrier billing, multiple providers, KYC, fraud protection and regulatory obligations remain unresolved. Time-limited DID access alone is **not sufficient anti-fraud protection** for a commercial relay. **Caller ID can be spoofed**, so \`TEST_CALLER_E164\` is only a conservative additional private-test guard, not proof of identity or an authorization mechanism suitable for public service. Carrier-verified origin or a cryptographic per-call challenge remains required before expansion.
 
+Authenticated MCP and REST JSON request bodies are byte-limited to 4096 bytes before parsing (pending PR #13), with strict UTF-8 and early stream cancellation. This protects request parsing; it does not make carrier routing production-ready.
+
 ### Security rules
 Never put real carrier credentials into public site code or the Git repo. No authorization fallback or arbitrary forwarding. Never turn off webhook validation to make a test pass. No premium/emergency/short-code destinations. Avoid recording or transcribing calls. Do not present made-up telecom prices as live quotations.
 
