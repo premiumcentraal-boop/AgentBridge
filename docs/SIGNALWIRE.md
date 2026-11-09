@@ -27,7 +27,7 @@ This is a developer command, not a multi-user credential-collection website. An 
 2. Set `SIGNALWIRE_PROJECT_ID` (plain env), `SIGNALWIRE_SWML_WEBHOOK_URL` (exact public HTTPS URL ending in `/telephony/signalwire/swml`), `US_BRIDGE_DID`, `TEST_CALLER_E164`, and `TEST_DESTINATION_E164` in the *private Worker configuration*. Preserve all existing Twilio environment settings if you also use the existing Twilio reference routes.
 3. Add `SIGNALWIRE_SIGNING_KEY` as a **secret** via the hosting platform's secret manager. **Do not use the REST API Token as the webhook signing key**.
 4. After you own a carrier-approved US DID, an operator may **manually** configure that number's inbound **Calling SWML external webhook** to the exact HTTPS URL. This repository does not perform this operation.
-5. The webhook verifies raw-body HMAC-SHA256 hex over `configured URL + raw body`, requires valid calling metadata, and returns only `{"version":"1.0.0","sections":{"main":[{"hangup":{}}]}}` for approved signed test calls; unapproved calls return 403. **Do not place a real call solely to test this adapter without explicit permission.**
+5. The webhook verifies raw-body HMAC-SHA256 hex over `configured URL + raw body`, enforces a 16 KiB streamed body cap before buffering, rejects malformed UTF-8, requires valid calling metadata, and returns only `{"version":"1.0.0","sections":{"main":[{"hangup":{}}]}}` for approved signed test calls; unapproved calls return 403. **Do not place a real call solely to test this adapter without explicit permission.**
 
 The read-only API checker and signed SWML webhook use different credentials. Their presence alone does **not** make routing ready, assign a DID, authenticate a Grok Bot session, verify a rate, or charge a call.
 
