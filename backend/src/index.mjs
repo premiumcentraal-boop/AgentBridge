@@ -57,9 +57,9 @@ export async function prepareReservation(account,requestData,env){
   const key=requestData?.idempotency_key;
   if(typeof key!=='string'||!/^[A-Za-z0-9_.:-]{8,96}$/.test(key))return {status:422,body:{error:{code:'INVALID_IDEMPOTENCY_KEY',message:'Supply a unique 8–96 character request key'}}};
   const now=Math.floor(Date.now()/1000);
-  await env.DB.prepare("UPDATE reservations SET status='expired' WHERE account_id=? AND status='ready' AND expires_at < ?").bind(account.id,now).run();
+  await env.DB.prepare("UPDATE reservations SET status='expired' WHERE account_id=? AND status='ready' AND expires_at <= ?").bind(account.id,now).run();
   const existing=await env.DB.prepare('SELECT id,destination,status,expires_at FROM reservations WHERE account_id=? AND idempotency_key=?').bind(account.id,key).first();
-  if(existing){if(existing.destination!==destination)return {status:409,body:{error:{code:'IDEMPOTENCY_CONFLICT',message:'Idempotency key used for a different destination'}}};return {status:200,body:reservationView(existing,account.did)};}
+  if(existing){if(existing.destination!==destination)return {status:409,body:{error:{code:'IDEMPOTENCY_CONFLICT',message:'Idempotency key used for a different destination'}}};if(existing.status==='ready'&&existing.expires_at<=now)return {status:409,body:{error:{code:'RESERVATION_EXPIRED',message:'Reservation expired. Use a new idempotency key.'}}};if(existing.status!=='ready')return {status:409,body:{error:{code:'RESERVATION_NOT_READY',message:'This reservation was consumed or closed. Use a new idempotency key.'}}};return {status:200,body:reservationView(existing,account.did,now)};}
   const active=await env.DB.prepare("SELECT id FROM reservations WHERE account_id=? AND status IN ('ready','connecting') LIMIT 1").bind(account.id).first();
   if(active)return {status:409,body:{error:{code:'BRIDGE_BUSY',message:'An active or unresolved call is already reserved'}}};
   const count=await env.DB.prepare('SELECT COUNT(*) AS n FROM reservations WHERE account_id=? AND created_at >= ?').bind(account.id,now-3600).first();
@@ -67,11 +67,11 @@ export async function prepareReservation(account,requestData,env){
   const id=crypto.randomUUID();
   try{await env.DB.prepare("INSERT INTO reservations (id,account_id,destination,idempotency_key,status,created_at,expires_at) VALUES (?,?,?,?, 'ready',?,?)").bind(id,account.id,destination,key,now,now+MAX_TTL_SECONDS).run();}
   catch{return {status:409,body:{error:{code:'BRIDGE_BUSY',message:'A reservation is already active. Retry after it is closed'}}};}
-  return {status:201,body:reservationView({id,destination,status:'ready',expires_at:now+MAX_TTL_SECONDS},account.did)};
+  return {status:201,body:reservationView({id,destination,status:'ready',expires_at:now+MAX_TTL_SECONDS},account.did,now)};
 }
-function reservationView(item,did){return {id:item.id,destination:item.destination,us_access_number:did,status:item.status,expires_at:new Date(item.expires_at*1000).toISOString(),max_call_seconds:MAX_CALL_SECONDS,warning:'Verify destination and obtain user approval before Grok Bot places its native US call. Prototype only; no live quote or billing.'};}
+function reservationView(item,did,now=Math.floor(Date.now()/1000)){const status=item.status==='ready'&&item.expires_at<=now?'expired':item.status;return {id:item.id,destination:item.destination,us_access_number:status==='ready'?did:null,status,expires_at:new Date(item.expires_at*1000).toISOString(),max_call_seconds:MAX_CALL_SECONDS,warning:status==='ready'?'Verify destination and obtain user approval before Grok Bot places its native US call. Prototype only; no live quote or billing.':'This reservation cannot be used to place a call. Create a new reservation with a new idempotency key.'};}
 async function getReservation(account,id,env){const row=await env.DB.prepare('SELECT id,destination,status,expires_at FROM reservations WHERE id=? AND account_id=?').bind(id,account.id).first();return row?json(reservationView(row,account.did)):error('NOT_FOUND','Reservation not found',404);}
-async function cancelReservation(account,id,env){const change=await env.DB.prepare("UPDATE reservations SET status='cancelled' WHERE id=? AND account_id=? AND status='ready'").bind(id,account.id).run();return change.meta?.changes?json({id,status:'cancelled'}):error('CANNOT_CANCEL','Reservation does not exist or is no longer ready',409);}
+async function cancelReservation(account,id,env){const change=await env.DB.prepare("UPDATE reservations SET status='cancelled' WHERE id=? AND account_id=? AND status='ready' AND expires_at> ?").bind(id,account.id,Math.floor(Date.now()/1000)).run();return change.meta?.changes?json({id,status:'cancelled'}):error('CANNOT_CANCEL','Reservation does not exist or is no longer ready',409);}
 /**
  * Private-test inbound gate. Caller ID is a weak, spoofable signal, so this
  * is an additional deny-by-default guard, NOT production authentication.
@@ -92,10 +92,10 @@ async function incoming(request,env){
   // unknown caller IDs BEFORE reading or consuming a reservation.
   if(to!==env.US_BRIDGE_DID||!approvedTestCaller(from,env)||!/^CA[a-f0-9]{32}$/i.test(sid||''))return twiml(hangupXml());
   const now=Math.floor(Date.now()/1000);
-  const row=await env.DB.prepare("SELECT r.id,r.destination FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE a.did=? AND a.status='active' AND r.status='ready' AND r.expires_at>=? ORDER BY r.created_at DESC LIMIT 1").bind(to,now).first();
+  const row=await env.DB.prepare("SELECT r.id,r.destination FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE a.did=? AND a.status='active' AND r.status='ready' AND r.expires_at>? ORDER BY r.created_at DESC LIMIT 1").bind(to,now).first();
   if(!row||row.destination!==env.TEST_DESTINATION_E164)return twiml(hangupXml());
   // Atomically consume route: no second inbound call may reuse it.
-  const done=await env.DB.prepare("UPDATE reservations SET status='connecting',call_sid=? WHERE id=? AND status='ready' AND expires_at>=?").bind(sid,row.id,now).run();
+  const done=await env.DB.prepare("UPDATE reservations SET status='connecting',call_sid=? WHERE id=? AND status='ready' AND expires_at>?").bind(sid,row.id,now).run();
   if(!done.meta?.changes)return twiml(hangupXml());
   const base=new URL(env.PUBLIC_BASE_URL);
   const callback=base.origin+'/telephony/twilio/dial-complete';
@@ -134,7 +134,7 @@ async function handleMcp(request,account,env){
     const name=rpc.params?.name,args=rpc.params?.arguments||{};let result;
     if(name==='prepare_international_call')result=await prepareReservation(account,args,env);
     else if(name==='get_call_status'){if(!/^[a-f0-9-]{36}$/i.test(args.reservation_id||''))result={status:422,body:{error:'Invalid reservation ID'}};else {const row=await env.DB.prepare('SELECT id,destination,status,expires_at FROM reservations WHERE id=? AND account_id=?').bind(args.reservation_id,account.id).first();result={status:row?200:404,body:row?reservationView(row,account.did):{error:'Not found'}};}}
-    else if(name==='cancel_international_call'){if(!/^[a-f0-9-]{36}$/i.test(args.reservation_id||''))result={status:422,body:{error:'Invalid reservation ID'}};else {const r=await env.DB.prepare("UPDATE reservations SET status='cancelled' WHERE id=? AND account_id=? AND status='ready'").bind(args.reservation_id,account.id).run();result={status:r.meta?.changes?200:409,body:r.meta?.changes?{status:'cancelled'}:{error:'Not ready or not found'}};}}
+    else if(name==='cancel_international_call'){if(!/^[a-f0-9-]{36}$/i.test(args.reservation_id||''))result={status:422,body:{error:'Invalid reservation ID'}};else {const r=await env.DB.prepare("UPDATE reservations SET status='cancelled' WHERE id=? AND account_id=? AND status='ready' AND expires_at> ?").bind(args.reservation_id,account.id,Math.floor(Date.now()/1000)).run();result={status:r.meta?.changes?200:409,body:r.meta?.changes?{status:'cancelled'}:{error:'Not ready or not found'}};}}
     else return fault(-32601,'Unknown tool');
     return response({content:[{type:'text',text:JSON.stringify(result.body)}],isError:result.status>=400});
   }
