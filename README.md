@@ -32,7 +32,7 @@ The \`backend/\` directory is a deliberately bounded **test-only reference**:
 - \`POST /v1/reservations\` to create a 90-second route, idempotently
 - \`GET /v1/reservations/:id\` and \`POST /v1/reservations/:id/cancel\`
 - \`POST /mcp\` with tools: \`prepare_international_call\`, \`get_call_status\`, \`cancel_international_call\`
-- \`POST /telephony/twilio/incoming\` verifies Twilio signatures and atomically consumes a route
+- \`POST /telephony/twilio/incoming\` verifies Twilio signatures and atomically consumes a route; both Twilio webhook endpoints stream and strictly cap raw bodies to 16,000 bytes before verification
 - \`POST /telephony/twilio/dial-complete\` records the high-level outcome
 - 180-second hard \`<Dial>\` limit, one concurrent route per account, basic hourly preparation throttle
 - **Only the exact \`TEST_DESTINATION_E164\` can be called, and only inbound calls matching \`TEST_CALLER_E164\` are considered**, until a full fraud/billing/consent system exists
