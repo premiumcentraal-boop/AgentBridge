@@ -19,8 +19,11 @@ Requires Node.js 22+.
 \`\`\`bash
 npm run ci
 npm run build:site
+npm run test:site
 npx serve dist  # optional; or use any static HTTP server
 \`\`\`
+The static audit checks links, semantic landmarks, form labels and assets; it does not replace real browser accessibility testing. For GitHub Pages, use \`BASE_PATH=/AgentBridge npm run build:site\` and \`BASE_PATH=/AgentBridge npm run test:site\`.
+
 No \`npm install\` is required to run checks or build the public site. \`dist/\` is the deployable static website; do **not** host the repository root as a public document directory.
 
 ## Backend: Cloudflare Worker + D1 + Twilio reference
@@ -32,18 +35,18 @@ The \`backend/\` directory is a deliberately bounded **test-only reference**:
 - \`POST /telephony/twilio/incoming\` verifies Twilio signatures and atomically consumes a route
 - \`POST /telephony/twilio/dial-complete\` records the high-level outcome
 - 180-second hard \`<Dial>\` limit, one concurrent route per account, basic hourly preparation throttle
-- **Only the exact \`TEST_DESTINATION_E164\` can be called**, until a full fraud/billing/consent system exists
+- **Only the exact \`TEST_DESTINATION_E164\` can be called, and only inbound calls matching \`TEST_CALLER_E164\` are considered**, until a full fraud/billing/consent system exists
 
 ### Private deployment checklist
 1. Obtain carrier approval for your own test use case, country routing and selected US DID. Verify pricing and the relevant platform terms.
 2. Create a Cloudflare D1 test database. Apply \`backend/schema.sql\`.
-3. Copy \`backend/wrangler.example.jsonc\` to \`backend/wrangler.jsonc\`; insert D1 ID, public HTTPS base URL, real US DID and a consenting **single** E.164 test destination.
+3. Copy \`backend/wrangler.example.jsonc\` to \`backend/wrangler.jsonc\`; insert D1 ID, public HTTPS base URL, real US DID, a consenting **single** E.164 test destination, and the E.164 caller ID of your preapproved test origin in \`TEST_CALLER_E164\`.
 4. Add \`TWILIO_AUTH_TOKEN\` via \`wrangler secret put\`, never in source control. Configure the carrier to send signed form POSTs to \`/telephony/twilio/incoming\`.
 5. Generate a scoped token and seed the account manually with \`node scripts/provision-test-account.mjs +1YOURDID\`; store the token privately. The script prints SQL; it does not execute it.
 6. Start a private staging deployment. Test \`GET /health\`. Make a consenting phone call, verify audio and observed carrier costs.
 7. Only after verification, test with Grok Bot's **native** calling feature and explicit user approval.
 
-**Important:** This is not approved for public paid use. Shared phone numbers, fluctuating AI caller IDs, caller-ID based access, stuck connecting calls, missing callback retries, exact carrier billing, multiple providers, KYC, fraud protection and regulatory obligations remain unresolved. Time-limited DID access alone is **not sufficient anti-fraud protection** for a commercial relay.
+**Important:** This is not approved for public paid use. Shared phone numbers, fluctuating AI caller IDs, caller-ID based access, stuck connecting calls, missing callback retries, exact carrier billing, multiple providers, KYC, fraud protection and regulatory obligations remain unresolved. Time-limited DID access alone is **not sufficient anti-fraud protection** for a commercial relay. **Caller ID can be spoofed**, so \`TEST_CALLER_E164\` is only a conservative additional private-test guard, not proof of identity or an authorization mechanism suitable for public service. Carrier-verified origin or a cryptographic per-call challenge remains required before expansion.
 
 ### Security rules
 Never put real carrier credentials into public site code or the Git repo. No authorization fallback or arbitrary forwarding. Never turn off webhook validation to make a test pass. No premium/emergency/short-code destinations. Avoid recording or transcribing calls. Do not present made-up telecom prices as live quotations.
@@ -60,4 +63,4 @@ Never put real carrier credentials into public site code or the Git repo. No aut
 AgentBridge is a **telephone routing layer**, not a new voice agent, and not a method to evade a service's calling restrictions.
 
 ### Website privacy and security posture
-The website no longer requests Google Fonts or other third-party font CDNs. The build adds a restrictive HTML Content Security Policy (CSP) and `Referrer-Policy: no-referrer` to every page. Cloudflare Pages additionally applies `_headers` for clickjacking, MIME-sniffing and device-permission controls. **GitHub Pages ignores `_headers`**, so HTTP-header-only protections such as `frame-ancestors` are not guaranteed there. Existing inline CSS requires `style-src 'unsafe-inline'`; inline JavaScript is not allowed. These measures harden the *static preview*, not the carrier backend or live call authorization.
+The site uses local system fonts instead of third-party font downloads. Built HTML includes CSP and a no-referrer meta policy. On Cloudflare Pages, `_headers` additionally denies framing, sniffing and device permission APIs. GitHub Pages ignores `_headers`, so `frame-ancestors` and other header-only controls cannot be assumed on GitHub Pages. Current inline styles still require `style-src 'unsafe-inline'`. These policies secure the public static preview, **not** the telecom backend, which remains private-test-only.

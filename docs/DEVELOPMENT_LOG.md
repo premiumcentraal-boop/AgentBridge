@@ -15,9 +15,26 @@ Append one dated entry for each substantial incremental development session. Lin
 - Verified through the GitHub connector that the source files, North Star, CI workflow and deployment workflow exist in main.
 - Not verified: actual automated CI success, deployment URL accessibility, live telecom integration, and real native Grok Bot international call.
 
-## 2026-11-09 — Static-site privacy and browser hardening (proposed)
-- Removed Google Fonts runtime dependency; site uses polished native system typography, improving privacy, load resilience and offline rendering.
-- Build injects restrictive script and connection CSP and no-referrer metadata on all six pages. Cloudflare Pages `_headers` adds clickjacking, MIME and browser-permission protections. GitHub Pages does not apply `_headers`, so the HTML meta CSP is its fallback; `frame-ancestors` is enforced only by an HTTP header on compatible hosts.
-- Added static regression tests for six-page policy coverage, no external font requests, Cloudflare headers and GitHub project-path builds.
-- Does not touch telephony, authentication, billing, caller restrictions or pending PRs #2/#4/#5.
-- Pending review/CI: no live browser, network or GitHub Actions success is claimed. Existing inline styles require CSP `style-src 'unsafe-inline'`; future cleanup should remove that exception.
+## 2026-11-09 — Private-test inbound caller hardening (PR pending)
+- Identified a high-risk condition: any inbound caller could consume a ready DID reservation and trigger a paid international leg if they reached the assigned US number during its 90-second window.
+- Added a fail-closed `TEST_CALLER_E164` origin gate before reservation lookup and consumption, plus strict Twilio CallSid shape validation.
+- Added regression tests for permitted/unknown/malformed/missing callers and missing caller configuration.
+- Updated private setup instructions and explicitly documented caller-ID spoofability. This is a **defense-in-depth private-test guard**, not cryptographic authentication; a carrier-verified origin or per-call challenge is still a release blocker.
+- GitHub Actions validation pending; local repository clone unavailable due to runtime network DNS restrictions. No live calls placed.
+
+## 2026-11-09 — Website structural integrity gate (PR #4)
+- Integrated a dependency-free audit of six static pages, navigation, local assets, anchors, duplicate IDs, labels and essential landmarks, including GitHub Pages project paths.
+- Added negative regression tests, quality gate and pre-deploy project-site audit, retaining the previous caller-authentication work.
+- Original PR #4 GitHub quality gate succeeded: https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/42550759009 . Browser accessibility/contrast and visual screenshots are not verified.
+
+## 2026-11-09 — Strict MCP request-validation gate (PR #5)
+- Integrated JSON-RPC 2.0 envelope, method and exact tool-argument validation ahead of MCP tool dispatch, preserving the merged approved-caller inbound gate.
+- Rejected malformed or unexpected reservation and cancellation arguments before database side effects; added dedicated Node regression tests.
+- Original PR #5 quality gate succeeded: https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/42556200400 . Final post-reconciliation CI is required before merging.
+- No calls, carrier credentials, payment processing or live backend deployment.
+
+## 2026-11-09 — Privacy and browser-policy integration (PR #6)
+- Removed external font CDN import; added offline system-font fallback and restrictive CSP/referrer metadata to the built preview, plus Cloudflare Pages `_headers`.
+- Fixed original PR #6 failed quality gate: typography test required explicit `system-ui` fallback, which is now present in the CSS stack.
+- Combined PR #4's separate `test:site` post-build audit with new static-security regression tests; protected execution order to prevent auditing before `dist/` exists.
+- Security remains subject to hosting limits: GitHub Pages ignores `_headers`; inline styles still require `style-src 'unsafe-inline'`. No verified browser screenshots or telecom backend changes.

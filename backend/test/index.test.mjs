@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHmac} from 'node:crypto';
-import {validateE164,escapeXml,hangupXml,dialXml,verifyTwilioSignature,prepareReservation,sha256} from '../src/index.mjs';
+import {validateE164,escapeXml,hangupXml,dialXml,verifyTwilioSignature,prepareReservation,sha256,approvedTestCaller} from '../src/index.mjs';
 test('E.164 rejects local, malformed and excessive numbers',()=>{
  for(const n of ['0031201234567','+0','+120','+12345678901234567890','+31-20-1234','+31123<script>'])assert.equal(validateE164(n),false);
  assert.equal(validateE164('+31201234567'),true);
@@ -39,4 +39,23 @@ test('reservation requires idempotency key',async()=>{
 test('disabled accounts cannot reserve',async()=>{
  const out=await prepareReservation({id:'test',did:'+12025550123',status:'disabled'},{destination:'+31201234567',idempotency_key:'unique-12345'},{US_BRIDGE_DID:'+12025550123',TEST_DESTINATION_E164:'+31201234567'});
  assert.equal(out.status,403);
+});
+
+test('private test caller gate denies unknown, empty, malformed and bridge origins',()=>{
+ const env={TEST_CALLER_E164:'+12125550177',US_BRIDGE_DID:'+12025550123'};
+ assert.equal(approvedTestCaller('+12125550177',env),true);
+ for(const from of [undefined,'','anonymous','+12125550178','+12025550123','12125550177'])
+   assert.equal(approvedTestCaller(from,env),false);
+ assert.equal(approvedTestCaller('+12125550177',{US_BRIDGE_DID:env.US_BRIDGE_DID}),false);
+ assert.equal(approvedTestCaller('+12125550177',{...env,TEST_CALLER_E164:'anonymous'}),false);
+ assert.equal(approvedTestCaller('+12025550123',{...env,TEST_CALLER_E164:env.US_BRIDGE_DID}),false);
+});
+test('inbound route fails closed when approved caller is not configured',async()=>{
+ const {default:worker}=await import('../src/index.mjs');
+ const res=await worker.fetch(new Request('https://api.example.com/telephony/twilio/incoming',{method:'POST'}),{
+   DB:{},PUBLIC_BASE_URL:'https://api.example.com',US_BRIDGE_DID:'+12025550123',
+   TEST_DESTINATION_E164:'+31201234567',TWILIO_AUTH_TOKEN:'test'
+ });
+ assert.equal(res.status,200);
+ assert.match(await res.text(),/<Hangup\/>/);
 });
