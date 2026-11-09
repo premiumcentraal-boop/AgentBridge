@@ -16,7 +16,7 @@ Last revised: 2026-11-08. Read [NORTH_STAR.md](NORTH_STAR.md) first.
 - [x] Offline-first system fonts, six-page CSP, Cloudflare headers and static policy regression tests (PR #6)
 - [ ] Real browser screenshots and visual quality checks
 - [x] Strict MCP JSON-RPC envelope and tool argument validation (PR #5; branch CI passed before merge)
-- [x] SignalWire BYO read-only number inventory, signed SWML fail-closed webhook, offline phone bridge serializer and regression tests (proposed; **paid routing disabled**)
+- [x] SignalWire BYO read-only number inventory, signed SWML fail-closed webhook with streaming byte cap and strict UTF-8 validation, offline phone bridge serializer and regression tests (proposed; **paid routing disabled**)
 - [ ] Secure multi-user SignalWire project credentials, DID ownership, cryptographic call authorization, verified quotes/billing and reliable carrier callbacks
 - [ ] Structured errors, trace IDs and webhook idempotent event ledger
 - [ ] Carrier-verified caller authentication or per-call challenge before any public routing (caller ID alone is spoofable)
