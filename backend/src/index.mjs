@@ -1,4 +1,5 @@
 import {validateMcpEnvelope} from './mcp-validation.mjs';
+import {SIGNALWIRE_SWML_PATH,handleSignalWireSwml} from './signalwire.mjs';
 /**
  * AgentBridge reference backend — intentionally fail-closed.
  * This is NOT a publicly deployable calling reseller: it only routes to one
@@ -143,6 +144,8 @@ async function handleMcp(request,account,env){
 export default {async fetch(request,env){
   const url=new URL(request.url);
   if(url.pathname==='/health'&&request.method==='GET')return json({service:'agentbridge',mode:'prototype',configured:requireEnv(env)});
+  // SignalWire has its own signed JSON/SWML contract, never share Twilio validation.
+  if(url.pathname===SIGNALWIRE_SWML_PATH)return handleSignalWireSwml(request,env);
   if(url.pathname.startsWith('/telephony/twilio/')){
     if(request.method!=='POST')return new Response('Method not allowed',{status:405});
     if(url.pathname==='/telephony/twilio/incoming')return incoming(request,env);
