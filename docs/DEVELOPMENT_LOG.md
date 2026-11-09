@@ -38,3 +38,8 @@ Append one dated entry for each substantial incremental development session. Lin
 - Fixed original PR #6 failed quality gate: typography test required explicit `system-ui` fallback, which is now present in the CSS stack.
 - Combined PR #4's separate `test:site` post-build audit with new static-security regression tests; protected execution order to prevent auditing before `dist/` exists.
 - Security remains subject to hosting limits: GitHub Pages ignores `_headers`; inline styles still require `style-src 'unsafe-inline'`. No verified browser screenshots or telecom backend changes.
+
+## 2026-11-09 — Bounded Twilio webhook streaming (PR pending)
+- Replaced unbounded `request.text()` in Twilio incoming and dial-complete endpoints with a shared byte-limited streaming reader (16,000 bytes). Rejects malformed content lengths, invalid UTF-8 and chunked oversize bodies before signature verification or database access; cancels unread streams.
+- Added Node regression tests for exact byte boundary, split UTF-8, early stream cancellation, invalid content lengths, signed inbound compatibility and oversize webhook denial. Added module syntax checking to CI.
+- Existing Twilio HMAC signature validation and fail-closed private-test caller gate remain unchanged. No changes to live carrier resources, public deployment or charges. Caller ID spoofing and durable replay protection remain unresolved (issue #3).
