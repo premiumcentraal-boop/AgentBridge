@@ -9,8 +9,8 @@ await rm(out,{force:true,recursive:true});await mkdir(out,{recursive:true});
 for(const path of ['index.html','favicon.svg','assets','how-it-works','pricing','connect','docs','app'])
  await cp(join(root,path),join(out,path),{recursive:true});
 // GitHub Pages project site needs prefix; Cloudflare Pages uses root.
-const base=(process.env.BASE_PATH||'').replace(/\\/$/,'');
-if(base&&(!/^\\/[A-Za-z0-9_-]+(?:\\/[A-Za-z0-9_-]+)*$/.test(base)))throw new Error('Unsafe BASE_PATH');
+const base=(process.env.BASE_PATH||'').replace(new RegExp('/+$'),'');
+if(base&&(!base.startsWith('/')||base.includes('..')||base.includes('//')||!base.slice(1).split('/').every(part=>/^[A-Za-z0-9_-]+$/.test(part))))throw new Error('Unsafe BASE_PATH');
 for(const path of pages){
  const file=join(out,path);
  let html=await readFile(file,'utf8');
