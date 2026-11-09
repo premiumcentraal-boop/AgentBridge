@@ -98,6 +98,9 @@ async function incoming(request,env){
   if(!requireEnv(env))return twiml(hangupXml());
   const raw=await readBoundedWebhookBody(request);if(raw===null||!await verifyTwilioSignature(request,raw,env.TWILIO_AUTH_TOKEN,env.PUBLIC_BASE_URL))return new Response('Forbidden',{status:403});
   const fields=new URLSearchParams(raw);
+  // Duplicate identity/routing fields are ambiguous even when the carrier
+  // signature is valid. Never select the first value and consume a route.
+  if(['To','From','CallSid'].some(field=>fields.getAll(field).length!==1))return twiml(hangupXml());
   const to=fields.get('To'),sid=fields.get('CallSid'),from=fields.get('From');
   // A reservation alone must never make the DID an open forwarder. Reject
   // unknown caller IDs BEFORE reading or consuming a reservation.
