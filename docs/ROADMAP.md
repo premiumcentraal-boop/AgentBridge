@@ -16,6 +16,7 @@ Last revised: 2026-11-08. Read [NORTH_STAR.md](NORTH_STAR.md) first.
 - [x] Offline-first system fonts, six-page CSP, Cloudflare headers and static policy regression tests (PR #6)
 - [ ] Real browser screenshots and visual quality checks
 - [x] Strict MCP JSON-RPC envelope and tool argument validation (PR #5; branch CI passed before merge)
+- [x] Bound both Twilio webhook bodies to 16,000 bytes before signature verification, with strict UTF-8 and streamed oversize rejection (PR pending)
 - [ ] Structured errors, trace IDs and webhook idempotent event ledger
 - [ ] Carrier-verified caller authentication or per-call challenge before any public routing (caller ID alone is spoofable)
 
