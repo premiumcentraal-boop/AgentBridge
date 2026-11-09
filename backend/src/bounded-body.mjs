@@ -7,9 +7,10 @@ export async function readBoundedWebhookBody(request,limit=MAX_WEBHOOK_BYTES){
   if(!Number.isSafeInteger(limit)||limit<1)throw new TypeError('Invalid limit');
   const header=request.headers.get('content-length');
   if(header!==null){
-    if(!/^(0|[1-9][0-9]*)$/.test(header)||!Number.isSafeInteger(Number(header)))
+    if(!/^(0|[1-9][0-9]*)$/.test(header)||!Number.isSafeInteger(Number(header))||Number(header)>limit){
+      if(request.body)await request.body.cancel().catch(()=>{});
       return null;
-    if(Number(header)>limit)return null;
+    }
   }
   if(!request.body)return '';
   const reader=request.body.getReader();
