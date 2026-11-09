@@ -11,6 +11,7 @@ Last revised: 2026-11-08. Read [NORTH_STAR.md](NORTH_STAR.md) first.
 - [x] Node tests for validation, signing and destination restrictions
 - [x] Hourly CI quality pulse and development protocol
 - [ ] Run actual GitHub Actions and validate all checks
+- [x] Gate GitHub Pages preview deployment behind manual approval (review pending; issue #7)
 - [x] Automated static link, label, landmark and project-path audit (GitHub PR #4 quality gate passed)
 - [ ] Browser accessibility audit across mobile and desktop; resolve contrast/keyboard issues
 - [x] Offline-first system fonts, six-page CSP, Cloudflare headers and static policy regression tests (PR #6)
