@@ -106,9 +106,19 @@ export async function listMyNumbers(account,env,fetchImpl=fetch){
 }
 
 /** Search only five local voice number candidates; cannot reserve or purchase. */
-export async function searchAvailableNumbers(account,{area_code}={},env,fetchImpl=fetch){
+export async function searchAvailableNumbers(account,args={},env,fetchImpl=fetch){
   const denied=guard(account,env);
   if(denied)return denied;
+  return searchNumberCandidates(args,env,fetchImpl);
+}
+
+/**
+ * Shared read-only candidate search without the hosted-account DID guard.
+ * Used by the hosted MCP tool above (after its guard) and by the private
+ * single-operator stdio server in local-mcp/, where the operator owns the
+ * SignalWire Project. Same validation, same single GET, no purchase path.
+ */
+export async function searchNumberCandidates({area_code}={},env,fetchImpl=fetch){
   if(typeof area_code!=='string'||!AREA.test(area_code))
     return failure('INVALID_AREA_CODE','Use a three-digit US area code such as 202 or 618.',422);
   if(!validConfig(env))return missingCredentials('number_choices');
