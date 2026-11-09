@@ -61,3 +61,6 @@ Never put real carrier credentials into public site code or the Git repo. No aut
 
 ## Product line
 AgentBridge is a **telephone routing layer**, not a new voice agent, and not a method to evade a service's calling restrictions.
+
+### Website privacy and security posture
+The site uses local system fonts instead of third-party font downloads. Built HTML includes CSP and a no-referrer meta policy. On Cloudflare Pages, `_headers` additionally denies framing, sniffing and device permission APIs. GitHub Pages ignores `_headers`, so `frame-ancestors` and other header-only controls cannot be assumed on GitHub Pages. Current inline styles still require `style-src 'unsafe-inline'`. These policies secure the public static preview, **not** the telecom backend, which remains private-test-only.

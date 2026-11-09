@@ -32,3 +32,9 @@ Append one dated entry for each substantial incremental development session. Lin
 - Rejected malformed or unexpected reservation and cancellation arguments before database side effects; added dedicated Node regression tests.
 - Original PR #5 quality gate succeeded: https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/42556200400 . Final post-reconciliation CI is required before merging.
 - No calls, carrier credentials, payment processing or live backend deployment.
+
+## 2026-11-09 — Privacy and browser-policy integration (PR #6)
+- Removed external font CDN import; added offline system-font fallback and restrictive CSP/referrer metadata to the built preview, plus Cloudflare Pages `_headers`.
+- Fixed original PR #6 failed quality gate: typography test required explicit `system-ui` fallback, which is now present in the CSS stack.
+- Combined PR #4's separate `test:site` post-build audit with new static-security regression tests; protected execution order to prevent auditing before `dist/` exists.
+- Security remains subject to hosting limits: GitHub Pages ignores `_headers`; inline styles still require `style-src 'unsafe-inline'`. No verified browser screenshots or telecom backend changes.
