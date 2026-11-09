@@ -117,3 +117,7 @@ Append one dated entry for each substantial incremental development session. Lin
 - Security review found that checking `Buffer.byteLength(line)` after `readline` emits a line permits arbitrarily large untrusted stdin lines to accumulate in memory before rejection.
 - Replaced line-event buffering with an incremental byte-bounded iterator that discards oversized frames until newline, preserves subsequent valid requests, counts UTF-8 bytes and handles CRLF/EOF. No provider writes, call paths or paid features added.
 - Added regression cases for a 20 KB fragmented input, multibyte overflow and valid-message recovery. CI and actual MCP host interoperability require separate verification; no carrier operations or deployment.
+
+## 2026-11-09 — Repair local MCP CI import path (PR #17 follow-up)
+- Investigated failing GitHub Actions quality gate run 42711903061: Node could not resolve `backend/scripts/local-number-mcp.mjs` from `backend/test/local-number-mcp.test.mjs`. Corrected test import to `../../scripts/local-number-mcp.mjs`, matching the repository-root scripts directory. The subprocess invocation already points to `scripts/local-number-mcp.mjs` from the repository root.
+- No carrier operations, credential changes, public deployment, call routing or payment features. Re-run full CI to verify the fix; real Grok Bot host integration remains unverified.

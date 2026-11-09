@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
-import {dispatch,boundedLines} from '../scripts/local-number-mcp.mjs';
+import {dispatch,boundedLines} from '../../scripts/local-number-mcp.mjs';
 import {Readable} from 'node:stream';
 const env={US_BRIDGE_DID:'+12025550123'};
 const call=(name,args={})=>({jsonrpc:'2.0',id:1,method:'tools/call',params:{name,arguments:args}});
