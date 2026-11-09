@@ -26,3 +26,9 @@ Append one dated entry for each substantial incremental development session. Lin
 - Integrated a dependency-free audit of six static pages, navigation, local assets, anchors, duplicate IDs, labels and essential landmarks, including GitHub Pages project paths.
 - Added negative regression tests, quality gate and pre-deploy project-site audit, retaining the previous caller-authentication work.
 - Original PR #4 GitHub quality gate succeeded: https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/42550759009 . Browser accessibility/contrast and visual screenshots are not verified.
+
+## 2026-11-09 — Strict MCP request-validation gate (PR #5)
+- Integrated JSON-RPC 2.0 envelope, method and exact tool-argument validation ahead of MCP tool dispatch, preserving the merged approved-caller inbound gate.
+- Rejected malformed or unexpected reservation and cancellation arguments before database side effects; added dedicated Node regression tests.
+- Original PR #5 quality gate succeeded: https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/42556200400 . Final post-reconciliation CI is required before merging.
+- No calls, carrier credentials, payment processing or live backend deployment.

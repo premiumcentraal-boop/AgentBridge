@@ -1,3 +1,4 @@
+import {validateMcpEnvelope} from './mcp-validation.mjs';
 /**
  * AgentBridge reference backend — intentionally fail-closed.
  * This is NOT a publicly deployable calling reseller: it only routes to one
@@ -119,8 +120,11 @@ async function routeRest(request,url,env,account){
 }
 const TOOLS=[{name:'prepare_international_call',description:'Reserve a short-lived US bridge for a preapproved test international destination. No call is placed by this tool.',inputSchema:{type:'object',properties:{destination:{type:'string',description:'International E.164 destination including +'},idempotency_key:{type:'string',description:'Unique key for safe retries'}},required:['destination','idempotency_key'],additionalProperties:false}},{name:'get_call_status',description:'Read the state of an existing reservation.',inputSchema:{type:'object',properties:{reservation_id:{type:'string'}},required:['reservation_id'],additionalProperties:false}},{name:'cancel_international_call',description:'Cancel an unused ready reservation.',inputSchema:{type:'object',properties:{reservation_id:{type:'string'}},required:['reservation_id'],additionalProperties:false}}];
 async function handleMcp(request,account,env){
-  const rpc=await parseJson(request);if(!rpc||typeof rpc.method!=='string')return error('INVALID_JSON','Invalid JSON-RPC request');
-  if(rpc.method==='notifications/initialized')return new Response(null,{status:202});
+  const rpc=await parseJson(request);
+  if(!rpc)return error('INVALID_JSON','Expected a small JSON object',400);
+  const validation=validateMcpEnvelope(rpc);
+  if(!validation.ok)return json({jsonrpc:'2.0',id:(typeof rpc.id==='string'||typeof rpc.id==='number')?rpc.id:null,error:{code:validation.code,message:validation.message}},400);
+  if(validation.notification)return new Response(null,{status:202});
   const response=(result)=>json({jsonrpc:'2.0',id:rpc.id??null,result});
   const fault=(code,message)=>json({jsonrpc:'2.0',id:rpc.id??null,error:{code,message}});
   if(rpc.method==='initialize')return response({protocolVersion:'2025-03-26',capabilities:{tools:{}},serverInfo:{name:'AgentBridge',version:'0.1.0'}});
