@@ -40,6 +40,54 @@ Written 2026-11-09 against branch `local-mcp` (based on `main` 84fc990). Read wi
 
 ---
 
+## Progress (branch `routing-fixes`, local only, 2026-11-09)
+
+The coding-agent parts of phases 1, 2 and 5 are implemented and tested offline: fake values, SQLite-backed D1, a fixed clock, no network, no deploy. **Routing remains OFF.** With either owner flag unset, `/telephony/signalwire/swml` runs the original hangup-only handler unchanged and never touches D1.
+
+| Item | Status | Where |
+| --- | --- | --- |
+| Private config git-ignored | done | `.gitignore` (`backend/wrangler.jsonc`, `.dev.vars*`) |
+| #9 exact boundaries | done; one gap fixed: an expired same-key retry now returns `RESERVATION_EXPIRED` plus the terminal state (it used to return `RESERVATION_NOT_READY`) | `backend/test/reservation-boundary.test.mjs`, `prepareReservation()` |
+| Replay ledger keyed by call ID | done | `backend/migrations/0001_routing_controls.sql` (`provider_events`) |
+| #3 caller proof | both modes built; neither is on by default | `backend/src/caller-proof.mjs`: `CALLER_PROOF_MODE=dtmf_pin` (8-digit, hashed, single use, 3 attempts, reservation TTL) or `capped_caller_id` + `CALLER_ID_TRUST_ACCEPTED=true` (≤120 s, ≤3 calls/day) |
+| Allowlist / countries / blocked ranges / caps | done | `backend/src/routing-policy.mjs` |
+| Two-step owner approval | done | `POST /v1/owner/reservations/:id/approve` (separate owner token), `scripts/owner-token.mjs`, `scripts/owner-reservation.mjs` |
+| SignalWire-only reservation API (no Twilio token) | done | `reservationApiReady()` in `backend/src/index.mjs` |
+| Gated `connect` | done | `backend/src/signalwire-routing.mjs`; `signalWireConnectPlan(dest, DID, {maxDuration, timeout})` |
+| Status callbacks | **TODO**: SignalWire does not document signatures for them. Until then the owner confirms the call ended in the SignalWire log and runs `owner-reservation.mjs mark-ended <id>` | |
+| Stuck-call reconciliation via SignalWire API | TODO (endpoint unknown) | |
+| Staging deploy files (pinned wrangler, preflight script, STAGING_DEPLOY.md) | TODO; deliberately not done in this pass | |
+| Local MCP server | unchanged, read-only; a test forbids routing imports | `local-mcp/` |
+
+**Placeholders only the owner can fill** (all in `backend/wrangler.jsonc` vars or as Worker secrets):
+- `ROUTING_DESTINATIONS`: the exact numbers, their country, and the rate with its source and date.
+- `ROUTING_ALLOWED_COUNTRIES`.
+- `ROUTING_MAX_CALL_SECONDS`, `ROUTING_MAX_CALLS_PER_DAY`, `ROUTING_MAX_SPEND_CENTS_PER_CALL`, `ROUTING_MAX_SPEND_CENTS_PER_DAY`.
+- `RESERVATION_TTL_SECONDS`.
+- `CALLER_PROOF_MODE` (+ `CALLER_ID_TRUST_ACCEPTED`, `TEST_CALLER_E164` for caller-ID mode).
+- `SIGNALWIRE_PROJECT_ID`, `SIGNALWIRE_SWML_WEBHOOK_URL`.
+- Secrets: `SIGNALWIRE_SIGNING_KEY` and `OWNER_APPROVAL_TOKEN_SHA256` (from `node scripts/owner-token.mjs`).
+- The two kill switches `PRIVATE_TEST_OUTBOUND_ENABLED` and `SIGNALWIRE_CONNECT_ENABLED`.
+
+**Call flow once everything is configured and both flags are on:**
+1. Grok Bot calls `prepare_international_call`.
+2. The response contains the estimate and, in PIN mode, a one-time PIN.
+3. The owner approves out-of-band.
+4. Grok Bot dials the DID.
+5. The Worker checks the signature, project and DID, replay, the approved reservation, policy and caps.
+6. Depending on the mode:
+   - **PIN mode:** silent `answer` + `prompt`, then `transfer` to the signed `/telephony/signalwire/swml/pin`, which checks the PIN and claims the reservation.
+   - **Capped caller-ID mode:** the reservation is claimed directly.
+7. `connect` goes to the single allowlisted destination with `from` = the DID, `max_duration` ≤ cap and `timeout` 30.
+8. The owner marks the call ended.
+
+**Unverified against a real call:**
+- The SWML body shape of the PIN `transfer`: the code reads `params.digits` or `vars.prompt_value`.
+- Whether Grok Bot can send DTMF.
+- Inbound-leg minutes are not included in the spend estimate.
+
+---
+
 ## Phase 0: Prerequisites and feasibility (no code deployed, no money spent)
 
 **You do**

@@ -112,3 +112,10 @@ Append one dated entry for each substantial incremental development session. Lin
 - Added `local-mcp/`: private single-operator stdio MCP server reusing backend number tools and the MCP Apps card; four read-only tools; allowlist guard; env-only credentials with redaction; `run.sh` with optional 0600 secrets file.
 - Extracted `searchNumberCandidates` from `searchAvailableNumbers` (hosted guard unchanged).
 - Added `scripts/setup-local-mcp.sh`, `docs/LOCAL_MCP.md`, stdio client tests with mocked SignalWire.
+
+## 2026-11-09 — Routing controls (branch routing-fixes, local, not pushed or deployed)
+- Git-ignored private Worker config. #9: fixed-clock SQLite boundary tests; expired same-key retries now return RESERVATION_EXPIRED with terminal state.
+- #3: provider_events replay ledger (migration 0001); caller proof modes dtmf_pin and capped_caller_id (owner acceptance required), default none.
+- Phase 2: owner allowlist + country/premium/NANP-non-US blocking, required caps, configurable TTL, owner-only two-step approval endpoint and scripts, SignalWire-only reservation API; Twilio route requires approval when owner approval is configured.
+- Phase 5: gated SignalWire connect behind both owner flags; flags-off behaviour unchanged (hangup-only, no D1). Status callbacks TODO (signing undocumented). No live calls, deploy or provider writes.
+

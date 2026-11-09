@@ -40,3 +40,12 @@ test('private Worker config and dev secrets are git-ignored',async()=>{
   for(const entry of ['backend/wrangler.jsonc','.dev.vars','backend/.dev.vars','.env'])
     assert.ok(ignore.includes(entry),entry+' must be ignored');
 });
+
+test('example Worker config ships with routing off and no secrets',async()=>{
+  const {readFileSync}=await import('node:fs');
+  const text=readFileSync(new URL('../backend/wrangler.example.jsonc',import.meta.url),'utf8');
+  for(const flag of ['PRIVATE_TEST_OUTBOUND_ENABLED','SIGNALWIRE_CONNECT_ENABLED','CALLER_PROOF_MODE','CALLER_ID_TRUST_ACCEPTED'])
+    assert.match(text,new RegExp('"'+flag+'": ""'),flag);
+  for(const secret of ['SIGNALWIRE_SIGNING_KEY"','SIGNALWIRE_API_TOKEN"','OWNER_APPROVAL_TOKEN_SHA256"','TWILIO_AUTH_TOKEN"'])
+    assert.ok(!text.includes('"'+secret+':'),secret);
+});
