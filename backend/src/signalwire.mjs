@@ -89,9 +89,32 @@ export async function handleSignalWireSwml(request,env={}){
     return new Response('Unsupported media type',{status:415});
   if(Number(request.headers.get('content-length')||0)>MAX_WEBHOOK_BYTES)
     return new Response('Payload too large',{status:413});
-  const raw=await request.text();
-  if(new TextEncoder().encode(raw).length>MAX_WEBHOOK_BYTES)
-    return new Response('Payload too large',{status:413});
+  // Do not buffer an untrusted, chunked request before enforcing the limit.
+  // Content-Length is optional and attacker-controlled; count streamed bytes.
+  const reader=request.body?.getReader();
+  if(!reader)return new Response('Invalid body',{status:400});
+  const chunks=[];
+  let bytes=0;
+  try{
+    while(true){
+      const {done,value}=await reader.read();
+      if(done)break;
+      bytes+=value.byteLength;
+      if(bytes>MAX_WEBHOOK_BYTES){
+        await reader.cancel();
+        return new Response('Payload too large',{status:413});
+      }
+      chunks.push(value);
+    }
+  }catch{
+    return new Response('Invalid body',{status:400});
+  }finally{reader.releaseLock();}
+  const combined=new Uint8Array(bytes);
+  let offset=0;
+  for(const chunk of chunks){combined.set(chunk,offset);offset+=chunk.byteLength;}
+  let raw;
+  try{raw=new TextDecoder('utf-8',{fatal:true}).decode(combined);}
+  catch{return new Response('Invalid UTF-8',{status:400});}
   const valid=await verifySignalWireSwmlSignature(raw,
     request.headers.get('x-signalwire-sha256-signature'),
     env.SIGNALWIRE_SIGNING_KEY,env.SIGNALWIRE_SWML_WEBHOOK_URL,request.url);
