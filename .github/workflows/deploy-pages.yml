@@ -25,6 +25,8 @@ jobs:
         run: npm run check && npm test
       - name: Build project-site URLs
         run: BASE_PATH=/AgentBridge npm run build:site
+      - name: Audit project-site navigation and accessibility
+        run: BASE_PATH=/AgentBridge npm run test:site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

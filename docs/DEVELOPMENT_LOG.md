@@ -15,11 +15,20 @@ Append one dated entry for each substantial incremental development session. Lin
 - Verified through the GitHub connector that the source files, North Star, CI workflow and deployment workflow exist in main.
 - Not verified: actual automated CI success, deployment URL accessibility, live telecom integration, and real native Grok Bot international call.
 
-## 2026-11-09 — MCP request validation hardening (review pending)
-- Inspected North Star, roadmap, log, README, main backend/tests and open PRs #2 and #4 plus issues #1 and #3.
-- Added a standalone strict JSON-RPC 2.0 envelope validator and integrated it before MCP tool dispatch.
-- Malformed batches/scalars, missing or invalid IDs, incorrect protocol versions, unknown methods/tools, malformed tool arguments and unexpected arguments are now rejected before any call reservation or cancellation.
-- Added dedicated Node regression tests for accepted and denied requests.
-- Independent of open inbound caller security PR #2 and website quality PR #4; no telephony routing, pricing, carrier integration or public site changes.
-- Verification limitation: attempted `git clone` and `npm run ci` locally, but DNS resolution of github.com failed before cloning; CI results must be checked before merge.
-- No real calls, provider secrets, public deployment, payments or merges.
+## 2026-11-09 — Private-test inbound caller hardening (PR pending)
+- Identified a high-risk condition: any inbound caller could consume a ready DID reservation and trigger a paid international leg if they reached the assigned US number during its 90-second window.
+- Added a fail-closed `TEST_CALLER_E164` origin gate before reservation lookup and consumption, plus strict Twilio CallSid shape validation.
+- Added regression tests for permitted/unknown/malformed/missing callers and missing caller configuration.
+- Updated private setup instructions and explicitly documented caller-ID spoofability. This is a **defense-in-depth private-test guard**, not cryptographic authentication; a carrier-verified origin or per-call challenge is still a release blocker.
+- GitHub Actions validation pending; local repository clone unavailable due to runtime network DNS restrictions. No live calls placed.
+
+## 2026-11-09 — Website structural integrity gate (PR #4)
+- Integrated a dependency-free audit of six static pages, navigation, local assets, anchors, duplicate IDs, labels and essential landmarks, including GitHub Pages project paths.
+- Added negative regression tests, quality gate and pre-deploy project-site audit, retaining the previous caller-authentication work.
+- Original PR #4 GitHub quality gate succeeded: https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/42550759009 . Browser accessibility/contrast and visual screenshots are not verified.
+
+## 2026-11-09 — Strict MCP request-validation gate (PR #5)
+- Integrated JSON-RPC 2.0 envelope, method and exact tool-argument validation ahead of MCP tool dispatch, preserving the merged approved-caller inbound gate.
+- Rejected malformed or unexpected reservation and cancellation arguments before database side effects; added dedicated Node regression tests.
+- Original PR #5 quality gate succeeded: https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/42556200400 . Final post-reconciliation CI is required before merging.
+- No calls, carrier credentials, payment processing or live backend deployment.
