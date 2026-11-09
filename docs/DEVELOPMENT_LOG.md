@@ -14,3 +14,10 @@ Append one dated entry for each substantial incremental development session. Lin
 - Added the [P1 native Grok Bot international test call acceptance issue](https://github.com/premiumcentraal-boop/AgentBridge/issues/1).
 - Verified through the GitHub connector that the source files, North Star, CI workflow and deployment workflow exist in main.
 - Not verified: actual automated CI success, deployment URL accessibility, live telecom integration, and real native Grok Bot international call.
+
+## 2026-11-09 — Private-test inbound caller hardening (PR pending)
+- Identified a high-risk condition: any inbound caller could consume a ready DID reservation and trigger a paid international leg if they reached the assigned US number during its 90-second window.
+- Added a fail-closed `TEST_CALLER_E164` origin gate before reservation lookup and consumption, plus strict Twilio CallSid shape validation.
+- Added regression tests for permitted/unknown/malformed/missing callers and missing caller configuration.
+- Updated private setup instructions and explicitly documented caller-ID spoofability. This is a **defense-in-depth private-test guard**, not cryptographic authentication; a carrier-verified origin or per-call challenge is still a release blocker.
+- GitHub Actions validation pending; local repository clone unavailable due to runtime network DNS restrictions. No live calls placed.
