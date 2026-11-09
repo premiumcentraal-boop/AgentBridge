@@ -45,7 +45,17 @@ async function findAccount(request,env){
   const digest=await sha256(token);
   return env.DB.prepare('SELECT id, did, status FROM accounts WHERE api_key_sha256 = ?').bind(digest).first();
 }
-async function parseJson(request){try{if(!(request.headers.get('content-type')||'').includes('application/json'))return null;const body=await request.text();if(body.length>4096)return null;return JSON.parse(body);}catch{return null;}}
+async function parseJson(request){
+  // Authentication precedes parsing. Never buffer an untrusted MCP/REST body
+  // without a byte limit; a declared Content-Length is not authoritative.
+  if(!/^application\/json(?:\s*;|\s*$)/i.test(request.headers.get('content-type')||''))return null;
+  try{
+    const body=await readBoundedWebhookBody(request,4096);
+    if(body===null)return null;
+    const data=JSON.parse(body);
+    return data;
+  }catch{return null;}
+}
 export async function prepareReservation(account,requestData,env){
   if(account.status!=='active')return {status:403,body:{error:{code:'ACCOUNT_DISABLED',message:'Account not active'}}};
   if(!validateE164(account.did)||account.did!==env.US_BRIDGE_DID)return {status:503,body:{error:{code:'BRIDGE_NOT_PROVISIONED',message:'Assigned US number is not configured'}}};
