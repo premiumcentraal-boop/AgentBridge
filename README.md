@@ -51,6 +51,12 @@ The \`backend/\` directory is a deliberately bounded **test-only reference**:
 ### Security rules
 Never put real carrier credentials into public site code or the Git repo. No authorization fallback or arbitrary forwarding. Never turn off webhook validation to make a test pass. No premium/emergency/short-code destinations. Avoid recording or transcribing calls. Do not present made-up telecom prices as live quotations.
 
+## SignalWire bring-your-own-project (developer preview)
+
+SignalWire integration has **two non-billable building blocks**: a read-only `npm run signalwire:check` inventory of voice-capable numbers in your own Project and a separately signed JSON/SWML webhook at `POST /telephony/signalwire/swml` that **always hangs up**. The read-only API uses server-side `SIGNALWIRE_SPACE`, `SIGNALWIRE_PROJECT_ID`, `SIGNALWIRE_API_TOKEN`; the webhook uses a different secret `SIGNALWIRE_SIGNING_KEY` and exact `SIGNALWIRE_SWML_WEBHOOK_URL`. Never paste secrets into the public site or an AI conversation. **Adding a key does not unlock paid routing.**
+
+See [docs/SIGNALWIRE.md](docs/SIGNALWIRE.md) for the verified API endpoint, setup, webhook signature requirements and the work still necessary for multi-user routing. SWML `connect` is the actual phone-bridge method; `goto`, `execute`, and `transfer` only control SWML program flow. Native Grok Bot calling compatibility has not been verified. No accounts, numbers, carrier spending or paid routing are provisioned by this change.
+
 ## Continuous development
 - \`.github/workflows/ci.yml\`: quality gate on push and pull requests.
 - \`.github/workflows/hourly-quality.yml\`: hourly CI test and build pulse (GitHub Actions scheduled runs can be delayed).
