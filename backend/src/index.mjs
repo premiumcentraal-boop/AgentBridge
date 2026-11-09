@@ -105,6 +105,10 @@ async function incoming(request,env){
   const now=Math.floor(Date.now()/1000);
   const row=await env.DB.prepare("SELECT r.id,r.destination FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE a.did=? AND a.status='active' AND r.status='ready' AND r.expires_at>=? ORDER BY r.created_at DESC LIMIT 1").bind(to,now).first();
   if(!row||row.destination!==env.TEST_DESTINATION_E164)return twiml(hangupXml());
+  // Explicit private-test kill switch: a deployed prototype must NEVER
+  // originate an international leg simply because a valid reservation exists.
+  // This flag is not sufficient for public use: caller ID is spoofable.
+  if(env.PRIVATE_TEST_OUTBOUND_ENABLED!=='true')return twiml(hangupXml());
   // Atomically consume route: no second inbound call may reuse it.
   const done=await env.DB.prepare("UPDATE reservations SET status='connecting',call_sid=? WHERE id=? AND status='ready' AND expires_at>=?").bind(sid,row.id,now).run();
   if(!done.meta?.changes)return twiml(hangupXml());
