@@ -87,6 +87,7 @@ test('stdio: setup status with no credentials reports not configured, no crash',
     const s=await c.client.callTool({name:'search_available_numbers',arguments:{area_code:'618'}});
     assert.equal(s.structuredContent.state,'operator_connection_required');
     assert.match(s.content[0].text,/Not configured/);
+    assert.doesNotMatch(textOf(s),/undefined/);
   }finally{await c.close();}
 });
 

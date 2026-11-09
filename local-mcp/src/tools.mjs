@@ -80,16 +80,19 @@ function summarize(body){
       break;
     }
     case 'owned_number':
+      if(body.state==='operator_connection_required'){lines.push('Assigned-number check unavailable.');break;}
       lines.push('Assigned-number check: '+body.state);
       for(const n of body.numbers||[])lines.push('- '+n.number+' (voice, '+n.ownership+')');
       if(!(body.numbers||[]).length)lines.push('No matching voice number returned.');
       break;
     case 'project_inventory':
+      if(body.state==='operator_connection_required'){lines.push('Project inventory unavailable.');break;}
       lines.push('SignalWire project voice numbers: '+body.numbers.length+(body.has_more?' (first page only; more exist)':''));
       for(const n of body.numbers)lines.push('- '+n.number);
       if(!body.numbers.length)lines.push('No voice-capable numbers on the first page.');
       break;
     case 'number_choices':
+      if(body.state==='operator_connection_required'){lines.push('US number search unavailable.');break;}
       lines.push('US local voice number candidates for area code '+body.area_code+': '+(body.numbers||[]).length);
       for(const n of body.numbers||[])lines.push('- '+n.number+' (candidate only, not reserved, price unknown)');
       break;
