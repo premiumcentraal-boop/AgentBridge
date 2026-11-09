@@ -48,6 +48,9 @@ The \`backend/\` directory is a deliberately bounded **test-only reference**:
 
 **Important:** This is not approved for public paid use. Shared phone numbers, fluctuating AI caller IDs, caller-ID based access, stuck connecting calls, missing callback retries, exact carrier billing, multiple providers, KYC, fraud protection and regulatory obligations remain unresolved. Time-limited DID access alone is **not sufficient anti-fraud protection** for a commercial relay. **Caller ID can be spoofed**, so \`TEST_CALLER_E164\` is only a conservative additional private-test guard, not proof of identity or an authorization mechanism suitable for public service. Carrier-verified origin or a cryptographic per-call challenge remains required before expansion.
 
+### Reservation retry contract
+A successful reservation expires after 90 seconds. Reusing the same idempotency key returns the original route **only while it remains ready and unexpired**. Expired, consumed or closed reservations require a new idempotency key; stale GET/MCP status responses never return a callable access number. At the exact expiry second the route is no longer callable. These rules do not replace cryptographic inbound authorization.
+
 ### Security rules
 Never put real carrier credentials into public site code or the Git repo. No authorization fallback or arbitrary forwarding. Never turn off webhook validation to make a test pass. No premium/emergency/short-code destinations. Avoid recording or transcribing calls. Do not present made-up telecom prices as live quotations.
 
