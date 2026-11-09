@@ -1,6 +1,8 @@
 import {validateMcpEnvelope} from './mcp-validation.mjs';
 import {SIGNALWIRE_SWML_PATH,handleSignalWireSwml} from './signalwire.mjs';
 import {readBoundedWebhookBody} from './bounded-body.mjs';
+import {getBridgeSetup,listMyNumbers,searchAvailableNumbers} from './chat-number-tools.mjs';
+import {NUMBER_CARD_URI,numberCardResource,readNumberCardResource} from './chat-card.mjs';
 /**
  * AgentBridge reference backend — intentionally fail-closed.
  * This is NOT a publicly deployable calling reseller: it only routes to one
@@ -23,6 +25,7 @@ export function dialXml(destination,actionUrl,seconds=MAX_CALL_SECONDS){
 function json(data,status=200){return new Response(JSON.stringify(data),{status,headers:JSON_HEADERS});}
 function twiml(body){return new Response(body,{status:200,headers:{'content-type':'application/xml; charset=utf-8','cache-control':'no-store'}});}
 function error(code,message,status=400){return json({error:{code,message}},status);}
+function requireMcpEnv(env){return Boolean(env.DB&&validateE164(env.US_BRIDGE_DID));}
 function requireEnv(env){return Boolean(env.DB&&env.PUBLIC_BASE_URL?.startsWith('https://')&&validateE164(env.US_BRIDGE_DID)&&validateE164(env.TEST_DESTINATION_E164)&&validateE164(env.TEST_CALLER_E164)&&env.TWILIO_AUTH_TOKEN);}
 function rawHex(bytes){return [...new Uint8Array(bytes)].map(x=>x.toString(16).padStart(2,'0')).join('');}
 export async function sha256(text){return rawHex(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)));}
@@ -142,7 +145,13 @@ async function routeRest(request,url,env,account){
   if(match&&request.method==='POST'&&match[2])return cancelReservation(account,match[1],env);
   return error('NOT_FOUND','Route not found',404);
 }
-const TOOLS=[{name:'prepare_international_call',description:'Reserve a short-lived US bridge for a preapproved test international destination. No call is placed by this tool.',inputSchema:{type:'object',properties:{destination:{type:'string',description:'International E.164 destination including +'},idempotency_key:{type:'string',description:'Unique key for safe retries'}},required:['destination','idempotency_key'],additionalProperties:false}},{name:'get_call_status',description:'Read the state of an existing reservation.',inputSchema:{type:'object',properties:{reservation_id:{type:'string'}},required:['reservation_id'],additionalProperties:false}},{name:'cancel_international_call',description:'Cancel an unused ready reservation.',inputSchema:{type:'object',properties:{reservation_id:{type:'string'}},required:['reservation_id'],additionalProperties:false}}];
+const CHAT_NUMBER_TOOLS=[
+  {name:'get_bridge_setup',title:'My AgentBridge setup',description:'Preview assigned US bridge number and next setup step. No provider request, payment or call.',annotations:{readOnlyHint:true,destructiveHint:false},inputSchema:{type:'object',properties:{},additionalProperties:false}},
+  {name:'list_my_numbers',title:'My US bridge number',description:'Check whether the account-assigned voice DID appears in the private SignalWire Project. Does not expose other project numbers.',annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:true},inputSchema:{type:'object',properties:{},additionalProperties:false}},
+  {name:'search_available_numbers',title:'Find US number candidates',description:'Read-only search for at most five local voice numbers by area code. No prices, holds or purchases.',annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:true},inputSchema:{type:'object',properties:{area_code:{type:'string',pattern:'^[2-9][0-9]{2}$',description:'Three-digit US area code, such as 202 or 618'}},required:['area_code'],additionalProperties:false}}
+];
+const NUMBER_CARD_TOOLS=CHAT_NUMBER_TOOLS.map(tool=>({...tool,_meta:{ui:{resourceUri:NUMBER_CARD_URI,visibility:['model','app']}}}));
+const TOOLS=[...NUMBER_CARD_TOOLS,{name:'prepare_international_call',description:'Reserve a short-lived US bridge for a preapproved test international destination. No call is placed by this tool.',inputSchema:{type:'object',properties:{destination:{type:'string',description:'International E.164 destination including +'},idempotency_key:{type:'string',description:'Unique key for safe retries'}},required:['destination','idempotency_key'],additionalProperties:false}},{name:'get_call_status',description:'Read the state of an existing reservation.',inputSchema:{type:'object',properties:{reservation_id:{type:'string'}},required:['reservation_id'],additionalProperties:false}},{name:'cancel_international_call',description:'Cancel an unused ready reservation.',inputSchema:{type:'object',properties:{reservation_id:{type:'string'}},required:['reservation_id'],additionalProperties:false}}];
 async function handleMcp(request,account,env){
   const rpc=await parseJson(request);
   if(!rpc)return error('INVALID_JSON','Expected a small JSON object',400);
@@ -151,16 +160,25 @@ async function handleMcp(request,account,env){
   if(validation.notification)return new Response(null,{status:202});
   const response=(result)=>json({jsonrpc:'2.0',id:rpc.id??null,result});
   const fault=(code,message)=>json({jsonrpc:'2.0',id:rpc.id??null,error:{code,message}});
-  if(rpc.method==='initialize')return response({protocolVersion:'2025-03-26',capabilities:{tools:{}},serverInfo:{name:'AgentBridge',version:'0.1.0'}});
+  if(rpc.method==='initialize')return response({protocolVersion:'2025-03-26',capabilities:{tools:{},resources:{}},serverInfo:{name:'AgentBridge',version:'0.1.0'}});
   if(rpc.method==='ping')return response({});
-  if(rpc.method==='tools/list')return response({tools:TOOLS});
+  if(rpc.method==='tools/list')return response({tools:requireEnv(env)?TOOLS:NUMBER_CARD_TOOLS});
+  if(rpc.method==='resources/list')return response({resources:[numberCardResource()]});
+  if(rpc.method==='resources/read')return response(readNumberCardResource(rpc.params.uri));
   if(rpc.method==='tools/call'){
     const name=rpc.params?.name,args=rpc.params?.arguments||{};let result;
-    if(name==='prepare_international_call')result=await prepareReservation(account,args,env);
+    if(name==='get_bridge_setup')result=getBridgeSetup(account,env);
+    else if(name==='list_my_numbers')result=await listMyNumbers(account,env);
+    else if(name==='search_available_numbers')result=await searchAvailableNumbers(account,args,env);
+    else if(!requireEnv(env))result={status:503,body:{error:{code:'NOT_CONFIGURED',message:'Calling is not configured; read-only tools remain available.'}}};
+    else if(name==='prepare_international_call')result=await prepareReservation(account,args,env);
     else if(name==='get_call_status'){if(!/^[a-f0-9-]{36}$/i.test(args.reservation_id||''))result={status:422,body:{error:'Invalid reservation ID'}};else {const row=await env.DB.prepare('SELECT id,destination,status,expires_at FROM reservations WHERE id=? AND account_id=?').bind(args.reservation_id,account.id).first();result={status:row?200:404,body:row?reservationView(row,account.did):{error:'Not found'}};}}
     else if(name==='cancel_international_call'){if(!/^[a-f0-9-]{36}$/i.test(args.reservation_id||''))result={status:422,body:{error:'Invalid reservation ID'}};else {const r=await env.DB.prepare("UPDATE reservations SET status='cancelled' WHERE id=? AND account_id=? AND status='ready' AND expires_at> ?").bind(args.reservation_id,account.id,Math.floor(Date.now()/1000)).run();result={status:r.meta?.changes?200:409,body:r.meta?.changes?{status:'cancelled'}:{error:'Not ready or not found'}};}}
     else return fault(-32601,'Unknown tool');
-    return response({content:[{type:'text',text:JSON.stringify(result.body)}],isError:result.status>=400});
+    const output={content:[{type:'text',text:JSON.stringify(result.body)}],isError:result.status>=400};
+    // Hosts supporting structured results can render cards; text is a complete fallback.
+    if(CHAT_NUMBER_TOOLS.some(tool=>tool.name===name)&&result.status<400)output.structuredContent=result.body;
+    return response(output);
   }
   return fault(-32601,'Method not found');
 }
@@ -175,7 +193,8 @@ export default {async fetch(request,env){
     if(url.pathname==='/telephony/twilio/dial-complete')return dialComplete(request,env);
     return new Response('Not found',{status:404});
   }
-  if(!requireEnv(env))return error('NOT_CONFIGURED','Bridge backend is not configured',503);
+  if((url.pathname==='/mcp'&&!requireMcpEnv(env))||
+     (url.pathname!=='/mcp'&&!requireEnv(env)))return error('NOT_CONFIGURED','Bridge backend is not configured',503);
   if(!['/mcp','/v1/reservations'].includes(url.pathname)&&!url.pathname.startsWith('/v1/reservations/'))return error('NOT_FOUND','Route not found',404);
   const account=await findAccount(request,env);
   if(!account)return error('UNAUTHORIZED','A valid scoped bearer token is required',401);

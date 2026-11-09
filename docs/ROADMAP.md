@@ -10,14 +10,16 @@ Last revised: 2026-11-09. Read [NORTH_STAR.md](NORTH_STAR.md) first.
 - [x] Twilio webhook signature check and one-time reservation consumption
 - [x] Node tests for validation, signing and destination restrictions
 - [x] Hourly CI quality pulse and development protocol
-- [ ] Run actual GitHub Actions and validate all checks
-- [x] Gate GitHub Pages preview deployment behind manual approval (review pending; issue #7)
+- [x] GitHub Actions full combined quality gate verified on PR #15 (2026-11-09)
+- [x] Gate GitHub Pages preview deployment behind manual workflow dispatch (merged PR #8; enabling Pages remains separate)
 - [x] Automated static link, label, landmark and project-path audit (GitHub PR #4 quality gate passed)
 - [ ] Browser accessibility audit across mobile and desktop; resolve contrast/keyboard issues
 - [x] Offline-first system fonts, six-page CSP, Cloudflare headers and static policy regression tests (PR #6)
 - [ ] Real browser screenshots and visual quality checks
 - [x] Strict MCP JSON-RPC envelope and tool argument validation (PR #5; branch CI passed before merge)
 - [x] SignalWire BYO read-only number inventory, signed SWML fail-closed webhook with streaming byte cap and strict UTF-8 validation, offline phone bridge serializer and regression tests (proposed; **paid routing disabled**)
+- [x] MCP read-only chat-number cards: truthful setup, scoped SignalWire DID check, five-candidate lookup and optional MCP Apps resource (PR under review; host compatibility unverified, not deployed, no purchases)
+- [ ] Provider-linked multi-user onboarding, exact number quotes, signed one-use chat purchase approvals and carrier purchase reconciliation
 - [ ] Secure multi-user SignalWire project credentials, DID ownership, cryptographic call authorization, verified quotes/billing and reliable carrier callbacks
 - [x] Strict reservation expiry boundaries and terminal idempotent retries; no stale access number after expiry (PR pending)
 - [x] Bound both Twilio webhook bodies to 16,000 bytes before signature verification, with strict UTF-8 and streamed oversize rejection (PR pending)
