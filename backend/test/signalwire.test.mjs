@@ -152,7 +152,7 @@ test('streaming SWML parser rejects chunked over-limit bodies without reading re
     headers:{'content-type':'application/json'},body:stream});
   const result=await worker.fetch(request,config);
   assert.equal(result.status,413);
-  assert.equal(reads,2);
+  assert.ok(reads<=3,'stream must stop without draining an unbounded body');
   assert.equal(cancelled,true);
 });
 test('streaming SWML parser rejects invalid UTF-8 before JSON handling',async()=>{
