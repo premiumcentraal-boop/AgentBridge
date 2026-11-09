@@ -47,7 +47,7 @@ test('signed inbound Twilio request still authenticates and hangs up with no act
   const params=new URLSearchParams(raw);
   const sig=createHmac('sha1',token).update(url+[...params.keys()].sort().map(k=>k+params.get(k)).join('')).digest('base64');
   const env={
-    DB:{prepare(){return {bind(){return {first:async()=>null}}}},
+    DB:{prepare(){return {bind(){return {first:async()=>null}}}}},
     PUBLIC_BASE_URL:'https://api.example.com',US_BRIDGE_DID:'+12025550123',
     TEST_DESTINATION_E164:'+31201234567',TEST_CALLER_E164:'+12125550177',
     TWILIO_AUTH_TOKEN:token
