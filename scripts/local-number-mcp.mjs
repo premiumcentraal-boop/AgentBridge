@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 /** Private, single-operator, read-only MCP stdio adapter. No telephony routes. */
-import {createInterface} from 'node:readline';
 import {getBridgeSetup,listMyNumbers,searchAvailableNumbers} from '../backend/src/chat-number-tools.mjs';
 
 const MAX_LINE=4096;
@@ -34,12 +33,34 @@ export async function dispatch(message,env=process.env,fetchImpl=fetch){
   const data=response.body;
   return {result:{content:[{type:'text',text:JSON.stringify(data)}],structuredContent:data,isError:response.status>=400}};
 }
+/** Bound memory before decoding/parsing: readline's line event is too late. */
+export async function* boundedLines(input){
+  let parts=[],size=0,discard=false;
+  for await(const chunk of input){
+    const bytes=Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk);
+    let offset=0;
+    while(offset<bytes.length){
+      const newline=bytes.indexOf(10,offset);
+      const end=newline===-1?bytes.length:newline;
+      const segment=bytes.subarray(offset,end);
+      if(!discard){
+        if(size+segment.length>MAX_LINE){discard=true;parts=[];size=0;}
+        else {parts.push(segment);size+=segment.length;}
+      }
+      if(newline===-1)break;
+      if(discard)yield {oversize:true};
+      else yield {line:Buffer.concat(parts,size).toString('utf8').replace(/\r$/,'')};
+      parts=[];size=0;discard=false;offset=newline+1;
+    }
+  }
+  if(discard)yield {oversize:true};
+  else if(size)yield {line:Buffer.concat(parts,size).toString('utf8')};
+}
 export async function start(input=process.stdin,env=process.env,fetchImpl=fetch){
-  const lines=createInterface({input,crlfDelay:Infinity});
-  for await(const line of lines){
-    if(Buffer.byteLength(line,'utf8')>MAX_LINE){reject(null,-32700,'Message too large');continue;}
+  for await(const item of boundedLines(input)){
+    if(item.oversize){reject(null,-32700,'Message too large');continue;}
     let msg;
-    try{msg=JSON.parse(line);}catch{reject(null,-32700,'Parse error');continue;}
+    try{msg=JSON.parse(item.line);}catch{reject(null,-32700,'Parse error');continue;}
     const id=isObject(msg)&&Object.hasOwn(msg,'id')?msg.id:null;
     let out;
     try{out=await dispatch(msg,env,fetchImpl);}catch{out={error:{code:-32603,message:'Internal error'}};}
