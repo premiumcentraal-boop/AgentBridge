@@ -20,7 +20,7 @@ export function dialXml(destination,actionUrl,seconds=MAX_CALL_SECONDS){
 function json(data,status=200){return new Response(JSON.stringify(data),{status,headers:JSON_HEADERS});}
 function twiml(body){return new Response(body,{status:200,headers:{'content-type':'application/xml; charset=utf-8','cache-control':'no-store'}});}
 function error(code,message,status=400){return json({error:{code,message}},status);}
-function requireEnv(env){return Boolean(env.DB&&env.PUBLIC_BASE_URL?.startsWith('https://')&&validateE164(env.US_BRIDGE_DID)&&validateE164(env.TEST_DESTINATION_E164)&&env.TWILIO_AUTH_TOKEN);}
+function requireEnv(env){return Boolean(env.DB&&env.PUBLIC_BASE_URL?.startsWith('https://')&&validateE164(env.US_BRIDGE_DID)&&validateE164(env.TEST_DESTINATION_E164)&&validateE164(env.TEST_CALLER_E164)&&env.TWILIO_AUTH_TOKEN);}
 function rawHex(bytes){return [...new Uint8Array(bytes)].map(x=>x.toString(16).padStart(2,'0')).join('');}
 export async function sha256(text){return rawHex(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)));}
 function safeEqual(a,b){if(typeof a!=='string'||typeof b!=='string'||a.length!==b.length)return false;let diff=0;for(let i=0;i<a.length;i++)diff|=a.charCodeAt(i)^b.charCodeAt(i);return diff===0;}
@@ -71,12 +71,25 @@ export async function prepareReservation(account,requestData,env){
 function reservationView(item,did){return {id:item.id,destination:item.destination,us_access_number:did,status:item.status,expires_at:new Date(item.expires_at*1000).toISOString(),max_call_seconds:MAX_CALL_SECONDS,warning:'Verify destination and obtain user approval before Grok Bot places its native US call. Prototype only; no live quote or billing.'};}
 async function getReservation(account,id,env){const row=await env.DB.prepare('SELECT id,destination,status,expires_at FROM reservations WHERE id=? AND account_id=?').bind(id,account.id).first();return row?json(reservationView(row,account.did)):error('NOT_FOUND','Reservation not found',404);}
 async function cancelReservation(account,id,env){const change=await env.DB.prepare("UPDATE reservations SET status='cancelled' WHERE id=? AND account_id=? AND status='ready'").bind(id,account.id).run();return change.meta?.changes?json({id,status:'cancelled'}):error('CANNOT_CANCEL','Reservation does not exist or is no longer ready',409);}
+/**
+ * Private-test inbound gate. Caller ID is a weak, spoofable signal, so this
+ * is an additional deny-by-default guard, NOT production authentication.
+ * Public service requires a carrier-verified origin / per-call challenge.
+ */
+export function approvedTestCaller(from, env) {
+  return validateE164(env?.TEST_CALLER_E164) &&
+    validateE164(from) &&
+    from === env.TEST_CALLER_E164 &&
+    from !== env.US_BRIDGE_DID;
+}
 async function incoming(request,env){
   if(!requireEnv(env))return twiml(hangupXml());
   const raw=await request.text();if(raw.length>16000||!await verifyTwilioSignature(request,raw,env.TWILIO_AUTH_TOKEN,env.PUBLIC_BASE_URL))return new Response('Forbidden',{status:403});
   const fields=new URLSearchParams(raw);
-  const to=fields.get('To'),sid=fields.get('CallSid');
-  if(to!==env.US_BRIDGE_DID||!sid||sid.length>64)return twiml(hangupXml());
+  const to=fields.get('To'),sid=fields.get('CallSid'),from=fields.get('From');
+  // A reservation alone must never make the DID an open forwarder. Reject
+  // unknown caller IDs BEFORE reading or consuming a reservation.
+  if(to!==env.US_BRIDGE_DID||!approvedTestCaller(from,env)||!/^CA[a-f0-9]{32}$/i.test(sid||''))return twiml(hangupXml());
   const now=Math.floor(Date.now()/1000);
   const row=await env.DB.prepare("SELECT r.id,r.destination FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE a.did=? AND a.status='active' AND r.status='ready' AND r.expires_at>=? ORDER BY r.created_at DESC LIMIT 1").bind(to,now).first();
   if(!row||row.destination!==env.TEST_DESTINATION_E164)return twiml(hangupXml());
