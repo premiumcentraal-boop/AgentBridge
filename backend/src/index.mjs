@@ -5,6 +5,7 @@ import {getBridgeSetup,listMyNumbers,searchAvailableNumbers} from './chat-number
 import {NUMBER_CARD_URI,numberCardResource,readNumberCardResource} from './chat-card.mjs';
 import {blockedReason,destinationDecision,reservationTtlSeconds,maxCostCents,routingCaps,signalWireReservationsConfigured} from './routing-policy.mjs';
 import {callerProofMode,generatePin,pinHash} from './caller-proof.mjs';
+import {SIGNALWIRE_PIN_PATH,signalWireRoutingFlagsOn,handleSignalWireRouting,handleSignalWirePin} from './signalwire-routing.mjs';
 /**
  * AgentBridge reference backend — intentionally fail-closed.
  * This is NOT a publicly deployable calling reseller: it only routes to one
@@ -232,7 +233,9 @@ export default {async fetch(request,env){
   const url=new URL(request.url);
   if(url.pathname==='/health'&&request.method==='GET')return json({service:'agentbridge',mode:'prototype',configured:requireEnv(env)});
   // Signed SignalWire SWML requests are hangup-only; this cannot place paid calls.
-  if(url.pathname===SIGNALWIRE_SWML_PATH)return handleSignalWireSwml(request,env);
+  // Both owner flags exactly 'true' -> fully gated router; otherwise the legacy hangup-only handler, unchanged.
+  if(url.pathname===SIGNALWIRE_SWML_PATH)return signalWireRoutingFlagsOn(env)?handleSignalWireRouting(request,env):handleSignalWireSwml(request,env);
+  if(url.pathname===SIGNALWIRE_PIN_PATH&&signalWireRoutingFlagsOn(env))return handleSignalWirePin(request,env);
   if(url.pathname.startsWith('/telephony/twilio/')){
     if(request.method!=='POST')return new Response('Method not allowed',{status:405});
     if(url.pathname==='/telephony/twilio/incoming')return incoming(request,env);
