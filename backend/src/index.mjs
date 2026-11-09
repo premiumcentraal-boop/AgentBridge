@@ -120,9 +120,14 @@ async function dialComplete(request,env){
   if(!requireEnv(env))return new Response('Not configured',{status:503});
   const raw=await readBoundedWebhookBody(request);if(raw===null||!await verifyTwilioSignature(request,raw,env.TWILIO_AUTH_TOKEN,env.PUBLIC_BASE_URL))return new Response('Forbidden',{status:403});
   const body=new URLSearchParams(raw);
-  const sid=body.get('CallSid')||'',state=body.get('DialCallStatus')||'';
-  if(!sid)return twiml(hangupXml());
-  const final=state==='completed'?'completed':'failed';
+  // Unknown or ambiguous callbacks are NOT evidence that the carrier leg ended.
+  // Retain the connecting lock until a confirmed terminal outcome arrives.
+  if(body.getAll('CallSid').length!==1||body.getAll('DialCallStatus').length!==1)return twiml(hangupXml());
+  const sid=body.get('CallSid'),state=body.get('DialCallStatus');
+  if(!/^CA[a-f0-9]{32}$/i.test(sid||''))return twiml(hangupXml());
+  const terminalStates={completed:'completed',busy:'failed',failed:'failed','no-answer':'failed',canceled:'failed'};
+  if(!Object.hasOwn(terminalStates,state))return twiml(hangupXml());
+  const final=terminalStates[state];
   await env.DB.prepare("UPDATE reservations SET status=?,completed_at=? WHERE call_sid=? AND status='connecting'").bind(final,Math.floor(Date.now()/1000),sid).run();
   return twiml(hangupXml());
 }
