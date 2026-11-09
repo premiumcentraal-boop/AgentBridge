@@ -45,3 +45,9 @@ Append one dated entry for each substantial incremental development session. Lin
 - Added an offline SWML `connect` serializer for future phone bridging, plus tests for malicious Space names, credential leakage, request tampering, cross-project and wrong-origin calls and no outbound connection.
 - Actual outbound routing remains DISABLED: caller ID is spoofable, native Grok Bot dialing is unverified, per-call cryptographic authentication, verified rates, spending caps and callback reconciliation are not complete. No SignalWire credentials were used, no carrier calls or changes were made.
 - Detailed operator instructions: [SignalWire integration](SIGNALWIRE.md). Await GitHub Actions test verification and PR review.
+
+## 2026-11-09 — SignalWire webhook bounded-stream hardening (PR #10 follow-up)
+- Found that the signed SignalWire handler used `await request.text()` before checking its 16 KiB limit; an attacker could send an arbitrarily large chunked body without Content-Length and cause avoidable Worker memory pressure.
+- Replaced unbounded text buffering with byte-counted ReadableStream reads, early cancel on excess, and fatal UTF-8 decoding. The signature remains computed from the exact decoded body and all valid requests still receive hangup-only SWML.
+- Added regression coverage for oversized chunked payloads, invalid UTF-8 and exact limit behavior. Updated the existing PR #10 rather than opening a competing PR. No live calls, secrets or carrier changes.
+- GitHub Actions checks on updated PR head required before merge.
