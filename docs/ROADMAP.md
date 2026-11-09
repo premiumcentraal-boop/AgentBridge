@@ -14,6 +14,7 @@ Last revised: 2026-11-08. Read [NORTH_STAR.md](NORTH_STAR.md) first.
 - [ ] Accessibility audit across mobile and desktop; resolve contrast/keyboard issues
 - [ ] Real browser screenshots and visual quality checks
 - [ ] Structured errors, trace IDs and webhook idempotent event ledger
+- [x] Strict MCP JSON-RPC envelope and tool argument validation before tool dispatch (proposed in PR; merge and CI pending)
 
 ## P1 — Real authorized call, still private
 - [ ] Create and verify a personal test telecom account
