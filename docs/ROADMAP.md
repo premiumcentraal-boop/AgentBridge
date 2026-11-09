@@ -20,7 +20,8 @@ Last revised: 2026-11-08. Read [NORTH_STAR.md](NORTH_STAR.md) first.
 - [x] Byte-bound authenticated MCP/REST JSON request parsing (4 KiB) with early stream cancellation, strict UTF-8 and no reservation writes on malformed bodies (PR #13)
 - [ ] Structured errors, trace IDs and webhook idempotent event ledger
 - [x] Default-deny Twilio international leg unless an explicit server-side private-test opt-in is present (PR #13 extension; test-only, not production authentication)
-- [ ] Carrier-verified caller authentication- [ ] Carrier-verified caller authentication or per-call challenge before any public routing (caller ID alone is spoofable)
+- [x] Fail closed on malformed, unknown, nonterminal or ambiguous Twilio Dial completion statuses; preserve connecting lock (PR #13, pending review)
+- [ ] Carrier-verified caller authentication or per-call challenge before any public routing (caller ID alone is spoofable)
 
 ## P1 — Real authorized call, still private
 - [ ] Create and verify a personal test telecom account
