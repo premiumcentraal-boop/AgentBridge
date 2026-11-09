@@ -1,4 +1,5 @@
 import {validateMcpEnvelope} from './mcp-validation.mjs';
+import {readBoundedWebhookBody} from './bounded-body.mjs';
 /**
  * AgentBridge reference backend — intentionally fail-closed.
  * This is NOT a publicly deployable calling reseller: it only routes to one
@@ -85,7 +86,7 @@ export function approvedTestCaller(from, env) {
 }
 async function incoming(request,env){
   if(!requireEnv(env))return twiml(hangupXml());
-  const raw=await request.text();if(raw.length>16000||!await verifyTwilioSignature(request,raw,env.TWILIO_AUTH_TOKEN,env.PUBLIC_BASE_URL))return new Response('Forbidden',{status:403});
+  const raw=await readBoundedWebhookBody(request);if(raw===null||!await verifyTwilioSignature(request,raw,env.TWILIO_AUTH_TOKEN,env.PUBLIC_BASE_URL))return new Response('Forbidden',{status:403});
   const fields=new URLSearchParams(raw);
   const to=fields.get('To'),sid=fields.get('CallSid'),from=fields.get('From');
   // A reservation alone must never make the DID an open forwarder. Reject
@@ -103,7 +104,7 @@ async function incoming(request,env){
 }
 async function dialComplete(request,env){
   if(!requireEnv(env))return new Response('Not configured',{status:503});
-  const raw=await request.text();if(raw.length>16000||!await verifyTwilioSignature(request,raw,env.TWILIO_AUTH_TOKEN,env.PUBLIC_BASE_URL))return new Response('Forbidden',{status:403});
+  const raw=await readBoundedWebhookBody(request);if(raw===null||!await verifyTwilioSignature(request,raw,env.TWILIO_AUTH_TOKEN,env.PUBLIC_BASE_URL))return new Response('Forbidden',{status:403});
   const body=new URLSearchParams(raw);
   const sid=body.get('CallSid')||'',state=body.get('DialCallStatus')||'';
   if(!sid)return twiml(hangupXml());
