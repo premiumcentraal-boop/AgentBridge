@@ -38,3 +38,8 @@ Append one dated entry for each substantial incremental development session. Lin
 - Fixed original PR #6 failed quality gate: typography test required explicit `system-ui` fallback, which is now present in the CSS stack.
 - Combined PR #4's separate `test:site` post-build audit with new static-security regression tests; protected execution order to prevent auditing before `dist/` exists.
 - Security remains subject to hosting limits: GitHub Pages ignores `_headers`; inline styles still require `style-src 'unsafe-inline'`. No verified browser screenshots or telecom backend changes.
+
+## 2026-11-09 — Require explicit approval before static-preview publication (PR pending)
+- Removed automatic main-branch GitHub Pages publication triggers; deployment now requires manual workflow dispatch, while the independent CI quality gate remains automatic.
+- Added a Node regression test guarding against reintroducing push, pull_request or schedule deployment triggers and asserting the manual entrypoint.
+- Addresses the safe non-publication path in issue #7. Pages configuration and browser deployment remain unverified; no public deployment authorized or attempted.

@@ -5,7 +5,7 @@
   "description": "International telecom bridge for existing AI agents",
   "type": "module",
   "scripts": {
-    "test": "node --test backend/test/*.test.mjs test/static-security.test.mjs",
+    "test": "node --test backend/test/*.test.mjs test/static-security.test.mjs test/deploy-policy.test.mjs",
     "check": "node --check assets/app.js && node --check backend/src/index.mjs && node --check scripts/build-site.mjs && node --check scripts/provision-test-account.mjs && node --check scripts/audit-site.mjs",
     "build:site": "node scripts/build-site.mjs",
     "ci": "npm run check && npm test && npm run build:site && npm run test:site",
