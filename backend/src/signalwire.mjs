@@ -23,7 +23,7 @@ export function signalWireConnectPlan(destination,from){
     {hangup:{}}
   ]}};
 }
-function validateConnection({space,projectId,apiToken}={}){
+export function validateConnection({space,projectId,apiToken}={}){
   if(typeof space!=='string'||!SPACE.test(space)||
      typeof projectId!=='string'||!UUID.test(projectId)||
      typeof apiToken!=='string'||apiToken.length<10||apiToken.length>512||

@@ -93,3 +93,17 @@ Append one dated entry for each substantial incremental development session. Lin
 - Preserved merged #8's manual-only preview deployment policy and combined pending #10 SignalWire read-only preflight / hangup-only SWML, #12 expiry/idempotency semantics and #13 bounded request parsing/default-deny Twilio webhook hardening.
 - Imported all distinct regression suites and reconciled backend dispatch, reservation status, package scripts, roadmap and README. The shared integration must pass a fresh CI run and manual review before merging.
 - No live calls, carrier purchases, secrets, deployment or billing operations occurred.
+
+
+## 2026-11-09 — Chat-first read-only SignalWire number discovery (feature PR pending)
+- Added three strictly validated MCP tools for setup status, account-scoped owned-DID inventory checks and five-result US area-code candidate search. Outputs contain structured JSON intended for optional native chat cards plus text fallback; Grok Bot card rendering and even MCP interoperability are not yet verified.
+- Reused the private server's SignalWire Project config; all provider requests are pinned read-only GETs with bounded responses, constrained area codes and masked Project inventory (only the authenticated active account's configured US DID can be shown). No shared-project numbers or secrets are sent to the model.
+- Preserved no-Twilio read-only MCP access while existing call/reservation MCP tools remain blocked without full private-test backend configuration.
+- Added offline regression coverage for auth boundaries, no-D1-write behavior, host filtering, candidate normalization, upstream errors, malformed arguments, no purchase tool and JSON/text parity. Tests and code require PR quality-gate verification and review before merge.
+- No phone-number purchase, provider mutation, credentials, live calls, paid routing, payment processing or deployment were performed. Next gates: per-user provider vault, authoritative quotes and backend-verified explicit purchase approval, then cryptographic call authorization and provider reconciliation.
+
+
+## 2026-11-09 — Optional standards-based read-only MCP Apps cards (PR #16 extension)
+- Added a self-contained no-network HTML card resource with declared MCP Apps MIME type, resource discovery and read methods, tool metadata linking the three read-only number tools, and standard iframe initialization/notification handling. The view renders untrusted phone-number strings using textContent instead of HTML injection and shows no purchase, payment or call buttons.
+- Kept complete structured JSON and text fallbacks, plus authenticated resource access. Hides call/reservation tools from discovery until the full private-test carrier environment is configured, although no paid routing is enabled by this UI.
+- Added offline resource and UI-handshake regression tests, basic DOM injection-safety tests and syntax checks. CI validation and real Grok Bot host rendering remain pending; no deployment, real phone calls, numbers purchased, carrier resources modified or secrets used.

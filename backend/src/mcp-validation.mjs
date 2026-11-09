@@ -2,10 +2,12 @@
  * Stateless JSON-RPC 2.0 envelope validation for AgentBridge's HTTP MCP endpoint.
  * This gate must run BEFORE tool dispatch to prevent accidental paid side effects.
  */
-const METHODS=new Set(['initialize','ping','tools/list','tools/call','notifications/initialized']);
+const METHODS=new Set(['initialize','ping','tools/list','tools/call','resources/list','resources/read','notifications/initialized']);
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const E164=/^\+[1-9]\d{7,14}$/;
 const KEYS=/^[A-Za-z0-9_.:-]{8,96}$/;
+const AREA=/^[2-9][0-9]{2}$/;
+const ZERO_ARG_TOOLS=new Set(['get_bridge_setup','list_my_numbers']);
 
 export function validateMcpEnvelope(input){
   if(input===null||typeof input!=='object'||Array.isArray(input))
@@ -21,14 +23,24 @@ export function validateMcpEnvelope(input){
     return {ok:false,code:-32600,message:'Requests require a string or integer id'};
   if(input.params!==undefined&&(input.params===null||typeof input.params!=='object'||Array.isArray(input.params)))
     return {ok:false,code:-32602,message:'Params must be an object'};
+  if(input.method==='resources/list'&&input.params!==undefined&&Object.keys(input.params).length!==0)
+    return {ok:false,code:-32602,message:'Resource listing takes no parameters'};
+  if(input.method==='resources/read'&&
+     (input.params?.uri!=='ui://agentbridge/number-card'||Object.keys(input.params).some(k=>k!=='uri')))
+    return {ok:false,code:-32602,message:'Only the read-only AgentBridge number card resource is available'};
   if(input.method==='tools/call'){
     if(typeof input.params?.name!=='string')return {ok:false,code:-32602,message:'Tool name is required'};
-    if(!['prepare_international_call','get_call_status','cancel_international_call'].includes(input.params.name))
+    if(!['prepare_international_call','get_call_status','cancel_international_call','get_bridge_setup','list_my_numbers','search_available_numbers'].includes(input.params.name))
       return {ok:false,code:-32601,message:'Unknown tool'};
-    const args=input.params.arguments;
+    const args=input.params.arguments===undefined&&ZERO_ARG_TOOLS.has(input.params.name)?{}:input.params.arguments;
     if(args===null||typeof args!=='object'||Array.isArray(args))
       return {ok:false,code:-32602,message:'Tool arguments must be an object'};
-    if(input.params.name==='prepare_international_call'){
+    if(ZERO_ARG_TOOLS.has(input.params.name)){
+      if(Object.keys(args).length!==0)return {ok:false,code:-32602,message:'This read-only tool takes no arguments'};
+    }else if(input.params.name==='search_available_numbers'){
+      if(typeof args.area_code!=='string'||!AREA.test(args.area_code)||Object.keys(args).some(k=>k!=='area_code'))
+        return {ok:false,code:-32602,message:'A valid three-digit US area_code is required'};
+    }else if(input.params.name==='prepare_international_call'){
       if(!E164.test(args.destination||'')||typeof args.destination!=='string'||!KEYS.test(args.idempotency_key||'')||typeof args.idempotency_key!=='string')
         return {ok:false,code:-32602,message:'Valid E.164 destination and idempotency key required'};
       if(Object.keys(args).some(k=>!['destination','idempotency_key'].includes(k)))
