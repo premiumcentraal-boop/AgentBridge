@@ -112,3 +112,8 @@ Append one dated entry for each substantial incremental development session. Lin
 - Added a command-based JSON-RPC stdio adapter that reuses the existing SignalWire-scoped, read-only number tools without Cloudflare D1 or Twilio. The adapter exposes only setup, owned-DID check and area-code candidate search; no purchases, call preparation, routing or carrier mutations.
 - Added strict tool-argument validation, explicit JSON/text parity and subprocess protocol regression tests, a Node syntax gate, and private operator setup documentation. Real Grok Bot host interoperability remains unverified.
 - The local adapter trusts its process environment and is single-operator only, never a multi-tenant credential vault. Secrets must stay in a trusted host's secret manager, not chat or source. No deployment, calls or carrier purchases occurred. PR CI pending.
+
+## 2026-11-09 — Bound local MCP stdio input before allocation (PR #17 follow-up)
+- Security review found that checking `Buffer.byteLength(line)` after `readline` emits a line permits arbitrarily large untrusted stdin lines to accumulate in memory before rejection.
+- Replaced line-event buffering with an incremental byte-bounded iterator that discards oversized frames until newline, preserves subsequent valid requests, counts UTF-8 bytes and handles CRLF/EOF. No provider writes, call paths or paid features added.
+- Added regression cases for a 20 KB fragmented input, multibyte overflow and valid-message recovery. CI and actual MCP host interoperability require separate verification; no carrier operations or deployment.
