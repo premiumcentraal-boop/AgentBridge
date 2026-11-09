@@ -1,5 +1,5 @@
 # AgentBridge development roadmap
-Last revised: 2026-11-08. Read [NORTH_STAR.md](NORTH_STAR.md) first.
+Last revised: 2026-11-09. Read [NORTH_STAR.md](NORTH_STAR.md) first.
 
 ## P0 — Design and safe technical foundation
 - [x] Public home page with truthful positioning and independent-brand disclosure
@@ -17,6 +17,14 @@ Last revised: 2026-11-08. Read [NORTH_STAR.md](NORTH_STAR.md) first.
 - [x] Offline-first system fonts, six-page CSP, Cloudflare headers and static policy regression tests (PR #6)
 - [ ] Real browser screenshots and visual quality checks
 - [x] Strict MCP JSON-RPC envelope and tool argument validation (PR #5; branch CI passed before merge)
+- [x] SignalWire BYO read-only number inventory, signed SWML fail-closed webhook with streaming byte cap and strict UTF-8 validation, offline phone bridge serializer and regression tests (proposed; **paid routing disabled**)
+- [ ] Secure multi-user SignalWire project credentials, DID ownership, cryptographic call authorization, verified quotes/billing and reliable carrier callbacks
+- [x] Strict reservation expiry boundaries and terminal idempotent retries; no stale access number after expiry (PR pending)
+- [x] Bound both Twilio webhook bodies to 16,000 bytes before signature verification, with strict UTF-8 and streamed oversize rejection (PR pending)
+- [x] Byte-bound authenticated MCP/REST JSON request parsing (4 KiB) with early stream cancellation, strict UTF-8 and no reservation writes on malformed bodies (PR #13)
+- [x] Default-deny Twilio international leg unless an explicit server-side private-test opt-in is present (PR #13 extension; test-only, not production authentication)
+- [x] Fail closed on malformed, unknown, nonterminal or ambiguous Twilio Dial completion statuses; preserve connecting lock (PR #13, pending review)
+- [x] Reject signed Twilio inbound requests with duplicate or missing `To`, `From`, or `CallSid` before reservation lookup (PR #13, pending review)
 - [ ] Structured errors, trace IDs and webhook idempotent event ledger
 - [ ] Carrier-verified caller authentication or per-call challenge before any public routing (caller ID alone is spoofable)
 

@@ -43,3 +43,53 @@ Append one dated entry for each substantial incremental development session. Lin
 - Removed automatic main-branch GitHub Pages publication triggers; deployment now requires manual workflow dispatch, while the independent CI quality gate remains automatic.
 - Added a Node regression test guarding against reintroducing push, pull_request or schedule deployment triggers and asserting the manual entrypoint.
 - Addresses the safe non-publication path in issue #7. Pages configuration and browser deployment remain unverified; no public deployment authorized or attempted.
+
+## 2026-11-09 — SignalWire BYO project and SWML adapter (PR pending)
+- Verified SignalWire's official Numbers inventory API and read-only Project ID + API Token authentication. Added an environment-only preflight that cannot purchase, reconfigure or dial any phone number.
+- Added an independent signed SWML JSON webhook using the SignalWire project signing key, exact HTTPS webhook URL, HMAC-SHA256 on raw request data, matched project/DID/origin, strict input size limits and no D1 reservation side effects.
+- Added an offline SWML `connect` serializer for future phone bridging, plus tests for malicious Space names, credential leakage, request tampering, cross-project and wrong-origin calls and no outbound connection.
+- Actual outbound routing remains DISABLED: caller ID is spoofable, native Grok Bot dialing is unverified, per-call cryptographic authentication, verified rates, spending caps and callback reconciliation are not complete. No SignalWire credentials were used, no carrier calls or changes were made.
+- Detailed operator instructions: [SignalWire integration](SIGNALWIRE.md). Await GitHub Actions test verification and PR review.
+
+## 2026-11-09 — SignalWire webhook bounded-stream hardening (PR #10 follow-up)
+- Found that the signed SignalWire handler used `await request.text()` before checking its 16 KiB limit; an attacker could send an arbitrarily large chunked body without Content-Length and cause avoidable Worker memory pressure.
+- Replaced unbounded text buffering with byte-counted ReadableStream reads, early cancel on excess, and fatal UTF-8 decoding. The signature remains computed from the exact decoded body and all valid requests still receive hangup-only SWML.
+- Added regression coverage for oversized chunked payloads, invalid UTF-8 and exact limit behavior. Updated the existing PR #10 rather than opening a competing PR. No live calls, secrets or carrier changes.
+- GitHub Actions checks on updated PR head required before merge.
+
+## 2026-11-09 — Reservation expiry and idempotent retry correctness (PR pending)
+- Fixed expiry boundary so an inbound call at the expiry second cannot claim a reservation. Expiration cleanup uses <= rather than <.
+- Existing idempotency keys cannot reopen consumed or expired reservations; clients must generate a new key. Existing active, unexpired retries still return the original route.
+- REST/MCP reservation views mask the US access number and show effective expired status even if the persisted D1 row has not yet been cleaned up. Cancellation requires a still-live ready reservation.
+- Added regression tests for expired and terminal retries, unexpired retries and stale GET behavior. CI and review pending. This does not authenticate inbound callers or authorize paid routing.
+
+## 2026-11-09 — Bounded Twilio webhook streaming (PR pending)
+- Replaced unbounded `request.text()` in Twilio incoming and dial-complete endpoints with a shared byte-limited streaming reader (16,000 bytes). Rejects malformed content lengths, invalid UTF-8 and chunked oversize bodies before signature verification or database access; cancels unread streams.
+- Added Node regression tests for exact byte boundary, split UTF-8, early stream cancellation, invalid content lengths, signed inbound compatibility and oversize webhook denial. Added module syntax checking to CI.
+- Existing Twilio HMAC signature validation and fail-closed private-test caller gate remain unchanged. No changes to live carrier resources, public deployment or charges. Caller ID spoofing and durable replay protection remain unresolved (issue #3).
+
+## 2026-11-09 — Bound authenticated MCP and REST request bodies (PR #13 follow-up)
+- Source review found that `parseJson()` used unbounded `request.text()` before checking its 4096-character limit; authenticated clients could stream oversized or multi-byte bodies into Worker memory.
+- Reused PR #13's bounded byte-stream reader with a 4096-byte limit for REST reservations and MCP JSON-RPC. Malformed UTF-8, misleading content lengths and oversize requests fail before tool dispatch or reservation mutations; authentication remains first.
+- Tightened the JSON content-type check to a media type boundary rather than substring matching. Added Node regression tests for chunked oversize, malformed UTF-8, misleading content types, valid split-chunk MCP ping, and unauthorized requests.
+- No live calls, secrets, billing, deployments or carrier changes. Pending CI and review; replay-resistant per-call authorization remains blocked by issue #3.
+
+## 2026-11-09 — Default-deny private outbound leg gate (PR #13 extension)
+- Added a server-side `PRIVATE_TEST_OUTBOUND_ENABLED` exact-string opt-in before any Twilio reservation is consumed or a chargeable `<Dial>` is returned. Without explicit opt-in, signed inbound calls receive hangup and cannot consume the pending reservation.
+- Added regression tests for missing/malformed/false flag values and the existing strictly allowlisted private-test path when explicitly enabled.
+- This flag is **not** proof of Grok Bot identity. Caller ID can be spoofed; do not enable it on a public deployment. Cryptographic per-call authorization, replay protection, billing caps and carrier verification remain blockers. No live call or deployment performed.
+
+## 2026-11-09 — Fail-closed Twilio completion state transitions (PR #13 extension)
+- Audited signed dial-complete handling: any status other than `completed`, including missing and intermediate values, previously released a `connecting` reservation as `failed` even without proof of carrier termination.
+- Added an explicit terminal-status allowlist, strict parent CallSid shape check and duplicate-sensitive-field rejection. Unknown/ambiguous callbacks now preserve the active lock for future reconciliation instead of prematurely permitting another chargeable leg.
+- Added offline signed-webhook regression tests for malformed, missing, intermediate, duplicate and known terminal statuses. Durable event replay protection, provider-state reconciliation and cryptographic per-call origin proof remain P0 blockers (issue #3). No carrier calls or public deployment.
+
+## 2026-11-09 — Reject ambiguous signed Twilio inbound identities (PR #13 extension)
+- Hardened the inbound Twilio handler to require exactly one `To`, `From`, and `CallSid` form value after signature validation, before any reservation lookup. Even correctly signed duplicate fields cannot select an ambiguous identity and consume a routing reservation.
+- Added offline signed-webhook tests for identical and conflicting duplicates, missing identity fields, and the legitimate single-value private-test route.
+- This is defense in depth; Twilio signatures and caller ID do not establish cryptographic per-call authorization. Paid routing stays default-deny and issue #3 remains a production blocker. No live calls or deployment.
+
+## 2026-11-09 — Isolated integration of PRs #8, #10, #12, and #13
+- Preserved merged #8's manual-only preview deployment policy and combined pending #10 SignalWire read-only preflight / hangup-only SWML, #12 expiry/idempotency semantics and #13 bounded request parsing/default-deny Twilio webhook hardening.
+- Imported all distinct regression suites and reconciled backend dispatch, reservation status, package scripts, roadmap and README. The shared integration must pass a fresh CI run and manual review before merging.
+- No live calls, carrier purchases, secrets, deployment or billing operations occurred.
