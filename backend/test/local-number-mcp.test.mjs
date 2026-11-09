@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
-import {dispatch} from '../scripts/local-number-mcp.mjs';
+import {dispatch,boundedLines} from '../scripts/local-number-mcp.mjs';
+import {Readable} from 'node:stream';
 const env={US_BRIDGE_DID:'+12025550123'};
 const call=(name,args={})=>({jsonrpc:'2.0',id:1,method:'tools/call',params:{name,arguments:args}});
 test('local adapter exposes exactly three non-mutating tools',async()=>{
@@ -32,4 +33,22 @@ test('real stdio process speaks newline JSON-RPC without logging credentials',as
  const code=await new Promise(resolve=>child.on('close',resolve));
  assert.equal(code,0);const lines=output.trim().split('\n').map(JSON.parse);
  assert.equal(lines.length,2);assert.equal(lines[0].result.serverInfo.name,'agentbridge-local-readonly');assert.equal(lines[1].result.structuredContent.bridge_number,env.US_BRIDGE_DID);
+});
+
+test('bounded stdio parser discards oversized lines before buffering and recovers',async()=>{
+ const valid=JSON.stringify(call('get_bridge_setup'));
+ const bytes=Buffer.from('x'.repeat(20000)+'\n'+valid+'\n');
+ const output=[];
+ for await(const item of boundedLines(Readable.from([bytes.subarray(0,5000),bytes.subarray(5000,18000),bytes.subarray(18000)])))output.push(item);
+ assert.deepEqual(output,[{oversize:true},{line:valid}]);
+});
+test('bounded stdio parser counts UTF-8 bytes across chunk boundaries',async()=>{
+ const output=[];
+ for await(const item of boundedLines(Readable.from([Buffer.from('é'.repeat(2049)+'\n'),Buffer.from('{"ok":true}\n')])))output.push(item);
+ assert.deepEqual(output,[{oversize:true},{line:'{"ok":true}'}]);
+});
+test('bounded stdio parser handles CRLF, EOF and consecutive lines',async()=>{
+ const output=[];
+ for await(const item of boundedLines(Readable.from([Buffer.from('{"a":1}\r\n{"b":2}\n{"c":3}')])))output.push(item);
+ assert.deepEqual(output,[{line:'{"a":1}'},{line:'{"b":2}'},{line:'{"c":3}'}]);
 });
