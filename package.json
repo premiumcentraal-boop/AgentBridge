@@ -12,7 +12,8 @@
     "test:site": "node --test test/site-audit.test.mjs",
     "signalwire:check": "node scripts/check-signalwire.mjs",
     "test:local-mcp": "npm --prefix local-mcp test",
-    "setup:local-mcp": "bash scripts/setup-local-mcp.sh"
+    "setup:local-mcp": "bash scripts/setup-local-mcp.sh",
+    "mcp:local": "node local-mcp/server.mjs"
   },
   "engines": {
     "node": ">=22"

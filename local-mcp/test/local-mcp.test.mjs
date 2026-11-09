@@ -215,3 +215,42 @@ test('run.sh: loads only allowed keys from a 0600 secrets file, refuses unsafe p
   assert.match(bad.stderr,/unsafe owner\/permissions/);
   assertNoSecret(bad.stderr+bad.stdout);
 });
+
+// Cases adapted from draft PR #17 (bounded input, strict/missing arguments), credited there.
+import {spawn} from 'node:child_process';
+function rawSession(lines){
+  return new Promise(resolve=>{
+    const child=spawn(process.execPath,[SERVER],{env:cleanEnv(),stdio:['pipe','pipe','pipe']});
+    let out='',err='';
+    child.stdout.on('data',d=>out+=d);child.stderr.on('data',d=>err+=d);
+    child.on('close',code=>resolve({code,err,msgs:out.trim().split('\n').filter(Boolean).map(l=>JSON.parse(l))}));
+    for(const l of lines)child.stdin.write(l);
+    child.stdin.end();
+  });
+}
+const init=JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'raw',version:'0'}}})+'\n'+
+  JSON.stringify({jsonrpc:'2.0',method:'notifications/initialized'})+'\n';
+
+test('stdio: zero-argument tools accept an omitted arguments field (MCP allows it)', async()=>{
+  const {msgs}=await rawSession([init,JSON.stringify({jsonrpc:'2.0',id:2,method:'tools/call',params:{name:'get_bridge_setup'}})+'\n']);
+  const r=msgs.find(m=>m.id===2);
+  assert.equal(r.result.isError,false);
+  assert.equal(r.result.structuredContent.card_type,'bridge_setup');
+});
+
+test('stdio: invalid area codes and unknown tools never reach the provider', async()=>{
+  const lines=[init];let id=10;
+  for(const args of [{area_code:'012'},{area_code:618},{}])lines.push(JSON.stringify({jsonrpc:'2.0',id:id++,method:'tools/call',params:{name:'search_available_numbers',arguments:args}})+'\n');
+  lines.push(JSON.stringify({jsonrpc:'2.0',id:id++,method:'tools/call',params:{name:'purchase_number',arguments:{}}})+'\n');
+  const {msgs}=await rawSession(lines);
+  for(let i=10;i<id;i++){const m=msgs.find(x=>x.id===i);assert.ok(m.error||m.result?.isError===true,'id '+i);}
+});
+
+test('stdio: malformed and oversized frames are bounded; the server survives junk below the cap', async()=>{
+  const {msgs}=await rawSession([init,'x'.repeat(20_000)+'\n','{not json}\n',
+    JSON.stringify({jsonrpc:'2.0',id:3,method:'tools/list'})+'\n']);
+  assert.ok(msgs.find(m=>m.id===3)?.result?.tools?.length===4,'recovers after junk lines');
+  const big=await rawSession([init,'y'.repeat(300*1024)+'\n',JSON.stringify({jsonrpc:'2.0',id:4,method:'tools/list'})+'\n']);
+  assert.equal(big.msgs.find(m=>m.id===4),undefined,'over-cap frame closes the session instead of buffering');
+  assert.equal(big.code,0);
+});
