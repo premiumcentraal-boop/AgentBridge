@@ -15,8 +15,14 @@ Append one dated entry for each substantial incremental development session. Lin
 - Verified through the GitHub connector that the source files, North Star, CI workflow and deployment workflow exist in main.
 - Not verified: actual automated CI success, deployment URL accessibility, live telecom integration, and real native Grok Bot international call.
 
-## 2026-11-08 — Independent website integrity and accessibility checks (PR pending)
-- Built a dependency-free static-site audit covering all six published pages, internal navigation/assets, broken fragments, duplicate IDs, accessible form labels, image alternatives, landmarks, and basic document metadata.
-- Added automated negative regression tests and integrated the audit with CI and GitHub Pages project-site deployment. This is intentionally separate from open PR #2's inbound telephony security changes.
-- Test execution status: not verified locally because the execution container cannot resolve github.com to clone the repository; GitHub Actions must validate before merge.
-- Browser WCAG checks, color contrast, keyboard interaction, responsive layout and screen-reader testing remain open; static checks are not a WCAG certification.
+## 2026-11-09 — Private-test inbound caller hardening (PR pending)
+- Identified a high-risk condition: any inbound caller could consume a ready DID reservation and trigger a paid international leg if they reached the assigned US number during its 90-second window.
+- Added a fail-closed `TEST_CALLER_E164` origin gate before reservation lookup and consumption, plus strict Twilio CallSid shape validation.
+- Added regression tests for permitted/unknown/malformed/missing callers and missing caller configuration.
+- Updated private setup instructions and explicitly documented caller-ID spoofability. This is a **defense-in-depth private-test guard**, not cryptographic authentication; a carrier-verified origin or per-call challenge is still a release blocker.
+- GitHub Actions validation pending; local repository clone unavailable due to runtime network DNS restrictions. No live calls placed.
+
+## 2026-11-09 — Website structural integrity gate (PR #4)
+- Integrated a dependency-free audit of six static pages, navigation, local assets, anchors, duplicate IDs, labels and essential landmarks, including GitHub Pages project paths.
+- Added negative regression tests, quality gate and pre-deploy project-site audit, retaining the previous caller-authentication work.
+- Original PR #4 GitHub quality gate succeeded: https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/42550759009 . Browser accessibility/contrast and visual screenshots are not verified.
