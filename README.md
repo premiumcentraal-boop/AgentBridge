@@ -19,8 +19,11 @@ Requires Node.js 22+.
 \`\`\`bash
 npm run ci
 npm run build:site
+npm run test:site
 npx serve dist  # optional; or use any static HTTP server
 \`\`\`
+The static audit checks links, semantic landmarks, form labels and assets; it does not replace real browser accessibility testing. For GitHub Pages, use \`BASE_PATH=/AgentBridge npm run build:site\` and \`BASE_PATH=/AgentBridge npm run test:site\`.
+
 No \`npm install\` is required to run checks or build the public site. \`dist/\` is the deployable static website; do **not** host the repository root as a public document directory.
 
 ## Backend: Cloudflare Worker + D1 + Twilio reference
