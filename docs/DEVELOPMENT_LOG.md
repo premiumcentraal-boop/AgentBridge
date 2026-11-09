@@ -54,3 +54,8 @@ Append one dated entry for each substantial incremental development session. Lin
 - Added a server-side `PRIVATE_TEST_OUTBOUND_ENABLED` exact-string opt-in before any Twilio reservation is consumed or a chargeable `<Dial>` is returned. Without explicit opt-in, signed inbound calls receive hangup and cannot consume the pending reservation.
 - Added regression tests for missing/malformed/false flag values and the existing strictly allowlisted private-test path when explicitly enabled.
 - This flag is **not** proof of Grok Bot identity. Caller ID can be spoofed; do not enable it on a public deployment. Cryptographic per-call authorization, replay protection, billing caps and carrier verification remain blockers. No live call or deployment performed.
+
+## 2026-11-09 — Fail-closed Twilio completion state transitions (PR #13 extension)
+- Audited signed dial-complete handling: any status other than `completed`, including missing and intermediate values, previously released a `connecting` reservation as `failed` even without proof of carrier termination.
+- Added an explicit terminal-status allowlist, strict parent CallSid shape check and duplicate-sensitive-field rejection. Unknown/ambiguous callbacks now preserve the active lock for future reconciliation instead of prematurely permitting another chargeable leg.
+- Added offline signed-webhook regression tests for malformed, missing, intermediate, duplicate and known terminal statuses. Durable event replay protection, provider-state reconciliation and cryptographic per-call origin proof remain P0 blockers (issue #3). No carrier calls or public deployment.
