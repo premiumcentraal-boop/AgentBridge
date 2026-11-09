@@ -106,6 +106,8 @@ export async function handleSignalWireSwml(request,env={}){
     call.from_number!==call.to_number;
   // Never return paid connect instructions until Issue #3 authentication,
   // replay ledger, per-call billing cap and missing-callback recovery exist.
-  // Signed/allowed calls also hang up; no D1 reservation is consumed.
+  // An unknown project/caller/DID fails closed; even approved test calls
+  // receive only hangup until cryptographic per-call authorization exists.
+  if(!allowed)return new Response('Forbidden',{status:403});
   return jsonResponse(signalWireHangup());
 }
