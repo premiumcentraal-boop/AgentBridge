@@ -38,3 +38,9 @@ Append one dated entry for each substantial incremental development session. Lin
 - Fixed original PR #6 failed quality gate: typography test required explicit `system-ui` fallback, which is now present in the CSS stack.
 - Combined PR #4's separate `test:site` post-build audit with new static-security regression tests; protected execution order to prevent auditing before `dist/` exists.
 - Security remains subject to hosting limits: GitHub Pages ignores `_headers`; inline styles still require `style-src 'unsafe-inline'`. No verified browser screenshots or telecom backend changes.
+
+## 2026-11-09 — Reservation expiry and idempotent retry correctness (PR pending)
+- Fixed expiry boundary so an inbound call at the expiry second cannot claim a reservation. Expiration cleanup uses <= rather than <.
+- Existing idempotency keys cannot reopen consumed or expired reservations; clients must generate a new key. Existing active, unexpired retries still return the original route.
+- REST/MCP reservation views mask the US access number and show effective expired status even if the persisted D1 row has not yet been cleaned up. Cancellation requires a still-live ready reservation.
+- Added regression tests for expired and terminal retries, unexpired retries and stale GET behavior. CI and review pending. This does not authenticate inbound callers or authorize paid routing.
