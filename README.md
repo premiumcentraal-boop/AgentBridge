@@ -58,3 +58,6 @@ Never put real carrier credentials into public site code or the Git repo. No aut
 
 ## Product line
 AgentBridge is a **telephone routing layer**, not a new voice agent, and not a method to evade a service's calling restrictions.
+
+### Website privacy and security posture
+The website no longer requests Google Fonts or other third-party font CDNs. The build adds a restrictive HTML Content Security Policy (CSP) and `Referrer-Policy: no-referrer` to every page. Cloudflare Pages additionally applies `_headers` for clickjacking, MIME-sniffing and device-permission controls. **GitHub Pages ignores `_headers`**, so HTTP-header-only protections such as `frame-ancestors` are not guaranteed there. Existing inline CSS requires `style-src 'unsafe-inline'`; inline JavaScript is not allowed. These measures harden the *static preview*, not the carrier backend or live call authorization.
