@@ -21,6 +21,7 @@ Last revised: 2026-11-08. Read [NORTH_STAR.md](NORTH_STAR.md) first.
 - [ ] Structured errors, trace IDs and webhook idempotent event ledger
 - [x] Default-deny Twilio international leg unless an explicit server-side private-test opt-in is present (PR #13 extension; test-only, not production authentication)
 - [x] Fail closed on malformed, unknown, nonterminal or ambiguous Twilio Dial completion statuses; preserve connecting lock (PR #13, pending review)
+- [x] Reject signed Twilio inbound requests with duplicate or missing `To`, `From`, or `CallSid` before reservation lookup (PR #13, pending review)
 - [ ] Carrier-verified caller authentication or per-call challenge before any public routing (caller ID alone is spoofable)
 
 ## P1 — Real authorized call, still private
