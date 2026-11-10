@@ -153,3 +153,8 @@ Append one dated entry for each substantial incremental development session. Lin
 ## 2026-11-09 — any_caller mode and 15-minute reservations (owner's assistant)
 - Owner: Grok Bot's outbound caller ID rotates per call. New `CALLER_PROOF_MODE=any_caller`, only with `ANY_CALLER_RISK_ACCEPTED=true`; all other guards unchanged; fingerprint records `trusted_caller: "ANY"`.
 - `RESERVATION_TTL_SECONDS` maximum raised from 300 to 900.
+
+## 2026-11-10 — Fail-closed unauthenticated any_caller mode (draft security PR)
+- Security review of merged PR #28 found that a signed carrier webhook plus an approved reservation did not authenticate the calling party. An arbitrary caller could claim the reservation during its 15-minute window if paid routing were enabled.
+- US pilot policy now refuses `any_caller` with `CALLER_AUTH_REQUIRED`, regardless of risk-acceptance flags; SignalWire inbound independently hangs up before querying or claiming a reservation. Added offline regression tests for reservation denial, signed inbound hangup and policy denial.
+- `capped_caller_id` remains a separate spoofable-risk path requiring its existing explicit opt-ins; this patch does not establish cryptographic origin for it. Grok Bot caller proof remains unverified. No live calls, deployment, provider credentials or routing-flag changes. CI verification and manual review pending.
