@@ -153,3 +153,7 @@ Append one dated entry for each substantial incremental development session. Lin
 ## 2026-11-09 — any_caller mode and 15-minute reservations (owner's assistant)
 - Owner: Grok Bot's outbound caller ID rotates per call. New `CALLER_PROOF_MODE=any_caller`, only with `ANY_CALLER_RISK_ACCEPTED=true`; all other guards unchanged; fingerprint records `trusted_caller: "ANY"`.
 - `RESERVATION_TTL_SECONDS` maximum raised from 300 to 900.
+
+## 2026-11-10 — SignalWire inventory response byte budget (PR pending, issue #31)
+- Replaced unbounded upstream response.text() with a streaming 250,000-byte cap and early reader cancellation; strict UTF-8 decode and generic malformed-response errors.
+- Added offline regression coverage for chunked oversize, false Content-Length, multibyte UTF-8, malformed UTF-8, exact boundary and pagination. No provider requests or routing changes. Pending exact-head CI and human review; not deployed.
