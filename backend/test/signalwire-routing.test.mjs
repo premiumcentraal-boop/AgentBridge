@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.mjs';
 import {signalWireHangup} from '../src/signalwire.mjs';
-import {routingSetup,api,owner,swml,call,T0,DEST,INTL,DID,CALLER,PIN_URL,SWML_URL,PROJECT} from './helpers/routing-env.mjs';
+import {routingSetup,api,owner,approveReservation,swml,call,T0,DEST,INTL,DID,CALLER,PIN_URL,SWML_URL,PROJECT} from './helpers/routing-env.mjs';
 
 const FLAGS={PRIVATE_TEST_OUTBOUND_ENABLED:'true',SIGNALWIRE_CONNECT_ENABLED:'true'};
 const CID=n=>'38313c74-b321-4c08-a3ea-'+String(n).padStart(12,'0');
@@ -23,7 +23,7 @@ test('flags off (any combination short of both exactly "true"): hangup-only and 
   const {env,DB}=await routingSetup(t,{CALLER_PROOF_MODE:'capped_caller_id',CALLER_ID_TRUST_ACCEPTED:'true',TEST_CALLER_E164:CALLER,
     TEST_DESTINATION_E164:DEST});
   const b=await reserve(env,'flags-off-0001');
-  await worker.fetch(owner(b.id),env);
+  await approveReservation(env,b.id);
   const before=DB.log.length;
   for(const flags of [{},{PRIVATE_TEST_OUTBOUND_ENABLED:'true'},{SIGNALWIRE_CONNECT_ENABLED:'true'},
     {PRIVATE_TEST_OUTBOUND_ENABLED:'TRUE',SIGNALWIRE_CONNECT_ENABLED:'true'},{PRIVATE_TEST_OUTBOUND_ENABLED:'true',SIGNALWIRE_CONNECT_ENABLED:'1'}]){
@@ -40,7 +40,7 @@ test('capped caller-ID mode: connect only for the owner-accepted caller, with ti
   const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'capped_caller_id',CALLER_ID_TRUST_ACCEPTED:'true',TEST_CALLER_E164:CALLER});
   const b=await reserve(env,'capped-0001');
   assert.ok(isHangup((await inbound(env,{call_id:CID(1)})).doc),'not yet approved');
-  assert.equal((await worker.fetch(owner(b.id),env)).status,200);
+  assert.equal((await approveReservation(env,b.id)).status,200);
   assert.ok(isHangup((await inbound(env,{call_id:CID(2),from_number:'+12125550178'})).doc),'wrong caller');
   const ok=await inbound(env,{call_id:CID(3)});
   const c=connectOf(ok.doc);
@@ -53,21 +53,22 @@ test('capped caller-ID mode: connect only for the owner-accepted caller, with ti
   const ev=DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=?").get(CID(3));
   assert.equal(ev.outcome,'connect');
   assert.ok(!JSON.stringify(DB.raw.prepare('SELECT * FROM provider_events').all()).includes(CALLER),'ledger stores no numbers');
-  assert.equal((await worker.fetch(owner(b.id,'mark-ended'),env)).status,200);
+  assert.equal((await worker.fetch(owner(b.id,'mark-ended'),env)).status,409);
+   // Simulate carrier-verified reconciliation in fixture; owner click cannot unlock.
   assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(b.id).status,'completed');
 });
 
 test('caller-ID mode without explicit owner acceptance never routes',async t=>{
   const {env}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'capped_caller_id',TEST_CALLER_E164:CALLER});
   const b=await reserve(env,'capped-noacc-1');
-  await worker.fetch(owner(b.id),env);
+  await approveReservation(env,b.id);
   assert.ok(isHangup((await inbound(env)).doc));
 });
 
 test('DTMF PIN mode: prompt, then connect only for the right single-use PIN on the signed PIN URL',async t=>{
   const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
   const b=await reserve(env,'pin-flow-0001');
-  await worker.fetch(owner(b.id),env);
+  await approveReservation(env,b.id);
   const first=await inbound(env,{call_id:CID(10),from_number:'+13125550199'});
   const main=first.doc.sections.main;
   assert.deepEqual(main[0],{answer:{max_duration:120}});
@@ -91,7 +92,7 @@ test('DTMF PIN mode: prompt, then connect only for the right single-use PIN on t
 test('DTMF follow-up cannot switch to a later reservation after first one is cancelled',async t=>{
   const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
   const first=await reserve(env,'pin-binding-A');
-  await worker.fetch(owner(first.id),env);
+  await approveReservation(env,first.id);
   const a=await inbound(env,{call_id:CID(101)});
   assert.ok(a.doc.sections.main.some(x=>x.prompt),'first call requests a PIN');
   const event=DB.raw.prepare("SELECT reservation_id FROM provider_events WHERE provider_call_id=? AND event_type='swml_inbound'")
@@ -100,7 +101,7 @@ test('DTMF follow-up cannot switch to a later reservation after first one is can
   const cancelled=await worker.fetch(api('/v1/reservations/'+first.id+'/cancel','POST'),env);
   assert.equal(cancelled.status,200);
   const second=await reserve(env,'pin-binding-B');
-  await worker.fetch(owner(second.id),env);
+  await approveReservation(env,second.id);
   const wrongCall=await pin(env,CID(101),second.dtmf_pin);
   assert.ok(isHangup(wrongCall.doc),'old call must not claim new approved reservation');
   assert.deepEqual({...DB.raw.prepare('SELECT status,pin_attempts FROM reservations WHERE id=?').get(second.id)},
@@ -113,14 +114,14 @@ test('DTMF follow-up cannot switch to a later reservation after first one is can
 test('DTMF PIN: attempt limit burns the reservation; expiry ends it',async t=>{
   const {env,DB,at}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
   const b=await reserve(env,'pin-limit-0001');
-  await worker.fetch(owner(b.id),env);
+  await approveReservation(env,b.id);
   const wrong=b.dtmf_pin==='00000000'?'11111111':'00000000';
   for(let i=0;i<3;i++){await inbound(env,{call_id:CID(20+i)});await pin(env,CID(20+i),wrong);}
   assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(b.id).status,'failed');
   await inbound(env,{call_id:CID(30)});
   assert.ok(isHangup((await pin(env,CID(30),b.dtmf_pin)).doc));
   const c=await reserve(env,'pin-expiry-001');
-  await worker.fetch(owner(c.id),env);
+  await approveReservation(env,c.id);
   await inbound(env,{call_id:CID(31)});
   at(T0+240);
   assert.ok(isHangup((await pin(env,CID(31),c.dtmf_pin)).doc),'expired between prompt and PIN');
@@ -139,14 +140,14 @@ test('every gate on its own forces hangup (capped mode baseline that would other
   for(const [name,over] of Object.entries(cases)){
     const {env}=await routingSetup(t,{...extra});
     const b=await reserve(env,'gate-'+name.replace(/\W/g,'-').slice(0,20)+'-x');
-    await worker.fetch(owner(b.id),env);
+    await approveReservation(env,b.id);
     const e={...env,...over};for(const [k,v] of Object.entries(e))if(v===undefined)delete e[k];
     const r=await inbound(e,{call_id:CID(40)});
     assert.ok(r.status!==200||isHangup(r.doc),name);
   }
   const {env}=await routingSetup(t,{...extra});
   const b=await reserve(env,'gate-base-0001');
-  await worker.fetch(owner(b.id),env);
+  await approveReservation(env,b.id);
   assert.equal((await inbound(env,{call_id:CID(50)},{sign:false})).status,403,'unsigned');
   assert.equal((await inbound(env,{call_id:CID(51)},{key:'another-signing-key-xxxxxxxxxxxx'})).status,403,'wrong key');
   assert.equal((await inbound(env,{call_id:CID(52),project_id:'11111111-1111-4111-8111-111111111111'})).status,403);
@@ -160,9 +161,11 @@ test('every gate on its own forces hangup (capped mode baseline that would other
 test('daily call cap counts claimed calls across reservations',async t=>{
   const {env}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'capped_caller_id',CALLER_ID_TRUST_ACCEPTED:'true',TEST_CALLER_E164:CALLER,
     ROUTING_MAX_CALLS_PER_DAY:'1'});
-  const a=await reserve(env,'daily-cap-0001');await worker.fetch(owner(a.id),env);
+  const a=await reserve(env,'daily-cap-0001');await approveReservation(env,a.id);
   assert.ok(connectOf((await inbound(env,{call_id:CID(60)})).doc));
-  await worker.fetch(owner(a.id,'mark-ended'),env);
-  const b=await reserve(env,'daily-cap-0002');await worker.fetch(owner(b.id),env);
+  assert.equal((await worker.fetch(owner(a.id,'mark-ended'),env)).status,409);
+  // For daily-cap regression, simulate a *separately verified* finished call.
+  env.DB.raw.prepare("UPDATE reservations SET status='completed' WHERE id=? AND status='connecting'").run(a.id);
+  const b=await reserve(env,'daily-cap-0002');await approveReservation(env,b.id);
   assert.ok(isHangup((await inbound(env,{call_id:CID(61)})).doc));
 });
