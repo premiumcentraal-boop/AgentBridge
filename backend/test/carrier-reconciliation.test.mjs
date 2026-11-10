@@ -27,7 +27,7 @@ test('requires two terminal verified carrier segments and sums real A/B charges'
   const p=provider();
   const result=await fetchCarrierReconciliation(row,env,p.fetchImpl);
   assert.deepEqual(result,{ok:true,inbound_segment_id:SEG,outbound_segment_id:CHILD,
-    actual_cost_cents:3,source:'verified_project_voice_logs',terminal:true});
+    outbound_status:'completed',actual_cost_cents:3,source:'verified_project_voice_logs',terminal:true});
   assert.equal(p.calls.length,2);
   assert.ok(p.calls[0].url.endsWith('/api/voice/logs/'+SEG));
   assert.equal(new URL(p.calls[1].url).pathname,'/api/voice/logs');
@@ -80,4 +80,67 @@ test('non-200, invalid JSON and oversized provider documents fail closed',async(
     const r=await fetchCarrierReconciliation(row,env,fake);
     assert.equal(r.ok,false);
   }
+});
+
+// Realistic fixtures shaped like SignalWire's documented Voice Logs responses
+// (GET /api/voice/logs/{id} and GET /api/voice/logs; Voice.RelayVoiceLog).
+const docInbound={billing_ms:60000,charge:0.0045,charge_details:[],created_at:'2027-01-15T08:00:05Z',
+  direction:'inbound',duration:42,duration_ms:41980,from:'+12125550177',id:SEG,parent_id:null,
+  qos_metrics:null,source:'realtime_api',status:'completed',to:DID,type:'relay_pstn_call',url:null};
+const docChild={billing_ms:30000,charge:0.0085,charge_details:[{description:'Outbound PSTN',charge:0.0085}],
+  created_at:'2027-01-15T08:00:20Z',direction:'outbound-dial',duration:25,duration_ms:25010,
+  from:DID,id:CHILD,parent_id:SEG,qos_metrics:null,source:'realtime_api',status:'ended',to:DEST,
+  type:'relay_pstn_call',url:null};
+const docLinks={self:'https://example-space.signalwire.com/api/voice/logs?page_number=0&page_size=1000',
+  first:'https://example-space.signalwire.com/api/voice/logs?page_size=1000'};
+test('documented Voice Logs shapes reconcile: ended status, outbound-dial direction, unrelated logs ignored',async()=>{
+  const unrelated={...docChild,id:'78313c74-b321-4c08-a3ea-7123449130ab',parent_id:null,to:'+13125550100'};
+  const p=provider(docInbound,[docInbound,unrelated,docChild],undefined);
+  const fetchImpl=async(url,o)=>{
+    const payload=url.endsWith('/'+SEG)?docInbound:{links:docLinks,data:[docInbound,unrelated,docChild]};
+    return new Response(JSON.stringify(payload),{status:200});
+  };
+  const r=await fetchCarrierReconciliation(row,env,fetchImpl);
+  assert.equal(r.ok,true,JSON.stringify(r));
+  assert.equal(r.actual_cost_cents,2,'0.0045+0.0085 dollars rounds up to 2 cents');
+  assert.equal(r.outbound_status,'ended');
+});
+test('an unanswered (busy/no-answer) B-leg is terminal and reconciles at its charge',async()=>{
+  for(const status of ['busy','no-answer','failed','canceled']){
+    const p=provider(docInbound,[{...docChild,status,charge:0}],docLinks);
+    const r=await fetchCarrierReconciliation(row,env,p.fetchImpl);
+    assert.equal(r.ok,true,status);
+  }
+});
+test('float charges do not over-round (0.1 + 0.2 dollars = 30 cents)',async()=>{
+  const p=provider({...docInbound,charge:0.1},[{...docChild,charge:0.2}],docLinks);
+  const r=await fetchCarrierReconciliation({...row,max_cost_cents:30},env,p.fetchImpl);
+  assert.equal(r.ok,true,JSON.stringify(r));
+  assert.equal(r.actual_cost_cents,30);
+});
+test('missing or unexpected documented fields stay locked with a specific code, never throw',async()=>{
+  const drop=(o,k)=>{const c={...o};delete c[k];return c;};
+  const cases=[
+    [provider(drop(docInbound,'status'),[docChild],docLinks),'INBOUND_CARRIER_NOT_TERMINAL'],
+    [provider({...docInbound,status:'ending'},[docChild],docLinks),'INBOUND_CARRIER_NOT_TERMINAL'],
+    [provider(drop(docInbound,'charge'),[docChild],docLinks),'INBOUND_CHARGE_UNKNOWN'],
+    [provider(drop(docInbound,'to'),[docChild],docLinks),'INBOUND_LOG_MISMATCH'],
+    [provider(drop(docInbound,'id'),[docChild],docLinks),'INBOUND_LOG_MISMATCH'],
+    [provider(docInbound,[drop(docChild,'parent_id')],docLinks),'UNVERIFIED_OUTBOUND_LEGS'],
+    [provider(docInbound,[drop(docChild,'direction')],docLinks),'OUTBOUND_LOG_MISMATCH'],
+    [provider(docInbound,[{...docChild,direction:'inbound'}],docLinks),'OUTBOUND_LOG_MISMATCH'],
+    [provider(docInbound,[{...docChild,status:'in-progress'}],docLinks),'OUTBOUND_CARRIER_NOT_TERMINAL'],
+    [provider(docInbound,[drop(docChild,'charge')],docLinks),'OUTBOUND_CHARGE_UNKNOWN'],
+    [provider(docInbound,[null,7,'x',docChild],{...docLinks,next:docLinks.self+'&page_token=abc'}),'PAGINATED_CARRIER_LOGS'],
+    [provider([],[docChild],docLinks),'INCOMPLETE_CARRIER_LOGS']
+  ];
+  for(const [p,code] of cases){
+    const r=await fetchCarrierReconciliation(row,env,p.fetchImpl);
+    assert.equal(r.ok,false);
+    assert.equal(r.code,code,JSON.stringify(r));
+  }
+  const weird=await fetchCarrierReconciliation(row,env,async()=>({get ok(){throw Error('boom');}}));
+  assert.equal(weird.ok,false);
+  const nullish=await fetchCarrierReconciliation(row,env,async()=>new Response('null'));
+  assert.equal(nullish.ok,false);
 });
