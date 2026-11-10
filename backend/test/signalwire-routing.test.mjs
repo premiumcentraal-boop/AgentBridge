@@ -88,6 +88,28 @@ test('DTMF PIN mode: prompt, then connect only for the right single-use PIN on t
   assert.equal(DB.raw.prepare('SELECT pin_attempts FROM reservations WHERE id=?').get(b.id).pin_attempts,2);
 });
 
+test('DTMF follow-up cannot switch to a later reservation after first one is cancelled',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const first=await reserve(env,'pin-binding-A');
+  await worker.fetch(owner(first.id),env);
+  const a=await inbound(env,{call_id:CID(101)});
+  assert.ok(a.doc.sections.main.some(x=>x.prompt),'first call requests a PIN');
+  const event=DB.raw.prepare("SELECT reservation_id FROM provider_events WHERE provider_call_id=? AND event_type='swml_inbound'")
+    .get(CID(101));
+  assert.equal(event.reservation_id,first.id,'event pins the original reservation');
+  const cancelled=await worker.fetch(api('/v1/reservations/'+first.id+'/cancel','POST'),env);
+  assert.equal(cancelled.status,200);
+  const second=await reserve(env,'pin-binding-B');
+  await worker.fetch(owner(second.id),env);
+  const wrongCall=await pin(env,CID(101),second.dtmf_pin);
+  assert.ok(isHangup(wrongCall.doc),'old call must not claim new approved reservation');
+  assert.deepEqual(DB.raw.prepare('SELECT status,pin_attempts FROM reservations WHERE id=?').get(second.id),
+    {status:'ready',pin_attempts:0},'later reservation is unconsumed');
+  await inbound(env,{call_id:CID(102)});
+  const right=await pin(env,CID(102),second.dtmf_pin);
+  assert.equal(connectOf(right.doc)?.to,DEST,'new call can claim its own reservation');
+});
+
 test('DTMF PIN: attempt limit burns the reservation; expiry ends it',async t=>{
   const {env,DB,at}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
   const b=await reserve(env,'pin-limit-0001');
