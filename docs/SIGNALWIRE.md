@@ -1,12 +1,12 @@
 # SignalWire bring-your-own-project connection (developer preview)
 
-**Status: read-only credential preflight + authenticated, fail-closed SWML webhook. Paid international routing is NOT enabled.** This is an independent AgentBridge integration concept, not an officially supported Grok/xAI feature. Grok Bot remains the sole speaking AI; no SignalWire AI, recording, transcription, or background voice agent is used.
+**Status: read-only inventory plus default-off authenticated SWML webhook. The new US-only private pilot implementation is in draft PR #26 and [US_PRIVATE_PILOT.md](US_PRIVATE_PILOT.md); only the flags-OFF handler is always hangup-only. The flags-ON route can generate a paid US connect after extra owner, DTMF, policy and D1 gates. Do not enable the flags or deploy based on this document. International routing is NOT authorized.** This is an independent AgentBridge integration concept, not an officially supported Grok/xAI feature. Grok Bot remains the sole speaking AI; no SignalWire AI, recording, transcription, or background voice agent is used.
 
 ## How the two SignalWire interfaces fit
 
 - **Project API**: Read-only `GET /api/relay/rest/phone_numbers` confirms that a Project ID and API Token can list owned voice-capable numbers. This does not buy numbers, update phone settings or validate rates.
-- **Signed SWML webhook**: `POST /telephony/signalwire/swml` accepts SignalWire's raw JSON Calling SWML request, checks `X-Signalwire-SHA256-Signature` using the **separate project signing key**, matches the project/DID/inbound origin, and responds with a valid **hangup-only** SWML document. It never issues an onward call or consumes D1 reservations.
-- **Planned routing**: When all authorization, replay, quote and spend controls exist, a valid reservation may yield SWML `connect.to` for the one explicitly approved destination. `signalWireConnectPlan()` is an offline-only serialization helper for that future flow. The live handler deliberately never invokes it.
+- **Signed SWML webhook (flags OFF)**: `POST /telephony/signalwire/swml` accepts SignalWire's raw JSON Calling SWML request, checks `X-Signalwire-SHA256-Signature` using the **separate project signing key**, matches the project/DID/inbound origin, and responds with a valid **hangup-only** SWML document. It never issues an onward call or consumes D1 reservations.
+- **Gated US pilot (draft)**: With both flags explicitly ON, the routed handler invokes `signalWireConnectPlan()` only after signed-call checks, original PIN binding, owner-reviewed digest, exact US-only destination, conservative software cap and atomic claim. Without both flags, the older handler continues to hang up. It has NOT been deployed or carrier-verified; software spend estimates do not constitute provider budget enforcement.
 
 The supplied `goto`, `execute`, and `transfer` guide is about SWML **control flow**. The correct method for bridging an inbound US call to an international phone number is `connect`. `transfer` does not automatically authorize or dial a phone number. Do **not** add a SignalWire conversational AI method: Grok Bot itself must remain the speaking party.
 
