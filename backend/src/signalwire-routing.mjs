@@ -19,7 +19,8 @@
 import {readBoundedWebhookBody} from './bounded-body.mjs';
 import {SIGNALWIRE_SWML_PATH,signalWireHangup,signalWireConnectPlan,verifySignalWireSwmlSignature} from './signalwire.mjs';
 import {callerProofMode,verifyPin,MAX_PIN_ATTEMPTS,PIN_DIGITS} from './caller-proof.mjs';
-import {destinationDecision,routingCaps,maxCostCents,utcDayStart,signalWireReservationsConfigured} from './routing-policy.mjs';
+import {routingCaps,utcDayStart,signalWireReservationsConfigured} from './routing-policy.mjs';
+import {pilotPolicy,verifyApprovalBinding} from './approval-policy.mjs';
 
 export const SIGNALWIRE_PIN_PATH='/telephony/signalwire/swml/pin';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -67,29 +68,19 @@ async function setOutcome(env,callId,eventType,outcome,reservationId=null){
     .bind(outcome,reservationId,callId,eventType).run();
 }
 async function findRoutable(env,now){
-  return env.DB.prepare("SELECT r.id,r.account_id,r.destination,r.pin_sha256,r.pin_attempts FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE a.did=? AND a.status='active' AND r.status='ready' AND r.approved_at IS NOT NULL AND r.expires_at>? ORDER BY r.created_at DESC LIMIT 1")
+  return env.DB.prepare("SELECT r.id,r.account_id,r.destination,r.expires_at,r.status,r.pin_sha256,r.pin_attempts FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE a.did=? AND a.status='active' AND r.status='ready' AND r.approved_at IS NOT NULL AND r.expires_at>? ORDER BY r.created_at DESC LIMIT 1")
     .bind(env.US_BRIDGE_DID,now).first();
 }
 /** Policy + caps; returns {ok, caps, cost, code}. */
 async function policyCheck(env,row,mode,now){
-  const decision=destinationDecision(row.destination,env);
-  if(!decision.ok)return {ok:false,code:decision.code};
-  // The first pilot is intentionally US-only, even if a stale allowlist still
-  // contains foreign destinations or older international test fixtures.
-  // Carrier Trial Mode may require BOTH US numbers to be purchased/verified.
-  if(decision.entry.country!=='US'||row.destination!==env.US_PILOT_TEST_DESTINATION)
-    return {ok:false,code:'US_PILOT_EXACT_DESTINATION_REQUIRED'};
-  if(env.US_PILOT_DESTINATION_VERIFIED!=='true')
-    return {ok:false,code:'US_PILOT_DESTINATION_NOT_ATTESTED'};
+  const proposal=pilotPolicy(row,env);
+  if(!proposal.ok)return {ok:false,code:proposal.code};
+  if(proposal.snapshot.caller_proof!==mode)return {ok:false,code:'CALLER_MODE_CHANGED'};
+  // A separate owner token must approve the EXACT current destination,
+  // duration, country, rate source and budget; a changed quote is not approved.
+  if(!await verifyApprovalBinding(env,row))return {ok:false,code:'APPROVAL_BINDING_MISSING_OR_STALE'};
   const caps=routingCaps(env,mode);
-  if(!caps)return {ok:false,code:'CAPS_NOT_CONFIGURED'};
-  // Default lower ceiling until live US carrier pricing, full billing and
-  // post-call reconciliation are established; caps are NOT provider spend caps.
-  if(caps.maxSeconds>60||caps.maxCallsPerDay>1||
-      caps.maxCentsPerCall>100||caps.maxCentsPerDay>100)
-    return {ok:false,code:'US_PILOT_CAPS_EXCEEDED'};
-  const cost=maxCostCents(decision.entry,caps.maxSeconds);
-  if(cost>caps.maxCentsPerCall)return {ok:false,code:'PER_CALL_SPEND_CAP'};
+  const cost=proposal.snapshot.estimated_max_cost_cents;
   const usage=await env.DB.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(max_cost_cents),0) AS c FROM reservations WHERE account_id=? AND claimed_at>=?')
     .bind(row.account_id,utcDayStart(now)).first();
   if(Number(usage?.n||0)+1>caps.maxCallsPerDay)return {ok:false,code:'DAILY_CALL_CAP'};
@@ -154,7 +145,7 @@ export async function handleSignalWirePin(request,env={}){
     .bind(call.call_id).first();
   if(!started?.reservation_id||!UUID.test(started.reservation_id))return hangup();
   if(!await recordEvent(env,call.call_id,'swml_pin',now))return hangup();
-  const row=await env.DB.prepare("SELECT r.id,r.account_id,r.destination,r.pin_sha256,r.pin_attempts FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE r.id=? AND a.did=? AND a.status='active' AND r.status='ready' AND r.approved_at IS NOT NULL AND r.expires_at>?")
+  const row=await env.DB.prepare("SELECT r.id,r.account_id,r.destination,r.expires_at,r.status,r.pin_sha256,r.pin_attempts FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE r.id=? AND a.did=? AND a.status='active' AND r.status='ready' AND r.approved_at IS NOT NULL AND r.expires_at>?")
     .bind(started.reservation_id,env.US_BRIDGE_DID,now).first();
   if(!row||!row.pin_sha256){await setOutcome(env,call.call_id,'swml_pin','original_reservation_unavailable',started.reservation_id);return hangup();}
   const bumped=await env.DB.prepare("UPDATE reservations SET pin_attempts=pin_attempts+1 WHERE id=? AND status='ready' AND approved_at IS NOT NULL AND expires_at>? AND pin_attempts<?")
