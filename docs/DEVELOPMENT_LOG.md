@@ -119,3 +119,13 @@ Append one dated entry for each substantial incremental development session. Lin
 - Phase 2: owner allowlist + country/premium/NANP-non-US blocking, required caps, configurable TTL, owner-only two-step approval endpoint and scripts, SignalWire-only reservation API; Twilio route requires approval when owner approval is configured.
 - Phase 5: gated SignalWire connect behind both owner flags; flags-off behaviour unchanged (hangup-only, no D1). Status callbacks TODO (signing undocumented). No live calls, deploy or provider writes.
 
+
+
+## 2026-11-09 — US-only fail-closed carrier pilot hardening (draft PR #26, not deployed)
+- Reviewed earlier security findings and open parallel draft PR #25. Drafted a larger US-pilot candidate on a separate branch instead of merging overlapping, incomplete work.
+- Hard-disabled legacy Twilio inbound dialing (hangup-only), closing the shared flag cross-provider exposure. Bound each DTMF PIN callback to the original reservation captured in provider_events and added replacement-reservation regression coverage.
+- Added mandatory owner-only proposal review with a SHA-256 fingerprint of immutable US destination, expiry, caller proof, both recorded per-minute rates/sources and time/cost caps. A second out-of-band owner request must supply the exact digest. Carrier routing revalidates it before connect; missing migration or stale policy fails closed.
+- Added conservative one-US-destination gate, a 60-second maximum outgoing connect, at most one claimed call/day and a $1 maximum **estimated** spend/day. Cost estimate reserves outbound duration and four started minutes of inbound leg overhead. These values are not verified prices or hard carrier spending caps.
+- Required signed incoming segment IDs and stored the inbound segment on claim. Manual mark-ended now asks read-only SignalWire Voice Logs for terminal inbound plus one matching terminal child, reconciles their recorded charges, and refuses to release when missing/inconsistent/over budget. Carrier schema and real-world behavior are NOT verified.
+- Added tracked 0002 D1 approval/segment tables, read-only migration preflight (detects partially/manual applied 0001) and a fast-forward-only main sync in local MCP setup. Added regression tests and operator checklist docs/US_PRIVATE_PILOT.md.
+- All coding, CI and documentation work uses fake fixture numbers; **no deploy, switch change, actual calls, number purchases, real provider keys, Cloudflare secrets or external billing**. Full final CI and independent review still required; phase is not authorized for live calls.
