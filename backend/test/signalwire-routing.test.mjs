@@ -44,12 +44,12 @@ test('capped caller-ID mode: connect only for the owner-accepted caller, with ti
   assert.ok(isHangup((await inbound(env,{call_id:CID(2),from_number:'+12125550178'})).doc),'wrong caller');
   const ok=await inbound(env,{call_id:CID(3)});
   const c=connectOf(ok.doc);
-  assert.deepEqual(c,{to:DEST,from:DID,answer_on_bridge:true,timeout:30,max_duration:120});
+  assert.deepEqual(c,{to:DEST,from:DID,answer_on_bridge:true,timeout:30,max_duration:60});
   assert.ok(!/"(ai|record|record_call|transcribe|stream|play|say)"/.test(JSON.stringify(ok.doc)));
   assert.ok(isHangup((await inbound(env,{call_id:CID(3)})).doc),'replay of the same call_id');
   assert.ok(isHangup((await inbound(env,{call_id:CID(4)})).doc),'reservation already consumed');
   const row=DB.raw.prepare('SELECT status,provider,provider_call_id,max_call_seconds,max_cost_cents FROM reservations WHERE id=?').get(b.id);
-  assert.deepEqual({...row},{status:'connecting',provider:'signalwire',provider_call_id:CID(3),max_call_seconds:120,max_cost_cents:4});
+  assert.deepEqual({...row},{status:'connecting',provider:'signalwire',provider_call_id:CID(3),max_call_seconds:60,max_cost_cents:2});
   const ev=DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=?").get(CID(3));
   assert.equal(ev.outcome,'connect');
   assert.ok(!JSON.stringify(DB.raw.prepare('SELECT * FROM provider_events').all()).includes(CALLER),'ledger stores no numbers');
@@ -70,7 +70,7 @@ test('DTMF PIN mode: prompt, then connect only for the right single-use PIN on t
   await worker.fetch(owner(b.id),env);
   const first=await inbound(env,{call_id:CID(10),from_number:'+13125550199'});
   const main=first.doc.sections.main;
-  assert.deepEqual(main[0],{answer:{max_duration:240}});
+  assert.deepEqual(main[0],{answer:{max_duration:120}});
   assert.deepEqual(main[1].prompt,{play:'silence:1',max_digits:8,terminators:'#',digit_timeout:5,initial_timeout:15});
   assert.deepEqual(main[2].transfer,{dest:PIN_URL,params:{digits:'${prompt_value}'}});
   assert.ok(!JSON.stringify(first.doc).includes(b.dtmf_pin),'PIN never echoed');
@@ -82,7 +82,7 @@ test('DTMF PIN mode: prompt, then connect only for the right single-use PIN on t
   assert.ok(isHangup((await pin(env,CID(10),b.dtmf_pin)).doc),'one PIN submission per call (replay)');
   await inbound(env,{call_id:CID(11)});
   const good=await pin(env,CID(11),b.dtmf_pin+'#');
-  assert.deepEqual(connectOf(good.doc),{to:DEST,from:DID,answer_on_bridge:true,timeout:30,max_duration:180});
+  assert.deepEqual(connectOf(good.doc),{to:DEST,from:DID,answer_on_bridge:true,timeout:30,max_duration:60});
   await inbound(env,{call_id:CID(12)});
   assert.ok(isHangup((await pin(env,CID(12),b.dtmf_pin)).doc),'single use');
   assert.equal(DB.raw.prepare('SELECT pin_attempts FROM reservations WHERE id=?').get(b.id).pin_attempts,2);
@@ -133,8 +133,8 @@ test('every gate on its own forces hangup (capped mode baseline that would other
     'destination removed from allowlist':{ROUTING_DESTINATIONS:JSON.stringify([{e164:INTL,country:'NL',rate_cents_per_min:10,rate_source:'x'}])},
     'country not allowed':{ROUTING_ALLOWED_COUNTRIES:'NL'},
     'caps missing':{ROUTING_MAX_SPEND_CENTS_PER_DAY:undefined},
-    'per-call spend cap':{ROUTING_MAX_SPEND_CENTS_PER_CALL:'3'},
-    'daily spend cap':{ROUTING_MAX_SPEND_CENTS_PER_DAY:'3'},
+    'per-call spend cap':{ROUTING_MAX_SPEND_CENTS_PER_CALL:'1'},
+    'daily spend cap':{ROUTING_MAX_SPEND_CENTS_PER_DAY:'1'},
   };
   for(const [name,over] of Object.entries(cases)){
     const {env}=await routingSetup(t,{...extra});
