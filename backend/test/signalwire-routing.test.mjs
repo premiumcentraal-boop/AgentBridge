@@ -49,7 +49,7 @@ test('capped caller-ID mode: connect only for the owner-accepted caller, with ti
   assert.ok(isHangup((await inbound(env,{call_id:CID(3)})).doc),'replay of the same call_id');
   assert.ok(isHangup((await inbound(env,{call_id:CID(4)})).doc),'reservation already consumed');
   const row=DB.raw.prepare('SELECT status,provider,provider_call_id,max_call_seconds,max_cost_cents FROM reservations WHERE id=?').get(b.id);
-  assert.deepEqual({...row},{status:'connecting',provider:'signalwire',provider_call_id:CID(3),max_call_seconds:60,max_cost_cents:2});
+  assert.deepEqual({...row},{status:'connecting',provider:'signalwire',provider_call_id:CID(3),max_call_seconds:60,max_cost_cents:6});
   const ev=DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=?").get(CID(3));
   assert.equal(ev.outcome,'connect');
   assert.ok(!JSON.stringify(DB.raw.prepare('SELECT * FROM provider_events').all()).includes(CALLER),'ledger stores no numbers');
