@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.mjs';
-import {routingSetup,api,owner,approveReservation,swml,call,BASE,OWNER,TOKEN,DEST,CALLER} from './helpers/routing-env.mjs';
+import {routingSetup,api,swml,call,BASE,OWNER,TOKEN,DEST,CALLER} from './helpers/routing-env.mjs';
 
 const FLAGS={PRIVATE_TEST_OUTBOUND_ENABLED:'true',SIGNALWIRE_CONNECT_ENABLED:'true'};
 const OPT_IN={CALLER_PROOF_MODE:'capped_caller_id',CALLER_ID_TRUST_ACCEPTED:'true',
@@ -17,62 +17,27 @@ async function inbound(env,over){
 const connectOf=doc=>doc?.sections?.main?.find(s=>s.connect)?.connect;
 const isHangup=doc=>Array.isArray(doc?.sections?.main)&&doc.sections.main.length===1&&'hangup' in doc.sections.main[0];
 
-test('caller-ID pilot needs BOTH owner opt-ins; otherwise DTMF stays mandatory',async t=>{
-  for(const missing of ['US_PILOT_ALLOW_CALLER_ID_PROOF','CALLER_ID_TRUST_ACCEPTED']){
-    const {env}=await routingSetup(t,{...FLAGS,...OPT_IN,[missing]:undefined});
-    const res=await reserve(env,'cid-missing-'+missing.length);
-    assert.equal(res.status,409,missing);
-    assert.match((await res.json()).error.message,/DTMF_PROOF_REQUIRED/);
+test('caller-ID routing stays denied for every risk-opt-in combination',async t=>{
+  for(const overrides of [{},{CALLER_ID_TRUST_ACCEPTED:undefined},{US_PILOT_ALLOW_CALLER_ID_PROOF:undefined},
+    {US_PILOT_ALLOW_CALLER_ID_PROOF:'TRUE'},{TEST_CALLER_E164:'+13125550100'}]){
+    const {env,DB}=await routingSetup(t,{...FLAGS,...OPT_IN,...overrides});
+    const res=await reserve(env,'cid-denied-'+Object.keys(overrides).join('-').slice(0,40));
+    assert.equal(res.status,409,JSON.stringify(overrides));
+    assert.match((await res.json()).error.message,/CALLER_AUTH_REQUIRED/);
+    const matching=await inbound(env,{call_id:CID(1),from_number:env.TEST_CALLER_E164||CALLER});
+    assert.equal(matching.status,200);
+    assert.ok(isHangup(matching.doc),'matching caller ID never authorizes forwarding');
+    assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservations').get().n,0);
+    assert.equal(DB.raw.prepare("SELECT COUNT(*) AS n FROM provider_events WHERE outcome='connect'").get().n,0);
   }
-  const {env}=await routingSetup(t,{...FLAGS,...OPT_IN,US_PILOT_ALLOW_CALLER_ID_PROOF:'TRUE'});
-  assert.equal((await reserve(env,'cid-case-sensitive')).status,409);
 });
 
-test('opted-in caller-ID pilot: 10-minute capped connect only for the exact approved caller',async t=>{
-  const {env,DB}=await routingSetup(t,{...FLAGS,...OPT_IN});
-  const created=await (await reserve(env,'cid-flow-0001')).json();
-  assert.equal(created.caller_proof,'capped_caller_id');
-  assert.equal(created.dtmf_pin,undefined,'no PIN in caller-ID mode');
-  assert.equal(created.max_call_seconds,600);
-  // 10 started outbound minutes at 2c + (10+3) inbound minutes at 1c.
-  assert.equal(created.estimate.max_cost_cents,33);
-  const review=await (await worker.fetch(owner(created.id,'review'),env)).json();
-  assert.equal(review.proposal.trusted_caller,CALLER);
-  assert.equal(review.proposal.caller_id_spoofable,true);
-  assert.equal(review.proposal.max_call_seconds,600);
-  assert.equal((await approveReservation(env,created.id)).status,200);
-  // Wrong caller: free hangup, reservation untouched, attempt logged.
-  const spoofless=await inbound(env,{call_id:CID(1),from_number:'+13125550199'});
-  assert.ok(isHangup(spoofless.doc));
-  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(created.id).status,'ready');
-  // Exact caller: connect to the one destination with max_duration 600.
-  const ok=await inbound(env,{call_id:CID(2)});
-  const c=connectOf(ok.doc);
-  assert.equal(c?.to,DEST);
-  assert.equal(c.max_duration,600);
-  assert.equal(c.timeout,30);
-  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(created.id).status,'connecting');
-  // Replay of the same call id cannot connect again.
-  assert.ok(isHangup((await inbound(env,{call_id:CID(2)})).doc));
-  const log=DB.raw.prepare('SELECT from_number,caller_matches_test_caller FROM inbound_call_log ORDER BY id').all();
-  assert.deepEqual(log.map(x=>[x.from_number,x.caller_matches_test_caller]),[['+13125550199',0],[CALLER,1]]);
-});
-
-test('changing the trusted caller after approval invalidates the approval fingerprint',async t=>{
-  const {env,DB}=await routingSetup(t,{...FLAGS,...OPT_IN});
-  const created=await (await reserve(env,'cid-flow-0002')).json();
-  assert.equal((await approveReservation(env,created.id)).status,200);
-  const other='+13125550100';
-  const changed={...env,TEST_CALLER_E164:other};
-  const r=await inbound(changed,{call_id:CID(3),from_number:other});
-  assert.ok(isHangup(r.doc),'approval was for a different caller');
-  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(created.id).status,'ready');
-});
-
-test('caller-ID pilot still enforces caps: more than 100c/day or 4 calls/day is refused',async t=>{
+test('caller-ID mode cannot bypass authorization by relaxing spending caps',async t=>{
   for(const [k,v] of [['ROUTING_MAX_CALLS_PER_DAY','5'],['ROUTING_MAX_SPEND_CENTS_PER_DAY','101'],['ROUTING_MAX_CALL_SECONDS','601']]){
     const {env}=await routingSetup(t,{...FLAGS,...OPT_IN,[k]:v});
-    assert.equal((await reserve(env,'cid-cap-'+k.length)).status,409,k);
+    const res=await reserve(env,'cid-cap-'+k.length);
+    assert.equal(res.status,409,k);
+    assert.match((await res.json()).error.message,/CALLER_AUTH_REQUIRED/);
   }
 });
 
