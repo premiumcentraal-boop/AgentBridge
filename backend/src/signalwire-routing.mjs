@@ -74,8 +74,20 @@ async function findRoutable(env,now){
 async function policyCheck(env,row,mode,now){
   const decision=destinationDecision(row.destination,env);
   if(!decision.ok)return {ok:false,code:decision.code};
+  // The first pilot is intentionally US-only, even if a stale allowlist still
+  // contains foreign destinations or older international test fixtures.
+  // Carrier Trial Mode may require BOTH US numbers to be purchased/verified.
+  if(decision.entry.country!=='US'||row.destination!==env.US_PILOT_TEST_DESTINATION)
+    return {ok:false,code:'US_PILOT_EXACT_DESTINATION_REQUIRED'};
+  if(env.US_PILOT_DESTINATION_VERIFIED!=='true')
+    return {ok:false,code:'US_PILOT_DESTINATION_NOT_ATTESTED'};
   const caps=routingCaps(env,mode);
   if(!caps)return {ok:false,code:'CAPS_NOT_CONFIGURED'};
+  // Default lower ceiling until live US carrier pricing, full billing and
+  // post-call reconciliation are established; caps are NOT provider spend caps.
+  if(caps.maxSeconds>60||caps.maxCallsPerDay>1||
+      caps.maxCentsPerCall>100||caps.maxCentsPerDay>100)
+    return {ok:false,code:'US_PILOT_CAPS_EXCEEDED'};
   const cost=maxCostCents(decision.entry,caps.maxSeconds);
   if(cost>caps.maxCentsPerCall)return {ok:false,code:'PER_CALL_SPEND_CAP'};
   const usage=await env.DB.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(max_cost_cents),0) AS c FROM reservations WHERE account_id=? AND claimed_at>=?')
