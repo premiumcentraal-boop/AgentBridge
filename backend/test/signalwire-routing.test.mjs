@@ -20,7 +20,7 @@ async function pin(env,callId,digits,signUrl=PIN_URL){
 const connectOf=doc=>doc?.sections?.main?.find(s=>s.connect)?.connect;
 
 test('flags off (any combination short of both exactly "true"): hangup-only and D1 untouched',async t=>{
-  const {env,DB}=await routingSetup(t,{CALLER_PROOF_MODE:'dtmf_pin',TEST_DESTINATION_E164:DEST});
+  const {env,DB}=await routingSetup(t,{CALLER_PROOF_MODE:'dtmf_pin',TEST_CALLER_E164:CALLER,TEST_DESTINATION_E164:DEST});
   const b=await reserve(env,'flags-off-0001');
   await approveReservation(env,b.id);
   const before=DB.log.length;
