@@ -115,7 +115,7 @@ export async function handleSignalWireRouting(request,env={}){
   if(!callMatches(call,env))return text('Forbidden',403);
   const mode=callerProofMode(env);
   await logInboundCall(env,call,'swml_routing','mode_'+mode);
-  if(mode==='none')return hangup();
+  // Defense in depth: never emit paid SWML for an unauthenticated caller.\n  // A carrier signature and owner-approved reservation do not prove caller identity.\n  if(mode==='none'||mode==='any_caller')return hangup();
   const now=Math.floor(Date.now()/1000);
   if(!await recordEvent(env,call.call_id,'swml_inbound',now))return hangup();
   const row=await findRoutable(env,now);
