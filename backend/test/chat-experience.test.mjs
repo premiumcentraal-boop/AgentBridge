@@ -58,3 +58,25 @@ test('all chat modes truthfully disclose current platform and live-route limitat
     assert.equal(b.payment_enabled,false);
   }
 });
+
+import {validateMcpEnvelope} from '../src/mcp-validation.mjs';
+
+function rpc(difficulty){
+  return {jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'preview_chat_call_flow',
+    arguments:difficulty===undefined?{}:{difficulty}}};
+}
+
+test('hosted MCP accepts all three difficulties and safe default arguments',()=>{
+  assert.equal(validateMcpEnvelope(rpc()).ok,true);
+  for(const difficulty of CALL_DIFFICULTIES)
+    assert.equal(validateMcpEnvelope(rpc(difficulty)).ok,true);
+  const missingArgs={jsonrpc:'2.0',id:2,method:'tools/call',params:{name:'preview_chat_call_flow'}};
+  assert.equal(validateMcpEnvelope(missingArgs).ok,true);
+});
+
+test('hosted MCP rejects unknown difficulty and attempted security overrides',()=>{
+  for(const difficulty of ['auto','unsafe','',12,null])
+    assert.equal(validateMcpEnvelope(rpc(difficulty)).ok,false);
+  const danger=rpc('simple'); danger.params.arguments.skip_approval=true;
+  assert.equal(validateMcpEnvelope(danger).ok,false);
+});
