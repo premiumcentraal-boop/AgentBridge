@@ -117,20 +117,13 @@ export async function handleSignalWireRouting(request,env={}){
   await logInboundCall(env,call,'swml_routing','mode_'+mode);
   // Defense in depth: never emit paid SWML for an unauthenticated caller.
   // A carrier signature and owner-approved reservation do not prove caller identity.
-  if(mode==='none'||mode==='any_caller')return hangup();
+  if(mode!=='dtmf_pin')return hangup();
   const now=Math.floor(Date.now()/1000);
   if(!await recordEvent(env,call.call_id,'swml_inbound',now))return hangup();
   const row=await findRoutable(env,now);
   if(!row){await setOutcome(env,call.call_id,'swml_inbound','no_approved_reservation');return hangup();}
   const check=await policyCheck(env,row,mode,now);
   if(!check.ok){await setOutcome(env,call.call_id,'swml_inbound',check.code,row.id);return hangup();}
-  if(mode==='capped_caller_id'||mode==='any_caller'){
-    // any_caller: the first signed inbound call during the approved window claims it.
-    if(mode==='capped_caller_id'&&call.from_number!==env.TEST_CALLER_E164){await setOutcome(env,call.call_id,'swml_inbound','CALLER_MISMATCH',row.id);return hangup();}
-    if(!await claim(env,row,call.call_id,call.segment_id,check,now)){await setOutcome(env,call.call_id,'swml_inbound','CLAIM_LOST',row.id);return hangup();}
-    await setOutcome(env,call.call_id,'swml_inbound','connect',row.id);
-    return connectFor(env,row,check);
-  }
   // dtmf_pin: answer silently, collect digits, post them to the signed PIN URL.
   if(!row.pin_sha256){await setOutcome(env,call.call_id,'swml_inbound','NO_PIN',row.id);return hangup();}
   await setOutcome(env,call.call_id,'swml_inbound','pin_requested',row.id);
