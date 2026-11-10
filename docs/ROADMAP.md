@@ -62,7 +62,7 @@ Never auto-merge production-risk changes. Do not falsely mark a task complete wi
 
 
 ## US-only first private pilot — draft PR #26 (not merged or deployed)
-- [x] *Implemented on draft branch, awaiting review*: retire Twilio carrier dialing; original-reservation-bound PIN; immutable owner-review digest; US-only 60-second/one-per-day caps; both-leg estimate; carrier-log-constrained completion; read-only D1 migration preflight.
+- [x] *Implemented on draft branch, awaiting review*: retire Twilio carrier dialing; DTMF-only authorization with original-reservation-bound PIN; immutable owner-review digest; US-only 60-second/one-per-day caps; both-leg estimate; carrier-log-constrained completion; read-only D1 migration preflight.
 - [ ] Confirm final CI on exact feature branch head and independent code/security review before merging.
 - [ ] Manually verify real US carrier rate for both legs and obtain satisfactory hard financial exposure controls before any chargeable call.
 - [ ] Apply D1 schema/migrations manually after backup, baseline tracking checks, and explicit owner approval.
