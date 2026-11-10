@@ -16,6 +16,9 @@ jobs:
         with:
           node-version: '22'
       - run: npm run ci
+      # Private read-only stdio MCP server (separate lockfile; root CI stays dependency-free)
+      - run: npm --prefix local-mcp ci --no-audit --no-fund
+      - run: npm --prefix local-mcp test
       - name: Upload static website
         uses: actions/upload-artifact@v4
         with:

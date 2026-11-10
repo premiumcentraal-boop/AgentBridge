@@ -1,0 +1,19 @@
+{
+  "name": "agentbridge-local-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private, read-only stdio MCP server for AgentBridge number management (single operator).",
+  "type": "module",
+  "main": "server.mjs",
+  "bin": {"agentbridge-local-mcp": "server.mjs"},
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "smoke": "node scripts/smoke-client.mjs"
+  },
+  "engines": {"node": ">=22"},
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "4.6.7"
+  }
+}

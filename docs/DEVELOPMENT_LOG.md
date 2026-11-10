@@ -107,3 +107,8 @@ Append one dated entry for each substantial incremental development session. Lin
 - Added a self-contained no-network HTML card resource with declared MCP Apps MIME type, resource discovery and read methods, tool metadata linking the three read-only number tools, and standard iframe initialization/notification handling. The view renders untrusted phone-number strings using textContent instead of HTML injection and shows no purchase, payment or call buttons.
 - Kept complete structured JSON and text fallbacks, plus authenticated resource access. Hides call/reservation tools from discovery until the full private-test carrier environment is configured, although no paid routing is enabled by this UI.
 - Added offline resource and UI-handshake regression tests, basic DOM injection-safety tests and syntax checks. CI validation and real Grok Bot host rendering remain pending; no deployment, real phone calls, numbers purchased, carrier resources modified or secrets used.
+
+## 2026-11-09 — Local read-only stdio MCP server (branch local-mcp, not pushed)
+- Added `local-mcp/`: private single-operator stdio MCP server reusing backend number tools and the MCP Apps card; four read-only tools; allowlist guard; env-only credentials with redaction; `run.sh` with optional 0600 secrets file.
+- Extracted `searchNumberCandidates` from `searchAvailableNumbers` (hosted guard unchanged).
+- Added `scripts/setup-local-mcp.sh`, `docs/LOCAL_MCP.md`, stdio client tests with mocked SignalWire.
