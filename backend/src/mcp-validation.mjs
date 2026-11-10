@@ -30,13 +30,17 @@ export function validateMcpEnvelope(input){
     return {ok:false,code:-32602,message:'Only the read-only AgentBridge number card resource is available'};
   if(input.method==='tools/call'){
     if(typeof input.params?.name!=='string')return {ok:false,code:-32602,message:'Tool name is required'};
-    if(!['prepare_international_call','get_call_status','cancel_international_call','get_bridge_setup','list_my_numbers','search_available_numbers'].includes(input.params.name))
+    if(!['prepare_international_call','get_call_status','cancel_international_call','get_bridge_setup','list_my_numbers','search_available_numbers','preview_chat_call_flow'].includes(input.params.name))
       return {ok:false,code:-32601,message:'Unknown tool'};
-    const args=input.params.arguments===undefined&&ZERO_ARG_TOOLS.has(input.params.name)?{}:input.params.arguments;
+    const args=input.params.arguments===undefined&&(ZERO_ARG_TOOLS.has(input.params.name)||input.params.name==='preview_chat_call_flow')?{}:input.params.arguments;
     if(args===null||typeof args!=='object'||Array.isArray(args))
       return {ok:false,code:-32602,message:'Tool arguments must be an object'};
     if(ZERO_ARG_TOOLS.has(input.params.name)){
       if(Object.keys(args).length!==0)return {ok:false,code:-32602,message:'This read-only tool takes no arguments'};
+    }else if(input.params.name==='preview_chat_call_flow'){
+      if(Object.keys(args).some(k=>k!=='difficulty')||
+         (args.difficulty!==undefined&&!['simple','guided','advanced'].includes(args.difficulty)))
+        return {ok:false,code:-32602,message:'Optional difficulty must be simple, guided or advanced'};
     }else if(input.params.name==='search_available_numbers'){
       if(typeof args.area_code!=='string'||!AREA.test(args.area_code)||Object.keys(args).some(k=>k!=='area_code'))
         return {ok:false,code:-32602,message:'A valid three-digit US area_code is required'};
