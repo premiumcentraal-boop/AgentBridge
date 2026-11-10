@@ -21,7 +21,13 @@ export function pilotPolicy(row,env){
     return {ok:false,code:'US_PILOT_EXACT_DESTINATION_REQUIRED'};
   if(env.US_PILOT_DESTINATION_VERIFIED!=='true')
     return {ok:false,code:'US_PILOT_DESTINATION_NOT_ATTESTED'};
-  const mode=callerProofMode(env),caps=routingCaps(env,mode);
+  const mode=callerProofMode(env);
+  // First US pilot MUST prove possession of the one-use challenge. Signed carrier
+  // requests and caller-ID matching do NOT authenticate the calling person.
+  // The legacy opt-in capped caller-ID mode remains in the library for
+  // historical compatibility, but is explicitly non-routable in this pilot.
+  if(mode!=='dtmf_pin')return {ok:false,code:'DTMF_PROOF_REQUIRED'};
+  const caps=routingCaps(env,mode);
   if(!caps)return {ok:false,code:'CAPS_NOT_CONFIGURED'};
   if(caps.maxSeconds>PILOT_MAX_SECONDS||caps.maxCallsPerDay>PILOT_MAX_CALLS_PER_DAY||
     caps.maxCentsPerCall>PILOT_MAX_SPEND_CENTS||caps.maxCentsPerDay>PILOT_MAX_SPEND_CENTS)
