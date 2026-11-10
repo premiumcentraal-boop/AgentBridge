@@ -92,6 +92,29 @@ test('stdio: setup status with no credentials reports not configured, no crash',
   }finally{await c.close();}
 });
 
+test('stdio: guidance difficulty changes only display; no carrier or write action',async()=>{
+  const c=await connect(cleanEnv({...CREDS,US_BRIDGE_DID:DID}),{mock:{}});
+  try{
+    const simple=await c.client.callTool({name:'preview_chat_call_flow',arguments:{difficulty:'simple'}});
+    const advanced=await c.client.callTool({name:'preview_chat_call_flow',arguments:{difficulty:'advanced'}});
+    for(const result of [simple,advanced]){
+      assert.equal(result.isError,false);
+      assert.equal(result.structuredContent.state,'preview_only');
+      assert.equal(result.structuredContent.ready_to_call,false);
+      assert.equal(result.structuredContent.routing_enabled,false);
+      assert.equal(result.structuredContent.preference_saved,false);
+      assert.equal(result.structuredContent.owner_approval_out_of_band_required,true);
+      assertNoSecret(result);
+    }
+    assert.notEqual(simple.structuredContent.sample_message,advanced.structuredContent.sample_message);
+    assert.deepEqual(simple.structuredContent.required_gates,advanced.structuredContent.required_gates);
+    assert.match(simple.content[0].text,/no calling capability/);
+    assert.equal(c.fetches().length,0,'preview must never contact carrier');
+    const bad=await c.client.callTool({name:'preview_chat_call_flow',arguments:{difficulty:'simple',skip_approval:true}}).catch(e=>e);
+    assert.ok(bad instanceof Error||bad.isError===true);
+  }finally{await c.close();}
+});
+
 test('stdio: setup status with credentials shows set/missing only, never values', async()=>{
   const c=await connect(cleanEnv({...CREDS,US_BRIDGE_DID:DID}));
   try{
