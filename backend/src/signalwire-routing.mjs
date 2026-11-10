@@ -52,7 +52,7 @@ async function readSigned(request,env,configuredUrl,path){
 }
 function callMatches(call,env){
   return call&&call.project_id===env.SIGNALWIRE_PROJECT_ID&&call.direction==='inbound'&&call.type==='phone'&&
-    UUID.test(call.call_id||'')&&call.to_number===env.US_BRIDGE_DID&&
+    UUID.test(call.call_id||'')&&UUID.test(call.segment_id||'')&&call.to_number===env.US_BRIDGE_DID&&
     E164.test(call.from_number||'')&&call.from_number!==call.to_number;
 }
 /** Durable replay guard: one row per (call_id, event_type). Returns false on replay. */
@@ -88,10 +88,18 @@ async function policyCheck(env,row,mode,now){
   return {ok:true,caps,cost};
 }
 /** Atomic single claim; the one-active-reservation index also blocks concurrent routes. */
-async function claim(env,row,callId,check,now){
+async function claim(env,row,callId,segmentId,check,now){
+  if(!UUID.test(segmentId))return false;
   const r=await env.DB.prepare("UPDATE reservations SET status='connecting',provider='signalwire',provider_call_id=?,claimed_at=?,max_call_seconds=?,max_cost_cents=? WHERE id=? AND status='ready' AND approved_at IS NOT NULL AND expires_at>?")
     .bind(callId,now,check.caps.maxSeconds,check.cost,row.id,now).run();
-  return r.meta?.changes===1;
+  if(r.meta?.changes!==1)return false;
+  // Persist the Voice Logs segment identity BEFORE emitting connect. If this
+  // insert fails, no paid SWML is returned and the reservation stays locked.
+  try{
+    await env.DB.prepare('INSERT INTO reservation_carrier_legs (reservation_id,provider_segment_id,claimed_at) VALUES (?,?,?)')
+      .bind(row.id,segmentId,now).run();
+    return true;
+  }catch{return false;}
 }
 function connectFor(env,row,check){
   return swml(signalWireConnectPlan(row.destination,env.US_BRIDGE_DID,{maxDuration:check.caps.maxSeconds,timeout:30}));
@@ -114,7 +122,7 @@ export async function handleSignalWireRouting(request,env={}){
   if(!check.ok){await setOutcome(env,call.call_id,'swml_inbound',check.code,row.id);return hangup();}
   if(mode==='capped_caller_id'){
     if(call.from_number!==env.TEST_CALLER_E164){await setOutcome(env,call.call_id,'swml_inbound','CALLER_MISMATCH',row.id);return hangup();}
-    if(!await claim(env,row,call.call_id,check,now)){await setOutcome(env,call.call_id,'swml_inbound','CLAIM_LOST',row.id);return hangup();}
+    if(!await claim(env,row,call.call_id,call.segment_id,check,now)){await setOutcome(env,call.call_id,'swml_inbound','CLAIM_LOST',row.id);return hangup();}
     await setOutcome(env,call.call_id,'swml_inbound','connect',row.id);
     return connectFor(env,row,check);
   }
@@ -161,7 +169,7 @@ export async function handleSignalWirePin(request,env={}){
   }
   const check=await policyCheck(env,row,'dtmf_pin',now);
   if(!check.ok){await setOutcome(env,call.call_id,'swml_pin',check.code,row.id);return hangup();}
-  if(!await claim(env,row,call.call_id,check,now)){await setOutcome(env,call.call_id,'swml_pin','CLAIM_LOST',row.id);return hangup();}
+  if(!await claim(env,row,call.call_id,call.segment_id,check,now)){await setOutcome(env,call.call_id,'swml_pin','CLAIM_LOST',row.id);return hangup();}
   await setOutcome(env,call.call_id,'swml_pin','connect',row.id);
   return connectFor(env,row,check);
 }
