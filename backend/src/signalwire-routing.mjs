@@ -135,14 +135,18 @@ export async function handleSignalWirePin(request,env={}){
   const call=read.body?.call;
   if(!callMatches(call,env))return text('Forbidden',403);
   const now=Math.floor(Date.now()/1000);
-  const started=await env.DB.prepare("SELECT 1 AS ok FROM provider_events WHERE provider='signalwire' AND provider_call_id=? AND event_type='swml_inbound' AND outcome='pin_requested'")
+  // A PIN must authenticate the reservation chosen by THIS call's first webhook.
+  // Selecting the newest ready reservation here would allow a delayed call from A
+  // to consume B after A is cancelled/expired and B becomes ready.
+  const started=await env.DB.prepare("SELECT reservation_id FROM provider_events WHERE provider='signalwire' AND provider_call_id=? AND event_type='swml_inbound' AND outcome='pin_requested'")
     .bind(call.call_id).first();
-  if(!started)return hangup();
+  if(!started?.reservation_id||!UUID.test(started.reservation_id))return hangup();
   if(!await recordEvent(env,call.call_id,'swml_pin',now))return hangup();
-  const row=await findRoutable(env,now);
-  if(!row||!row.pin_sha256){await setOutcome(env,call.call_id,'swml_pin','no_approved_reservation');return hangup();}
-  const bumped=await env.DB.prepare("UPDATE reservations SET pin_attempts=pin_attempts+1 WHERE id=? AND status='ready' AND pin_attempts<?")
-    .bind(row.id,MAX_PIN_ATTEMPTS).run();
+  const row=await env.DB.prepare("SELECT r.id,r.account_id,r.destination,r.pin_sha256,r.pin_attempts FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE r.id=? AND a.did=? AND a.status='active' AND r.status='ready' AND r.approved_at IS NOT NULL AND r.expires_at>?")
+    .bind(started.reservation_id,env.US_BRIDGE_DID,now).first();
+  if(!row||!row.pin_sha256){await setOutcome(env,call.call_id,'swml_pin','original_reservation_unavailable',started.reservation_id);return hangup();}
+  const bumped=await env.DB.prepare("UPDATE reservations SET pin_attempts=pin_attempts+1 WHERE id=? AND status='ready' AND approved_at IS NOT NULL AND expires_at>? AND pin_attempts<?")
+    .bind(row.id,now,MAX_PIN_ATTEMPTS).run();
   if(!bumped.meta?.changes){await setOutcome(env,call.call_id,'swml_pin','PIN_LOCKED',row.id);return hangup();}
   const raw=read.body?.params?.digits??read.body?.vars?.prompt_value;
   const digits=typeof raw==='string'?raw.replace(/#$/,''):'';
