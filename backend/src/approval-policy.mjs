@@ -6,7 +6,7 @@
  *
  * No provider API calls, AI voice, or payment actions.
  */
-import {callerProofMode,callerIdPilotOptIn} from './caller-proof.mjs';
+import {callerProofMode} from './caller-proof.mjs';
 import {destinationDecision,routingCaps,maxCostCents} from './routing-policy.mjs';
 
 // Hard US-pilot ceilings. Owner config may only be stricter.
@@ -28,8 +28,7 @@ export function pilotPolicy(row,env){
   // A signed provider webhook proves the carrier, not the human caller.
   // An approved reservation is not itself a caller credential. Reject the
   // unauthenticated any_caller mode even if legacy risk opt-ins are set.
-  if(mode==='any_caller')return {ok:false,code:'CALLER_AUTH_REQUIRED'};
-  if(mode!=='dtmf_pin'&&!callerIdPilotOptIn(env))return {ok:false,code:'DTMF_PROOF_REQUIRED'};
+  if(mode!=='dtmf_pin')return {ok:false,code:'CALLER_AUTH_REQUIRED'};
   const caps=routingCaps(env,mode);
   if(!caps)return {ok:false,code:'CAPS_NOT_CONFIGURED'};
   if(caps.maxSeconds>PILOT_MAX_SECONDS||caps.maxCallsPerDay>PILOT_MAX_CALLS_PER_DAY||
