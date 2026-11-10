@@ -128,7 +128,7 @@ test('every signed routing gate fails closed, and a valid signed PIN succeeds',a
   let i=40;
   for(const [name,over] of Object.entries(cases)){
     const {env}=await routingSetup(t,{...extra});
-    const b=await reserve(env,'gate-'+name.replace(/\\W/g,'-').slice(0,20)+'-x');
+    const b=await reserve(env,'gate-'+name.split(' ').join('-').slice(0,20)+'-x');
     await approveReservation(env,b.id);
     const modified={...env,...over};
     for(const [key,value] of Object.entries(modified))if(value===undefined)delete modified[key];
