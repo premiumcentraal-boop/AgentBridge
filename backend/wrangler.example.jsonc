@@ -34,9 +34,9 @@
     "US_PILOT_INBOUND_RATE_CENTS_PER_MIN": "REPLACE",
     "US_PILOT_INBOUND_RATE_SOURCE": "REPLACE: provider source and date",
 
-    // Caller proof: "dtmf_pin" or "capped_caller_id" (the latter also needs CALLER_ID_TRUST_ACCEPTED="true").
-    // Unset = no routing.
-    "CALLER_PROOF_MODE": "",
+    // US PILOT: DTMF PIN is mandatory; capped_caller_id is rejected as spoofable.
+    // Unset or other mode = no US pilot reservation or forwarding.
+    "CALLER_PROOF_MODE": "", // owner may set "dtmf_pin" only after DTMF capability confirmed
     "CALLER_ID_TRUST_ACCEPTED": "",
 
     // OWNER KILL SWITCHES: routing happens only when BOTH are exactly "true". Leave empty.
