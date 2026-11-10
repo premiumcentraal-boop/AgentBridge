@@ -72,5 +72,5 @@ test('legacy Twilio route remains hangup-only even after owner approval',async t
       'x-twilio-signature':createHmac('sha1','private-test-auth-token').update(signed).digest('base64')},body:form.toString()});};
   assert.doesNotMatch(await (await worker.fetch(incoming(),env)).text(),/<Dial/);
   await approveReservation(env,b.id);
-  assert.match(await (await worker.fetch(incoming(),env)).text(),/<Dial/);
+  assert.doesNotMatch(await (await worker.fetch(incoming(),env)).text(),/<Dial/);
 });
