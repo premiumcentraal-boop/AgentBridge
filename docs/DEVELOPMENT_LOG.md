@@ -143,3 +143,9 @@ Append one dated entry for each substantial incremental development session. Lin
 - Wrangler pinned at 4.159.0 in `backend/package.json`; `docs/STAGING_DEPLOY.md` owner runbook; D1 preflight now prints a migration plan and baseline SQL (0001 never scheduled twice).
 - README/SIGNALWIRE docs now point carriers at `/telephony/signalwire/swml`; Twilio route documented as hangup-only.
 - No deploys, secrets, carrier changes, flag changes or calls.
+
+## 2026-11-09 — US pilot: 10-minute legs, opt-in caller-ID proof, caller-ID discovery (owner's assistant)
+- Hard ceilings: 600 s per onward leg (SWML `connect.max_duration`), 4 calls/day, $1 estimated per call and per day. Inbound estimate = B-leg minutes + 3.
+- `capped_caller_id` is routable in the pilot only with `CALLER_ID_TRUST_ACCEPTED=true` and `US_PILOT_ALLOW_CALLER_ID_PROOF=true`; approval fingerprint binds the trusted caller. Residual spoofing risk documented.
+- Migration 0004 `inbound_call_log` + owner-only `GET /v1/owner/inbound-calls`; the flags-off SWML handler now hangs up (200) on any signed call to the DID, even with blank `TEST_CALLER_E164`, and logs its caller ID.
+- D1 preflight runs Wrangler from `backend/` (fixes EACCES on `/node_modules/.cache`).

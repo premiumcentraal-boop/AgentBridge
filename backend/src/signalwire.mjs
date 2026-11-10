@@ -10,6 +10,7 @@ const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const E164=/^\+[1-9]\d{7,14}$/;
 const SPACE=/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const MAX_WEBHOOK_BYTES=16_384;
+import {logInboundCall} from './inbound-call-log.mjs';
 export const SIGNALWIRE_SWML_PATH='/telephony/signalwire/swml';
 export const signalWireHangup=()=>({version:'1.0.0',sections:{main:[{hangup:{}}]}});
 
@@ -18,8 +19,8 @@ export function signalWireConnectPlan(destination,from,{maxDuration,timeout=20}=
   if(typeof destination!=='string'||!E164.test(destination)||
      typeof from!=='string'||!E164.test(from)||destination===from)
     throw new TypeError('A distinct permitted E.164 destination and verified provider DID are required');
-  if(maxDuration!==undefined&&!(Number.isSafeInteger(maxDuration)&&maxDuration>=1&&maxDuration<=180))
-    throw new TypeError('max_duration must be 1..180 seconds');
+  if(maxDuration!==undefined&&!(Number.isSafeInteger(maxDuration)&&maxDuration>=1&&maxDuration<=600))
+    throw new TypeError('max_duration must be 1..600 seconds');
   if(!(Number.isSafeInteger(timeout)&&timeout>=5&&timeout<=60))throw new TypeError('timeout must be 5..60 seconds');
   // Phone-to-phone bridge only: no record, transcribe, stream or AI methods.
   return {version:'1.0.0',sections:{main:[
@@ -86,9 +87,10 @@ function jsonResponse(data,status=200){
  */
 export async function handleSignalWireSwml(request,env={}){
   if(request.method!=='POST')return new Response('Method not allowed',{status:405});
+  // TEST_CALLER_E164 may be blank while the owner learns the agent's caller ID:
+  // signed calls then still get a clean hangup and are logged for review.
   if(!env.SIGNALWIRE_SIGNING_KEY||!UUID.test(env.SIGNALWIRE_PROJECT_ID||'')||
-     !E164.test(env.US_BRIDGE_DID||'')||!E164.test(env.TEST_CALLER_E164||'')||
-     !E164.test(env.TEST_DESTINATION_E164||''))
+     !E164.test(env.US_BRIDGE_DID||''))
     return new Response('Not configured',{status:503});
   if(!(request.headers.get('content-type')||'').toLowerCase().startsWith('application/json'))
     return new Response('Unsupported media type',{status:415});
@@ -130,12 +132,13 @@ export async function handleSignalWireSwml(request,env={}){
   const allowed=call&&call.project_id===env.SIGNALWIRE_PROJECT_ID&&
     call.direction==='inbound'&&call.type==='phone'&&
     UUID.test(call.call_id||'')&&call.to_number===env.US_BRIDGE_DID&&
-    call.from_number===env.TEST_CALLER_E164&&
+    E164.test(call.from_number||'')&&
     call.from_number!==call.to_number;
-  // Never return paid connect instructions until Issue #3 authentication,
-  // replay ledger, per-call billing cap and missing-callback recovery exist.
-  // An unknown project/caller/DID fails closed; even approved test calls
-  // receive only hangup until cryptographic per-call authorization exists.
+  // This handler NEVER returns paid connect instructions (flags-off path).
+  // A wrong project/DID/type fails closed with 403. A correctly signed call
+  // from ANY caller gets a free hangup and is logged (caller ID discovery).
   if(!allowed)return new Response('Forbidden',{status:403});
+  const known=E164.test(env.TEST_CALLER_E164||'')&&call.from_number===env.TEST_CALLER_E164;
+  await logInboundCall(env,call,'swml_hangup_only',known?'hangup_known_caller':'hangup_unknown_caller');
   return jsonResponse(signalWireHangup());
 }

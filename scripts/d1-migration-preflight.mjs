@@ -6,13 +6,19 @@
  */
 import {execFileSync} from 'node:child_process';
 import {existsSync} from 'node:fs';
+import {resolve} from 'node:path';
 // Pinned Wrangler from backend/package.json (npm --prefix backend ci) is preferred.
-const PINNED_WRANGLER='backend/node_modules/.bin/wrangler';
+// Wrangler runs with cwd=backend/ so it finds backend/node_modules (its cache
+// lives in node_modules/.cache); running it from the repo root fails when the
+// root has no node_modules (EACCES on /node_modules/.cache).
+const BACKEND=resolve('backend');
+const PINNED_WRANGLER=resolve(BACKEND,'node_modules/.bin/wrangler');
 
 const V1=['approved_at','pin_sha256','pin_attempts','provider','provider_call_id','claimed_at','max_call_seconds','max_cost_cents'];
 const V2=['reservation_approval_bindings','reservation_carrier_legs'];
 const V3=['owner_actions'];
-export const MIGRATION_FILES=['0001_routing_controls.sql','0002_approval_bindings.sql','0003_owner_actions.sql'];
+const V4=['inbound_call_log'];
+export const MIGRATION_FILES=['0001_routing_controls.sql','0002_approval_bindings.sql','0003_owner_actions.sql','0004_inbound_call_log.sql'];
 /**
  * 0001 uses ALTER TABLE ADD COLUMN, which SQLite/D1 cannot make re-runnable.
  * This plan is the guard: it only ever lists 0001 when NONE of its columns exist.
@@ -22,7 +28,8 @@ export function migrationPlan(state,applied=[]){
   if(state.unsafe)return {safe:false,apply:[],baseline:[]};
   const done=new Set(applied);
   const present={'0001_routing_controls.sql':state.v1==='complete',
-    '0002_approval_bindings.sql':state.v2==='complete','0003_owner_actions.sql':state.v3==='complete'};
+    '0002_approval_bindings.sql':state.v2==='complete','0003_owner_actions.sql':state.v3==='complete',
+    '0004_inbound_call_log.sql':state.v4==='complete'};
   const baseline=MIGRATION_FILES.filter(f=>present[f]&&!done.has(f));
   const apply=MIGRATION_FILES.filter(f=>!present[f]&&!done.has(f));
   return {safe:true,apply,baseline};
@@ -41,9 +48,10 @@ export function classifyMigrationState(columns,tables){
     old.length===V1.length&&hasLedger?'complete':'PARTIAL';
   const v2=next.length===0?'absent':next.length===V2.length?'complete':'PARTIAL';
   const v3=V3.every(x=>tab.has(x))?'complete':'absent';
+  const v4=V4.every(x=>tab.has(x))?'complete':'absent';
   const unsafe=v1==='PARTIAL'||v2==='PARTIAL'||(v2==='complete'&&v1!=='complete')||
-    (v3==='complete'&&v2!=='complete');
-  return {v1,v2,v3,unsafe,reasons:unsafe?['Schema is inconsistent. Do not apply migrations before backup and manual reconciliation.']:[]};
+    (v3==='complete'&&v2!=='complete')||(v4==='complete'&&v1!=='complete');
+  return {v1,v2,v3,v4,unsafe,reasons:unsafe?['Schema is inconsistent. Do not apply migrations before backup and manual reconciliation.']:[]};
 }
 function parseWranglerJson(raw){
   const trimmed=String(raw).trim();
@@ -56,8 +64,8 @@ function parseWranglerJson(raw){
 }
 function inspect(database,mode,sql){
   const executable=process.env.AGENTBRIDGE_WRANGLER||(existsSync(PINNED_WRANGLER)?PINNED_WRANGLER:'wrangler');
-  const out=execFileSync(executable,['d1','execute',database,mode,'--config','backend/wrangler.jsonc','--command',sql,'--json'],{
-    encoding:'utf8',timeout:20000,stdio:['ignore','pipe','pipe']
+  const out=execFileSync(executable,['d1','execute',database,mode,'--config','wrangler.jsonc','--command',sql,'--json'],{
+    cwd:BACKEND,encoding:'utf8',timeout:20000,stdio:['ignore','pipe','pipe']
   });
   return parseWranglerJson(out);
 }
@@ -82,11 +90,11 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
     }else if(plan.baseline.length){
       console.error('NOTICE: these migrations are already present but not recorded by Wrangler: '+plan.baseline.join(', ')+
         '. After a backup, record them WITHOUT re-running them, e.g.:');
-      console.error('  wrangler d1 execute '+database+' '+mode+' --config backend/wrangler.jsonc --command "'+baselineSql(plan.baseline)+'"');
+      console.error('  (cd backend && npx wrangler d1 execute '+database+' '+mode+' --command "'+baselineSql(plan.baseline)+'")');
       console.error('Then re-run this preflight before `wrangler d1 migrations apply`.');
       process.exitCode=2;
     }else if(plan.apply.length){
-      console.error('OK: after a backup, `wrangler d1 migrations apply '+database+' '+mode+'` will apply: '+plan.apply.join(', '));
+      console.error('OK: after a backup, `(cd backend && npx wrangler d1 migrations apply '+database+' '+mode+')` will apply: '+plan.apply.join(', '));
     }else{
       console.error('OK: all migrations present and recorded. Nothing to apply.');
     }

@@ -8,6 +8,7 @@ import {callerProofMode,generatePin,pinHash} from './caller-proof.mjs';
 import {SIGNALWIRE_PIN_PATH,signalWireRoutingFlagsOn,handleSignalWireRouting,handleSignalWirePin} from './signalwire-routing.mjs';
 import {pilotPolicy,policyFingerprint} from './approval-policy.mjs';
 import {fetchCarrierReconciliation} from './carrier-reconciliation.mjs';
+import {recentInboundCalls} from './inbound-call-log.mjs';
 /**
  * AgentBridge reference backend — intentionally fail-closed.
  * This is NOT a publicly deployable calling reseller: it only routes to one
@@ -197,6 +198,15 @@ async function ownerRoute(request,url,env){
   // from POST approval; both demand the exact independently held owner token.
   if(!env.DB||!OWNER_HASH.test(env.OWNER_APPROVAL_TOKEN_SHA256||''))
     return error('NOT_CONFIGURED','Owner approval is not configured',503);
+  if(url.pathname==='/v1/owner/inbound-calls'){
+    if(request.method!=='GET')return error('METHOD_NOT_ALLOWED','GET required',405);
+    const auth0=request.headers.get('authorization')||'';
+    const token0=auth0.startsWith('Bearer ')?auth0.slice(7).trim():'';
+    if(token0.length<32||token0.length>256||!safeEqual(await sha256(token0),env.OWNER_APPROVAL_TOKEN_SHA256))
+      return error('UNAUTHORIZED','Owner approval token required',401);
+    try{return json({calls:await recentInboundCalls(env,Number(url.searchParams.get('limit')||20))});}
+    catch{return error('NOT_CONFIGURED','Apply migration 0004 (inbound_call_log)',503);}
+  }
   const m=url.pathname.match(/^\/v1\/owner\/reservations\/([a-f0-9-]{36})\/(review|approve|mark-ended|force-unlock)$/i);
   if(!m)return error('NOT_FOUND','Route not found',404);
   const action=m[2];
