@@ -212,3 +212,29 @@ test('DTMF challenge rejects malformed and future timestamps without burning PIN
   at(T0+1);
   assert.equal(connectOf((await pin(env,id,b.dtmf_pin)).doc)?.to,DEST,'valid original timestamp works');
 });
+
+
+test('simultaneous valid PIN callbacks cannot produce two carrier connections',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const reservation=await reserve(env,'concurrent-pin-claims-0001');
+  await approveReservation(env,reservation.id);
+  const firstId=CID(220),secondId=CID(221);
+  const [firstPrompt,secondPrompt]=await Promise.all([
+    inbound(env,{call_id:firstId}),inbound(env,{call_id:secondId})
+  ]);
+  assert.ok(firstPrompt.doc?.sections?.main?.some(x=>x.prompt));
+  assert.ok(secondPrompt.doc?.sections?.main?.some(x=>x.prompt));
+  const results=await Promise.all([
+    pin(env,firstId,reservation.dtmf_pin),
+    pin(env,secondId,reservation.dtmf_pin)
+  ]);
+  assert.equal(results.filter(x=>connectOf(x.doc)).length,1,
+    'exactly one competing signed PIN callback can connect');
+  assert.equal(results.filter(x=>isHangup(x.doc)).length,1,
+    'losing callback must hang up');
+  assert.equal(DB.raw.prepare("SELECT COUNT(*) AS n FROM provider_events WHERE event_type='swml_pin' AND outcome='connect'").get().n,1);
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,1);
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'connecting');
+  assert.ok(isHangup((await pin(env,firstId,reservation.dtmf_pin)).doc),'replayed first callback hangs up');
+  assert.ok(isHangup((await pin(env,secondId,reservation.dtmf_pin)).doc),'replayed second callback hangs up');
+});
