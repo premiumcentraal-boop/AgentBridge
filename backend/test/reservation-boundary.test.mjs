@@ -39,7 +39,7 @@ async function create(env,key='boundary-key-1'){
   assert.equal(r.status,201);return r.json();
 }
 
-test('#9: one second before expiry the route is still ready and routable exactly once',async t=>{
+test('#9: one second before expiry reservation is ready, but retired Twilio transport never dials',async t=>{
   const {env,at}=await setup(t);
   const r=await create(env);
   assert.equal(r.status,'ready');
@@ -47,7 +47,8 @@ test('#9: one second before expiry the route is still ready and routable exactly
   const get=await (await worker.fetch(api('/v1/reservations/'+r.id),env)).json();
   assert.equal(get.status,'ready');
   const first=await (await worker.fetch(twilioIncoming(),env)).text();
-  assert.match(first,/<Dial/);
+  assert.match(first,/<Hangup\/>/);
+  assert.doesNotMatch(first,/<Dial/);
   const replay=await (await worker.fetch(twilioIncoming('CA'+'c'.repeat(32)),env)).text();
   assert.doesNotMatch(replay,/<Dial/);
 });
@@ -95,9 +96,11 @@ test('#9: idempotent retry after expiry never inserts or reopens; a new key is r
 });
 
 test('#9: consumed reservation retried with the same key is terminal, not ready',async t=>{
-  const {env}=await setup(t);
-  await create(env);
-  assert.match(await (await worker.fetch(twilioIncoming(),env)).text(),/<Dial/);
+  const {env,DB}=await setup(t);
+  const r=await create(env);
+  // Model a prior atomic consumption directly; the retired Twilio handler cannot consume.
+  DB.raw.prepare("UPDATE reservations SET status='connecting' WHERE id=?").run(r.id);
+  assert.doesNotMatch(await (await worker.fetch(twilioIncoming(),env)).text(),/<Dial/);
   const retry=await worker.fetch(api('/v1/reservations','POST',{destination:DEST,idempotency_key:'boundary-key-1'}),env);
   assert.equal(retry.status,409);
   assert.equal((await retry.json()).error.code,'RESERVATION_NOT_READY');
