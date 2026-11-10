@@ -1,12 +1,34 @@
 # AgentBridge
-**Your agent. Every number. One conversation.**
+**Your agent. A wider world.**
+
+## Victor product page & control studio
+
+The new product experience is prepared for **agentbridge.victor.ceo**, with a dedicated
+AgentBridge tab in the `victor-ceo` repository, following Meridian’s integration.
+
+- `/` — dark Victor product page, original globe illustration, product walkthrough, studio preview and FAQ.
+- `/studio/?demo=1` — interactive sample workspace; changes reset when the tab reloads.
+- `/studio/` — private operator sign-in; server-backed route drafts, search, archive, activity,
+  guidance preferences, export and optional read-only private backend discovery.
+- `npm start` — standalone Node service; persistent SQLite storage, no runtime dependencies.
+
+**Railway deployment:** [new service, volume, access key and custom domain setup](docs/RAILWAY_STUDIO.md).
+The Docker service does not load or expose the telephony Worker. New studio drafts
+are separate from carrier reservations and cannot activate calls. Existing private
+backend credentials are optional and stay on the server.
+
+Local setup: Node 22.13+ (Node 24 recommended), `npm run ci`, then `npm run dev`.
+Open `/studio/` with the local development key `local-development`, or explore the demo.
+The known development key is ignored in production. A missing production access-key
+hash keeps the private workspace locked.
+
 
 A premium website and developer-first international telecom bridge for AI agents with their own US outbound calling capability. The intended experience is a natural extension of Grok Bot: prepare a route, call a US access number, and let the carrier connect it to an approved international recipient while **Grok Bot stays the only speaking AI**.
 
 > **Current status: development preview, NOT a live calling service.** No consumer account creation, payments, number provisioning, or verified Grok Bot end-to-end dialing are provided. AgentBridge is independent of Grok/xAI, Cursor and Apple. A US calling feature must already be enabled and its use must be allowed under the relevant terms.
 
 ## Website
-Responsive, dependency-free public pages, designed for Cloudflare Pages or static hosting:
+Responsive, dependency-free public guides remain available alongside the product page. Static hosting supports the guides and demo; the authenticated studio requires the Node service:
 - \`/\` — Home, visual value proposition
 - \`/how-it-works/\` — Three-step explanation
 - \`/pricing/\` — Proposed plans and interactive illustrative calculator
@@ -15,7 +37,7 @@ Responsive, dependency-free public pages, designed for Cloudflare Pages or stati
 - \`/app/\` — Honest, **non-calling** interactive console preview
 
 ### Run locally
-Requires Node.js 22+.
+Requires Node.js 22.13+ (Node 24 recommended).
 \`\`\`bash
 npm run ci
 npm run build:site
@@ -65,7 +87,7 @@ Never put real carrier credentials into public site code or the Git repo. No aut
 AgentBridge is a **telephone routing layer**, not a new voice agent, and not a method to evade a service's calling restrictions.
 
 ### Website privacy and security posture
-The site uses local system fonts instead of third-party font downloads. Built HTML includes CSP and a no-referrer meta policy. On Cloudflare Pages, `_headers` additionally denies framing, sniffing and device permission APIs. GitHub Pages ignores `_headers`, so `frame-ancestors` and other header-only controls cannot be assumed on GitHub Pages. Current inline styles still require `style-src 'unsafe-inline'`. These policies secure the public static preview, **not** the telecom backend, which remains private-test-only.
+The site uses local system fonts instead of third-party font downloads. Built HTML includes CSP and a no-referrer meta policy. On Railway, the Node server permits public product framing only by Victor and blocks all studio framing. On Cloudflare Pages, `_headers` supplies corresponding framing, sniffing and device-permission rules. GitHub Pages ignores `_headers`, so `frame-ancestors` and other header-only controls cannot be assumed on GitHub Pages. Current inline styles still require `style-src 'unsafe-inline'`. These policies secure the public static preview, **not** the telecom backend, which remains private-test-only.
 
 ## Combined integration status (review branch)
 The code now combines SignalWire's read-only BYO Project/DID preflight, hangup-only signed SWML endpoint, bounded Twilio and authenticated JSON body readers, strict one-use reservation expiration, and a private-test outbound default-deny switch. No number purchasing, public self-service key linking, live international call, or payment pathway has been enabled. For the SignalWire operator's setup, see [docs/SIGNALWIRE.md](docs/SIGNALWIRE.md); `npm run signalwire:check` only performs read-only inventory with credentials supplied privately in the environment.

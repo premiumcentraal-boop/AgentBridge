@@ -1,0 +1,11 @@
+.git
+node_modules
+data
+dist
+.env
+.env.*
+.dev.vars
+**/.dev.vars
+backend/wrangler.jsonc
+backend/wrangler.toml
+*.log

@@ -22,15 +22,22 @@ test('typography does not contact external font providers',async()=>{
  assert.doesNotMatch(css,/fonts\.(googleapis|gstatic)\.com/i);
  assert.match(css,/system-ui/);
 });
-test('hosting header policy blocks framing, MIME sniffing, device APIs',async()=>{
+test('hosting header policy permits Victor product framing and protects the studio',async()=>{
  const h=await readFile(join(root,'_headers'),'utf8');
- for(const item of ["frame-ancestors 'none'","X-Content-Type-Options: nosniff","X-Frame-Options: DENY","Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()"])assert.ok(h.includes(item),item);
+ for(const item of ["frame-ancestors 'self' https://victor.ceo https://www.victor.ceo","/studio/*","frame-ancestors 'none'","X-Content-Type-Options: nosniff","X-Frame-Options: DENY","Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()"])assert.ok(h.includes(item),item);
+});
+
+test('studio permits only same-origin API connections and is excluded from indexing',async()=>{
+ const html=await readFile(join(root,'dist/studio/index.html'),'utf8');
+ assert.match(html,/connect-src 'self'/);
+ assert.match(html,/name="robots" content="noindex,nofollow"/);
+ assert.doesNotMatch(html,/localStorage|sessionStorage/);
 });
 test('project-path build keeps CSP and correct local asset URLs',async()=>{
  execFileSync(process.execPath,['scripts/build-site.mjs'],{cwd:root,env:{...process.env,BASE_PATH:'/AgentBridge'}});
  const html=await readFile(join(root,'dist/index.html'),'utf8');
  assert.match(html,/href="\/AgentBridge\/assets\/styles\.css"/);
- assert.match(html,/src="\/AgentBridge\/assets\/app\.js"/);
+ assert.match(html,/src="\/AgentBridge\/assets\/product\/product\.js"/);
  assert.match(html,/script-src 'self'/);
 });
 

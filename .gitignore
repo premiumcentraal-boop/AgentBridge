@@ -9,6 +9,10 @@ backend/.dev.vars
 .DS_Store
 .wrangler/
 coverage/
+data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
 
 # Private Worker config (contains account-specific IDs; never commit)
 backend/wrangler.jsonc

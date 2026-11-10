@@ -153,3 +153,27 @@ Append one dated entry for each substantial incremental development session. Lin
 ## 2026-11-09 — any_caller mode and 15-minute reservations (owner's assistant)
 - Owner: Grok Bot's outbound caller ID rotates per call. New `CALLER_PROOF_MODE=any_caller`, only with `ANY_CALLER_RISK_ACCEPTED=true`; all other guards unchanged; fingerprint records `trusted_caller: "ANY"`.
 - `RESERVATION_TTL_SECONDS` maximum raised from 300 to 900.
+
+## 2026-11-10 — Victor product page and private control studio (review branch)
+
+- Added a distinct dark product page for `agentbridge.victor.ceo`, original local
+  globe and social artwork, mobile navigation, product walkthrough, studio preview,
+  FAQ and explicit development status. Existing public guides remain available.
+- Added `/studio/` with a clearly labeled sample mode and an authenticated,
+  single-operator backend: SQLite route drafts, search/archive UI, activity,
+  Simple/Guided/Advanced studio preferences and private JSON export.
+- Added constant-time access-key verification, secure HttpOnly session cookies,
+  same-origin write checks, bounded JSON, login throttling, SQL parameter binding,
+  server-only optional MCP account credentials and bounded read-only setup checks.
+- Added Railway Docker configuration, `/health`, volume privilege setup, an access
+  key generator and `docs/RAILWAY_STUDIO.md`. Companion Victor change adds the tab,
+  product frame and top-level direct studio link.
+- The standalone Node service never loads the telephony Worker. No live route,
+  access number, approval, payment, provisioning, carrier mutation or call is
+  available through the new studio. Pending security PRs were not merged.
+- Validation: root `npm run ci` passed (131 backend/security tests and seven
+  static-site tests); `/AgentBridge` BASE_PATH build and static audit passed.
+  Companion Victor: 71 tests and production build passed. Browser QA is unverified:
+  supported managed browser tooling is not available in this environment.
+- Railway account connection and authoritative DNS changes are still needed for
+  public deployment; source implementation does not establish deployment.
