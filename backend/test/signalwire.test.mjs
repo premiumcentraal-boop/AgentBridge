@@ -47,11 +47,11 @@ test('BYO read-only inventory uses only pinned SignalWire host and never returns
   const requests=[];
   const fakeFetch=async(url,options)=>{
     requests.push({url,options});
-    return {ok:true,text:async()=>JSON.stringify({links:{next:null},data:[
+    return new Response(JSON.stringify({links:{next:null},data:[
       {id:'n1',number:'+12025550123',capabilities:['voice','sms']},
       {id:'n2',number:'+12025550124',capabilities:['sms']},
       {id:'n3',number:'junk',capabilities:['voice']}
-    ]})};
+    ]}),{status:200});
   };
   const token='swapi_opaque_secret_never_return';
   const result=await inspectSignalWireNumbers(
@@ -76,13 +76,13 @@ test('BYO inventory rejects SSRF, malformed config, and failing provider calls',
       {space,projectId,apiToken:'opaque-test-token'},fake),TypeError);
   }
   assert.equal(contacted,false);
-  const deny=async()=>({ok:false,status:401});
+  const deny=async()=>new Response('',{status:401});
   await assert.rejects(inspectSignalWireNumbers({
     space:'example',projectId,apiToken:'opaque-test-token'
   },deny),/unavailable \(401\)/);
   await assert.rejects(inspectSignalWireNumbers({
     space:'example',projectId,apiToken:'opaque-test-token'
-  },async()=>({ok:true,text:async()=>'{bad'})),/Invalid SignalWire inventory/);
+  },async()=>new Response('{bad',{status:200})),/Invalid SignalWire inventory/);
 });
 test('SWML signatures require exact canonical URL and unmodified raw JSON',async()=>{
   const raw=JSON.stringify({call});
@@ -195,4 +195,43 @@ test('blank TEST_CALLER_E164: signed calls still hang up cleanly and the caller 
   assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM inbound_call_log').get().n,1);
   // No reservations were read or created.
   assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservations').get().n,0);
+});
+
+test('SignalWire inventory enforces byte cap on streamed upstream data and cancels early',async()=>{
+  let pulls=0,cancelled=false;
+  const stream=new ReadableStream({
+    pull(controller){
+      pulls++;
+      controller.enqueue(new Uint8Array(100_000).fill(65));
+    },
+    cancel(){cancelled=true;}
+  });
+  const fetcher=async()=>new Response(stream,{status:200});
+  await assert.rejects(inspectSignalWireNumbers({
+    space:'example',projectId,apiToken:'opaque-test-token'
+  },fetcher),/response too large/);
+  assert.ok(pulls<=4,'must not drain an unbounded response');
+  assert.equal(cancelled,true);
+});
+
+test('SignalWire inventory rejects oversized declared length, invalid UTF-8 and multibyte bytes',async()=>{
+  const cfg={space:'example',projectId,apiToken:'opaque-test-token'};
+  await assert.rejects(inspectSignalWireNumbers(cfg,async()=>new Response('ok',{
+    status:200,headers:{'content-length':'250001'}
+  })),/response too large/);
+  await assert.rejects(inspectSignalWireNumbers(cfg,async()=>new Response(
+    new Uint8Array([0xff,0xfe]),{status:200}
+  )),/Invalid SignalWire inventory/);
+  await assert.rejects(inspectSignalWireNumbers(cfg,async()=>new Response(
+    'é'.repeat(125001),{status:200}
+  )),/response too large/);
+  await assert.rejects(inspectSignalWireNumbers(cfg,async()=>new Response(
+    ' '.repeat(250000),{status:200}
+  )),/Invalid SignalWire inventory/);
+  const good=await inspectSignalWireNumbers(cfg,async()=>new Response(JSON.stringify({
+    data:[{number:'+12025550123',id:'ok',capabilities:['voice']}],
+    links:{next:'/next'}
+  }),{status:200}));
+  assert.equal(good.has_more,true);
+  assert.equal(good.voice_numbers.length,1);
 });
