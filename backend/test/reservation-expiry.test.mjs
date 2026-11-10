@@ -43,7 +43,9 @@ test('same idempotency key cannot reopen consumed or terminal reservations',asyn
     const result=await prepareReservation(account,{destination,idempotency_key:key},
       {DB:fakeDb(0,row).DB,US_BRIDGE_DID:did,TEST_DESTINATION_E164:destination});
     assert.equal(result.status,409);
-    assert.equal(result.body.error.code,'RESERVATION_NOT_READY');
+    // #9: an already-expired row now reports the specific terminal code.
+    assert.equal(result.body.error.code,status==='expired'?'RESERVATION_EXPIRED':'RESERVATION_NOT_READY');
+    assert.equal(result.body.reservation.us_access_number,null);
   }
 });
 test('unexpired same-key retry is safe and returns original route',async()=>{
