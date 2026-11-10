@@ -19,7 +19,8 @@ async function setup(t,extra={}){
   const DB=createD1();
   DB.raw.prepare("INSERT INTO accounts (id,api_key_sha256,did,status) VALUES ('acct',?,?,'active')").run(await sha256(TOKEN),DID);
   const env={DB,PUBLIC_BASE_URL:BASE,US_BRIDGE_DID:DID,TEST_DESTINATION_E164:DEST,
-    TEST_CALLER_E164:CALLER,TWILIO_AUTH_TOKEN:TWILIO,PRIVATE_TEST_OUTBOUND_ENABLED:'true',...extra};
+    TEST_CALLER_E164:CALLER,TWILIO_AUTH_TOKEN:TWILIO,PRIVATE_TEST_OUTBOUND_ENABLED:'true',
+    OWNER_APPROVAL_TOKEN_SHA256:'a'.repeat(64),...extra};
   const at=s=>t.mock.timers.setTime(s*1000);
   return {DB,env,at};
 }
@@ -36,7 +37,11 @@ function twilioIncoming(sid='CA'+'b'.repeat(32)){
 }
 async function create(env,key='boundary-key-1'){
   const r=await worker.fetch(api('/v1/reservations','POST',{destination:DEST,idempotency_key:key}),env);
-  assert.equal(r.status,201);return r.json();
+  assert.equal(r.status,201);
+  const reservation=await r.json();
+  // This suite isolates expiry semantics; explicit owner approval is a prerequisite.
+  env.DB.raw.prepare('UPDATE reservations SET approved_at=? WHERE id=?').run(Math.floor(Date.now()/1000),reservation.id);
+  return reservation;
 }
 
 test('#9: one second before expiry the route is still ready and routable exactly once',async t=>{
