@@ -27,7 +27,8 @@ function fixture(){
     }},
     PUBLIC_BASE_URL:'https://api.example.com',US_BRIDGE_DID:did,
     TEST_DESTINATION_E164:destination,TEST_CALLER_E164:caller,
-    TWILIO_AUTH_TOKEN:token,PRIVATE_TEST_OUTBOUND_ENABLED:'true'
+    TWILIO_AUTH_TOKEN:token,PRIVATE_TEST_OUTBOUND_ENABLED:'true',
+    OWNER_APPROVAL_TOKEN_SHA256:'a'.repeat(64)
   };
 }
 test('signed duplicate or absent inbound routing identity never reads or consumes a reservation',async()=>{
