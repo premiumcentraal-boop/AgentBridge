@@ -153,3 +153,10 @@ Append one dated entry for each substantial incremental development session. Lin
 ## 2026-11-09 — any_caller mode and 15-minute reservations (owner's assistant)
 - Owner: Grok Bot's outbound caller ID rotates per call. New `CALLER_PROOF_MODE=any_caller`, only with `ANY_CALLER_RISK_ACCEPTED=true`; all other guards unchanged; fingerprint records `trusted_caller: "ANY"`.
 - `RESERVATION_TTL_SECONDS` maximum raised from 300 to 900.
+
+
+## 2026-11-10 — Read-only chat-first difficulty selector (feature PR, NOT calling-ready)
+- Added a shared stateless `previewChatCallFlow` presenter with `simple` (default), `guided`, and `advanced` output. Difficulty only affects explanations; identical security/permission checks, independent owner approval, one-use caller proof, native call confirmation and provider spend gates remain mandatory for every level.
+- Registered the preview-only tool in authenticated HTTP MCP and the existing private local read-only MCP server. The response explicitly marks `ready_to_call=false`, `routing_enabled=false`, no verified carrier rates or Grok Bot compatibility, and `preference_saved=false`. No routing, account preference storage, owner authorization, provider mutation or payment capability was added.
+- Added argument-envelope, mode-invariant and invalid-input tests; included the new module in syntax checks, documented the chat-first golden path, current platform restrictions and the missing account preference/independent in-chat approval milestones. International bridge use is NOT authorized by this preview or an MCP connector; platform and carrier calling terms remain a launch gate.
+- Local clone cannot resolve GitHub DNS, so full local CI and actual Grok Bot host interoperability are not verified in this commit. Keep draft, no merge or deployment without CI and manual review.
