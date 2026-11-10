@@ -157,3 +157,7 @@ Append one dated entry for each substantial incremental development session. Lin
 ## 2026-11-10 — SignalWire inventory response byte budget (PR pending, issue #31)
 - Replaced unbounded upstream response.text() with a streaming 250,000-byte cap and early reader cancellation; strict UTF-8 decode and generic malformed-response errors.
 - Added offline regression coverage for chunked oversize, false Content-Length, multibyte UTF-8, malformed UTF-8, exact boundary and pagination. No provider requests or routing changes. Pending exact-head CI and human review; not deployed.
+
+
+## 2026-11-10 — PR #32 CI follow-up: numeric Content-Length guard
+GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) at `backend/test/signalwire.test.mjs:221`: the oversized declared-length response reached JSON parsing instead of the early size guard. Inspection found the regex was accidentally written `/^\\d+$/` (matching a literal backslash and `d`) rather than `/^\d+$/` (decimal digits). Corrected the regex on the existing PR branch; streaming byte enforcement remains unchanged and still bounds dishonest or absent headers. Verification of the corrected head is pending GitHub Actions. No routing, carrier resources, credentials or deployments changed.
