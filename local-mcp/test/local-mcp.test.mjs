@@ -111,7 +111,13 @@ test('stdio: guidance difficulty changes only display; no carrier or write actio
     assert.match(simple.content[0].text,/no calling capability/);
     assert.equal(c.fetches().length,0,'preview must never contact carrier');
     const bad=await c.client.callTool({name:'preview_chat_call_flow',arguments:{difficulty:'simple',skip_approval:true}}).catch(e=>e);
-    assert.ok(bad instanceof Error||bad.isError===true);
+    // MCP SDK may strip unknown Zod fields rather than reject them. Either result must remain harmless.
+    if(!(bad instanceof Error)&&bad.isError!==true){
+      assert.equal(bad.structuredContent.ready_to_call,false);
+      assert.equal(bad.structuredContent.owner_approval_out_of_band_required,true);
+      assert.equal(bad.structuredContent.routing_enabled,false);
+      assert.equal(c.fetches().length,0);
+    }
   }finally{await c.close();}
 });
 
