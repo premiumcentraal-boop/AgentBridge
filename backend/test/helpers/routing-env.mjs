@@ -1,6 +1,6 @@
 /** Shared fixtures for SignalWire routing tests (fake values only). */
 import {createHmac} from 'node:crypto';
-import {sha256} from '../../src/index.mjs';
+import worker,{sha256} from '../../src/index.mjs';
 import {createD1} from './d1.mjs';
 
 export const T0=1_800_000_000;
@@ -35,7 +35,18 @@ export async function routingSetup(t,extra={}){
 export const api=(path,method='GET',body,token=TOKEN)=>new Request(BASE+path,{method,
   headers:{authorization:'Bearer '+token,...(body?{'content-type':'application/json'}:{})},
   body:body?JSON.stringify(body):undefined});
-export const owner=(id,action='approve',token=OWNER)=>new Request(BASE+'/v1/owner/reservations/'+id+'/'+action,{method:'POST',headers:{authorization:'Bearer '+token}});
+export const owner=(id,action='approve',token=OWNER,digest)=>new Request(BASE+'/v1/owner/reservations/'+id+'/'+action,{
+  method:action==='review'?'GET':'POST',
+  headers:{authorization:'Bearer '+token,...(digest?{'content-type':'application/json'}:{})},
+  body:digest?JSON.stringify({proposal_digest:digest}):undefined
+});
+export async function approveReservation(env,id,token=OWNER){
+  // Simulate real owner: GET the exact server proposal, then explicitly submit its digest.
+  const reviewed=await worker.fetch(owner(id,'review',token),env);
+  if(reviewed.status!==200)return reviewed;
+  const body=await reviewed.json();
+  return worker.fetch(owner(id,'approve',token,body.proposal_digest),env);
+}
 export function call(over={}){
   return {project_id:PROJECT,call_id:over.call_id||'38313c74-b321-4c08-a3ea-7123449130ab',direction:'inbound',type:'phone',
     from_number:CALLER,to_number:DID,...over};
