@@ -46,3 +46,25 @@ The read-only API checker and signed SWML webhook use different credentials. The
 - [Signed SWML request security](https://signalwire.com/docs/swml/guides/webhook-security)
 - [Calling SWML JSON payload](https://signalwire.com/docs/swml/reference/calling)
 - [SWML connect to phone](https://signalwire.com/docs/swml/reference/calling/connect)
+
+## Gated routing (branch `routing-fixes`, off by default)
+
+`index.mjs` sends `/telephony/signalwire/swml` to `handleSignalWireRouting()` **only** when `PRIVATE_TEST_OUTBOUND_ENABLED` and `SIGNALWIRE_CONNECT_ENABLED` are both exactly `true`. Otherwise the hangup-only handler above runs unchanged.
+
+The router returns `connect` only after all of these pass:
+- a valid `X-Signalwire-SHA256-Signature` over the exact configured URL + raw body;
+- project, DID, inbound direction and phone type match;
+- the call ID is not already in the `provider_events` ledger;
+- caller proof passes (`CALLER_PROOF_MODE`);
+- an owner-approved, unexpired reservation exists;
+- the destination is allowlisted and in an allowed country, outside blocked ranges;
+- per-call and per-day caps allow it;
+- the atomic claim succeeds.
+
+In DTMF mode, the second fetch goes to `/telephony/signalwire/swml/pin`. SignalWire signs `transfer` fetches to external URLs, per its webhook-security guide, and the Worker verifies that path's exact URL.
+
+The emitted SWML uses only `answer`, `prompt` (with `silence:1`, no TTS), `transfer`, `connect` and `hangup`. There is no AI, recording, transcription or streaming.
+
+Status callbacks are not used yet (TODO): their signing is undocumented.
+
+Apply `backend/migrations/0001_routing_controls.sql` after `schema.sql`. See [ROUTING_PLAN.md](ROUTING_PLAN.md#progress-branch-routing-fixes-local-only-2026-11-09) for the owner placeholders.

@@ -14,12 +14,17 @@ export const SIGNALWIRE_SWML_PATH='/telephony/signalwire/swml';
 export const signalWireHangup=()=>({version:'1.0.0',sections:{main:[{hangup:{}}]}});
 
 /** Offline-only draft: never returned from the public webhook. */
-export function signalWireConnectPlan(destination,from){
+export function signalWireConnectPlan(destination,from,{maxDuration,timeout=20}={}){
   if(typeof destination!=='string'||!E164.test(destination)||
      typeof from!=='string'||!E164.test(from)||destination===from)
     throw new TypeError('A distinct permitted E.164 destination and verified provider DID are required');
+  if(maxDuration!==undefined&&!(Number.isSafeInteger(maxDuration)&&maxDuration>=1&&maxDuration<=180))
+    throw new TypeError('max_duration must be 1..180 seconds');
+  if(!(Number.isSafeInteger(timeout)&&timeout>=5&&timeout<=60))throw new TypeError('timeout must be 5..60 seconds');
+  // Phone-to-phone bridge only: no record, transcribe, stream or AI methods.
   return {version:'1.0.0',sections:{main:[
-    {connect:{to:destination,from,answer_on_bridge:true,timeout:20}},
+    {connect:{to:destination,from,answer_on_bridge:true,timeout,
+      ...(maxDuration===undefined?{}:{max_duration:maxDuration})}},
     {hangup:{}}
   ]}};
 }
@@ -56,14 +61,14 @@ function constantTimeEqual(a,b){
   let n=0;for(let i=0;i<a.length;i++)n|=a.charCodeAt(i)^b.charCodeAt(i);return n===0;
 }
 /** Official SWML signature contract: HMAC SHA256 hex of exact URL + raw body. */
-export async function verifySignalWireSwmlSignature(rawBody,signature,signingKey,configuredUrl,requestUrl){
+export async function verifySignalWireSwmlSignature(rawBody,signature,signingKey,configuredUrl,requestUrl,expectedPath=SIGNALWIRE_SWML_PATH){
   if(typeof rawBody!=='string'||new TextEncoder().encode(rawBody).length>MAX_WEBHOOK_BYTES||
      typeof signingKey!=='string'||signingKey.length<16||
      typeof signature!=='string'||!(/^[a-f0-9]{64}$/i.test(signature))||
      typeof configuredUrl!=='string'||configuredUrl!==requestUrl)return false;
   let u;
   try{u=new URL(configuredUrl);}catch{return false;}
-  if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash||u.pathname!==SIGNALWIRE_SWML_PATH)return false;
+  if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash||u.pathname!==expectedPath)return false;
   const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(signingKey),
     {name:'HMAC',hash:'SHA-256'},false,['sign']);
   const digest=hex(await crypto.subtle.sign('HMAC',k,new TextEncoder().encode(configuredUrl+rawBody)));

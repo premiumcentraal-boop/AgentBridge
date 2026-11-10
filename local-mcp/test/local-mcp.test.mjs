@@ -186,7 +186,8 @@ test('in-process guard: registry refuses anything outside the allowlist', ()=>{
 test('static guard: server never imports hosted Worker, routing or connect helpers', ()=>{
   const src=readFileSync(join(here,'..','src','tools.mjs'),'utf8')+readFileSync(SERVER,'utf8');
   assert.doesNotMatch(src,/from\s+['"][^'"]*backend\/src\/index\.mjs['"]/);
-  for(const sym of ['signalWireConnectPlan','handleSignalWireSwml','prepareReservation','dialXml','console.log'])
+  for(const sym of ['signalWireConnectPlan','handleSignalWireSwml','prepareReservation','dialXml','console.log',
+    'signalwire-routing','routing-policy','caller-proof','handleSignalWireRouting','handleSignalWirePin','/v1/owner/'])
     assert.ok(!src.includes(sym),sym);
   assert.doesNotMatch(src,/method:\s*['"](POST|PUT|PATCH|DELETE)['"]/);
 });

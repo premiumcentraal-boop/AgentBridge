@@ -27,8 +27,8 @@ Last revised: 2026-11-09. Read [NORTH_STAR.md](NORTH_STAR.md) first.
 - [x] Default-deny Twilio international leg unless an explicit server-side private-test opt-in is present (PR #13 extension; test-only, not production authentication)
 - [x] Fail closed on malformed, unknown, nonterminal or ambiguous Twilio Dial completion statuses; preserve connecting lock (PR #13, pending review)
 - [x] Reject signed Twilio inbound requests with duplicate or missing `To`, `From`, or `CallSid` before reservation lookup (PR #13, pending review)
-- [ ] Structured errors, trace IDs and webhook idempotent event ledger
-- [ ] Carrier-verified caller authentication or per-call challenge before any public routing (caller ID alone is spoofable)
+- [ ] Structured errors, trace IDs and webhook idempotent event ledger (ledger + SignalWire replay guard done on branch routing-fixes; trace IDs pending)
+- [ ] Carrier-verified caller authentication or per-call challenge before any public routing (caller ID alone is spoofable) — DTMF PIN challenge implemented offline on routing-fixes; Grok Bot DTMF support unverified
 
 ## P1 — Real authorized call, still private
 - [ ] Create and verify a personal test telecom account

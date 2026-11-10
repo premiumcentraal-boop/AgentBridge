@@ -14,7 +14,7 @@ export const SWML_URL=BASE+'/telephony/signalwire/swml';
 export const PIN_URL=BASE+'/telephony/signalwire/swml/pin';
 
 export async function routingSetup(t,extra={}){
-  t.mock.timers.enable({apis:['Date'],now:T0*1000});
+  try{t.mock.timers.enable({apis:['Date'],now:T0*1000});}catch{t.mock.timers.setTime(T0*1000);}
   const DB=createD1();
   DB.raw.prepare("INSERT INTO accounts (id,api_key_sha256,did,status) VALUES ('acct',?,?,'active')").run(await sha256(TOKEN),DID);
   const env={DB,US_BRIDGE_DID:DID,
@@ -39,8 +39,8 @@ export function call(over={}){
   return {project_id:PROJECT,call_id:over.call_id||'38313c74-b321-4c08-a3ea-7123449130ab',direction:'inbound',type:'phone',
     from_number:CALLER,to_number:DID,...over};
 }
-export function swml(payload,url=SWML_URL,{sign=true,key=SIGNING}={}){
+export function swml(payload,url=SWML_URL,{sign=true,key=SIGNING,signUrl=url}={}){
   const raw=JSON.stringify(payload);
-  const sig=createHmac('sha256',key).update(url+raw).digest('hex');
+  const sig=createHmac('sha256',key).update(signUrl+raw).digest('hex');
   return new Request(url,{method:'POST',headers:{'content-type':'application/json',...(sign?{'x-signalwire-sha256-signature':sig}:{})},body:raw});
 }
