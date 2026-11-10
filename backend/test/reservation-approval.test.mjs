@@ -11,7 +11,7 @@ test('SignalWire-only config serves the reservation API without any Twilio setti
   assert.equal(r.status,201);
   const b=await r.json();
   assert.equal(b.status,'ready');assert.equal(b.owner_approval_required,true);
-  assert.equal(b.caller_proof,'none');assert.equal(b.dtmf_pin,undefined);
+  assert.equal(b.caller_proof,'dtmf_pin');assert.match(b.dtmf_pin,/^\d{8}$/);
   assert.deepEqual(b.estimate,{rate_cents_per_min:2,rate_source:'owner-recorded test rate',
     inbound_rate_cents_per_min:1,inbound_rate_source:'operator-reviewed inbound rate',
     inbound_estimated_max_minutes:4,max_call_seconds:60,max_cost_cents:6,price_verified:false});
