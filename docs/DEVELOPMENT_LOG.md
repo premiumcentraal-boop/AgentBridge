@@ -158,3 +158,8 @@ Append one dated entry for each substantial incremental development session. Lin
 - Security review of merged PR #28 found that a signed carrier webhook plus an approved reservation did not authenticate the calling party. An arbitrary caller could claim the reservation during its 15-minute window if paid routing were enabled.
 - US pilot policy now refuses `any_caller` with `CALLER_AUTH_REQUIRED`, regardless of risk-acceptance flags; SignalWire inbound independently hangs up before querying or claiming a reservation. Added offline regression tests for reservation denial, signed inbound hangup and policy denial.
 - `capped_caller_id` remains a separate spoofable-risk path requiring its existing explicit opt-ins; this patch does not establish cryptographic origin for it. Grok Bot caller proof remains unverified. No live calls, deployment, provider credentials or routing-flag changes. CI verification and manual review pending.
+
+
+## 2026-11-10 — PR #29 CI triage: restore parsed security guards
+- GitHub Actions run 42756542946 failed (`npm run ci`: 117 passed, 6 failed). Review of the exact PR head found literal `\\n` sequences in `approval-policy.mjs` and `signalwire-routing.mjs` where actual newlines were intended; these placed the `any_caller` rejection conditions inside `//` comments, so the critical security fix was ineffective.
+- Replaced the six escaped newline tokens with real line breaks in those two modules on the existing PR branch. This restores executable policy and inbound-handler guards. Await a fresh quality-gate run on the corrected head; the earlier failing CI does not validate the correction. No carrier operation or deployment.
