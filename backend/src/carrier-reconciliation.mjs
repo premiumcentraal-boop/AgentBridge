@@ -9,7 +9,7 @@
  */
 import {validateConnection} from './signalwire.mjs';
 import {readBoundedWebhookBody} from './bounded-body.mjs';
-const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const MAX_RESPONSE=65_536;
 const MAX_LIST_RESPONSE=256*1024;
 function failed(code){return {ok:false,code};}
