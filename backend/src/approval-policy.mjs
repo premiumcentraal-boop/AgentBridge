@@ -25,7 +25,11 @@ export function pilotPolicy(row,env){
   if(env.US_PILOT_DESTINATION_VERIFIED!=='true')
     return {ok:false,code:'US_PILOT_DESTINATION_NOT_ATTESTED'};
   const mode=callerProofMode(env);
-  // A signed provider webhook proves the carrier, not the human caller.\n  // An approved reservation is not itself a caller credential. Reject the\n  // unauthenticated any_caller mode even if legacy risk opt-ins are set.\n  if(mode==='any_caller')return {ok:false,code:'CALLER_AUTH_REQUIRED'};\n  if(mode!=='dtmf_pin'&&!callerIdPilotOptIn(env))return {ok:false,code:'DTMF_PROOF_REQUIRED'};
+  // A signed provider webhook proves the carrier, not the human caller.
+  // An approved reservation is not itself a caller credential. Reject the
+  // unauthenticated any_caller mode even if legacy risk opt-ins are set.
+  if(mode==='any_caller')return {ok:false,code:'CALLER_AUTH_REQUIRED'};
+  if(mode!=='dtmf_pin'&&!callerIdPilotOptIn(env))return {ok:false,code:'DTMF_PROOF_REQUIRED'};
   const caps=routingCaps(env,mode);
   if(!caps)return {ok:false,code:'CAPS_NOT_CONFIGURED'};
   if(caps.maxSeconds>PILOT_MAX_SECONDS||caps.maxCallsPerDay>PILOT_MAX_CALLS_PER_DAY||
