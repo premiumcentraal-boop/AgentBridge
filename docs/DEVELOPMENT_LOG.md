@@ -129,3 +129,9 @@ Append one dated entry for each substantial incremental development session. Lin
 - Required signed incoming segment IDs and stored the inbound segment on claim. Manual mark-ended now asks read-only SignalWire Voice Logs for terminal inbound plus one matching terminal child, reconciles their recorded charges, and refuses to release when missing/inconsistent/over budget. Carrier schema and real-world behavior are NOT verified.
 - Added tracked 0002 D1 approval/segment tables, read-only migration preflight (detects partially/manual applied 0001) and a fast-forward-only main sync in local MCP setup. Added regression tests and operator checklist docs/US_PRIVATE_PILOT.md.
 - All coding, CI and documentation work uses fake fixture numbers; **no deploy, switch change, actual calls, number purchases, real provider keys, Cloudflare secrets or external billing**. Full final CI and independent review still required; phase is not authorized for live calls.
+
+
+## 2026-11-09 — Eliminate spoofable caller-ID-only proof from US pilot (PR #26 continuation)
+- Enforced CALLER_PROOF_MODE='dtmf_pin' in the US pilot policy before any ready reservation is created. The older capped_caller_id mode remains parseable for compatibility but is non-routable in this pilot, even with CALLER_ID_TRUST_ACCEPTED=true. This prevents signed carrier webhooks and spoofable caller IDs alone from authorizing domestic forwarding.
+- Updated the routing integration suite to demonstrate caller-ID mode fails closed, while signed DTMF PIN still binds a call to its reviewed reservation and rejects replay, invalid settings and exhausted daily allowance. Updated default pilot fixtures, config template and owner checklist accordingly.
+- Grok Bot native DTMF support remains unverified, and unavailability of DTMF is now an explicit stop condition, not permission to fall back to caller ID.
