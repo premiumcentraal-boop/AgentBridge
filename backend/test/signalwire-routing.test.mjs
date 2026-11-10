@@ -203,7 +203,7 @@ test('DTMF challenge rejects malformed and future timestamps without burning PIN
   const id=CID(212);
   await inbound(env,{call_id:id});
   const update=DB.raw.prepare("UPDATE provider_events SET received_at=? WHERE provider_call_id=? AND event_type='swml_inbound'");
-  for(const value of [T0+1,null,-1]){
+  for(const value of [T0+1,'invalid',-1]){
     update.run(value,id);
     assert.ok(isHangup((await pin(env,id,b.dtmf_pin)).doc),String(value));
   }
