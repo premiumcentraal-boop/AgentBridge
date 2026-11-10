@@ -9,3 +9,9 @@ backend/.dev.vars
 .DS_Store
 .wrangler/
 coverage/
+
+# Private Worker config (contains account-specific IDs; never commit)
+backend/wrangler.jsonc
+backend/wrangler.toml
+.dev.vars.*
+backend/.dev.vars.*

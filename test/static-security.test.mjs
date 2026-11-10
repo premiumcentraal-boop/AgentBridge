@@ -33,3 +33,10 @@ test('project-path build keeps CSP and correct local asset URLs',async()=>{
  assert.match(html,/src="\/AgentBridge\/assets\/app\.js"/);
  assert.match(html,/script-src 'self'/);
 });
+
+test('private Worker config and dev secrets are git-ignored',async()=>{
+  const {readFileSync}=await import('node:fs');
+  const ignore=readFileSync(new URL('../.gitignore',import.meta.url),'utf8').split('\n').map(s=>s.trim());
+  for(const entry of ['backend/wrangler.jsonc','.dev.vars','backend/.dev.vars','.env'])
+    assert.ok(ignore.includes(entry),entry+' must be ignored');
+});
