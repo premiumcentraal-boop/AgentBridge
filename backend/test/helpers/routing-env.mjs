@@ -24,6 +24,7 @@ export async function routingSetup(t,extra={}){
       {e164:DEST,country:'US',rate_cents_per_min:2,rate_source:'owner-recorded test rate'},
       {e164:INTL,country:'NL',rate_cents_per_min:10,rate_source:'owner-recorded test rate'}]),
     US_PILOT_TEST_DESTINATION:DEST,US_PILOT_DESTINATION_VERIFIED:'true',
+    US_PILOT_INBOUND_RATE_CENTS_PER_MIN:'1',US_PILOT_INBOUND_RATE_SOURCE:'operator-reviewed inbound rate',
     ROUTING_MAX_CALL_SECONDS:'60',ROUTING_MAX_CALLS_PER_DAY:'1',
     ROUTING_MAX_SPEND_CENTS_PER_CALL:'50',ROUTING_MAX_SPEND_CENTS_PER_DAY:'100',
     RESERVATION_TTL_SECONDS:'240',
