@@ -16,7 +16,7 @@ The existing `backend/` Worker and its pending security PRs remain separate.
    and select `premiumcentraal-boop/AgentBridge`.
 2. For a review deployment, select `feat/victor-product-studio`. For an accepted
    release, select the reviewed/merged commit. The root `railway.json` uses the
-   multi-stage Dockerfile, Node 24, no third-party runtime packages, and `/health`.
+   small allowlisted Docker image, Node 24, no third-party runtime packages, and `/health`.
 3. Add **one persistent volume mounted at `/data`**. Use one replica. SQLite
    data must not live on the ephemeral application filesystem. The entrypoint
    prepares the dedicated mounted directory and drops to UID/GID 1000 before

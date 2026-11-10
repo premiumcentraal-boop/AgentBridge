@@ -177,3 +177,6 @@ Append one dated entry for each substantial incremental development session. Lin
   supported managed browser tooling is not available in this environment.
 - Railway account connection and authoritative DNS changes are still needed for
   public deployment; source implementation does not establish deployment.
+
+- Final Docker packaging uses an explicit context allowlist and fewer build layers;
+  private Worker config, runtime data and credentials cannot enter the image.
