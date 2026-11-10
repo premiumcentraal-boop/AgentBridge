@@ -54,8 +54,9 @@ test('explicit private-test flag preserves the existing constrained test route o
 });
 
 test('owner approval configuration fails closed even with signed caller and outbound flag on',async()=>{
-  for(const ownerHash of [undefined,'','invalid','A'.repeat(64)]){
+  for(const ownerHash of [null,'','invalid','A'.repeat(64)]){
     const e=env('true',{ownerHash});
+    if(ownerHash===null)delete e.OWNER_APPROVAL_TOKEN_SHA256;
     const xml=await (await worker.fetch(request(),e)).text();
     assert.match(xml,/<Hangup\\/>/);
     assert.doesNotMatch(xml,/<Dial/);
