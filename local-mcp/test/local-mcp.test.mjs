@@ -59,7 +59,8 @@ test('stdio: lists exactly the read-only allowlist; no write/paid tools', async(
       assert.equal(t.annotations?.readOnlyHint,true,t.name);
       assert.equal(t.annotations?.destructiveHint,false,t.name);
       assert.ok(!FORBIDDEN_TOOLS.includes(t.name));
-      assert.doesNotMatch(t.name,/purchase|buy|reserve|call|dial|send|forward|update|assign|delete|cancel/i);
+      assert.doesNotMatch(t.name,/purchase|buy|reserve|dial|send|forward|update|assign|delete|cancel/i);
+      if(/call/i.test(t.name))assert.equal(t.name,'preview_chat_call_flow','Only the exact preview tool may mention calls');
     }
     for(const n of ['get_bridge_setup','list_my_numbers','search_available_numbers'])
       assert.equal(tools.find(t=>t.name===n)._meta?.ui?.resourceUri,NUMBER_CARD_URI);
@@ -250,7 +251,7 @@ test('stdio: invalid area codes and unknown tools never reach the provider', asy
 test('stdio: malformed and oversized frames are bounded; the server survives junk below the cap', async()=>{
   const {msgs}=await rawSession([init,'x'.repeat(20_000)+'\n','{not json}\n',
     JSON.stringify({jsonrpc:'2.0',id:3,method:'tools/list'})+'\n']);
-  assert.ok(msgs.find(m=>m.id===3)?.result?.tools?.length===4,'recovers after junk lines');
+  assert.ok(msgs.find(m=>m.id===3)?.result?.tools?.length===READ_ONLY_TOOLS.length,'recovers after junk lines');
   const big=await rawSession([init,'y'.repeat(300*1024)+'\n',JSON.stringify({jsonrpc:'2.0',id:4,method:'tools/list'})+'\n']);
   assert.equal(big.msgs.find(m=>m.id===4),undefined,'over-cap frame closes the session instead of buffering');
   assert.equal(big.code,0);
