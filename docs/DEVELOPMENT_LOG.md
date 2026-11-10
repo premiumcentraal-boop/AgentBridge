@@ -119,3 +119,9 @@ Append one dated entry for each substantial incremental development session. Lin
 - Phase 2: owner allowlist + country/premium/NANP-non-US blocking, required caps, configurable TTL, owner-only two-step approval endpoint and scripts, SignalWire-only reservation API; Twilio route requires approval when owner approval is configured.
 - Phase 5: gated SignalWire connect behind both owner flags; flags-off behaviour unchanged (hangup-only, no D1). Status callbacks TODO (signing undocumented). No live calls, deploy or provider writes.
 
+
+## 2026-11-09 — Twilio owner approval fail-closed hardening (PR pending)
+- Security review found that the Twilio inbound route conditionally appended `approved_at IS NOT NULL` only when OWNER_APPROVAL_TOKEN_SHA256 was syntactically valid. A missing/malformed owner hash therefore disabled the approval check even with PRIVATE_TEST_OUTBOUND_ENABLED=true.
+- The signed Twilio inbound path now hangs up if the owner approval hash is absent or invalid, requires approved_at on reservation selection, and rechecks approved_at in the atomic UPDATE claim to avoid consuming a route whose approval was removed between operations.
+- Added negative tests for missing/malformed approval configuration and unapproved reservations; existing signed private-test path remains subject to explicit owner approval. No provider calls, routing flags, secrets, purchases or deployments were changed.
+- Pending: full CI verification and manual security review. Caller ID remains spoofable; do not enable paid routing publicly. This patch does not establish carrier spend limits or verified live compatibility.
