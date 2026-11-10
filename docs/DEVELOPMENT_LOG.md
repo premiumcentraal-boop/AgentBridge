@@ -167,3 +167,9 @@ Append one dated entry for each substantial incremental development session. Lin
 ## 2026-11-10 — Close caller-ID proof bypass in draft PR #29
 - The remaining `capped_caller_id` opt-in could claim a chargeable reservation based only on a spoofable `From` number. Restricted US pilot policy to `dtmf_pin` exclusively; all other proof modes now fail with `CALLER_AUTH_REQUIRED` regardless of owner risk flags. The signed inbound handler independently hangs up before reservation lookup/event claims for non-DTMF modes, and the direct connect path was removed.
 - Added offline regressions for denied reservation creation, matching signed caller-ID hangup, and policy refusal. Existing legacy success tests may require updating; verify exact PR head CI before review. No carrier actions, routing flags, deployment, payments, or calls.
+
+
+## 2026-11-10 — PR #29 regression-suite reconciliation after caller-ID removal
+- GitHub Actions run 42783402244 on cb5f768 failed 4 of 126 tests. Three obsolete tests in us-pilot-caller-id.test.mjs still expected caller-ID connections/approval; a fourth in signalwire-routing.test.mjs expected the former DTMF_PROOF_REQUIRED error instead of CALLER_AUTH_REQUIRED.
+- Replaced obsolete positive caller-ID tests with explicit negative cases covering both risk opt-ins, missing/malformed opt-ins, changed caller number, signed matching caller-ID hangup, no reservation writes and no connect events. Retained owner-only inbound-log privacy coverage and adjusted the remaining rejection assertion.
+- No production behavior or carrier configuration changed. These test changes require a fresh exact-head CI pass before PR #29 is eligible for manual review. Paid routing remains default-deny.
