@@ -1,7 +1,10 @@
 {
   // Copy to backend/wrangler.jsonc (git-ignored) and fill in. Secrets go in
   // `wrangler secret put`, never here: SIGNALWIRE_SIGNING_KEY, OWNER_APPROVAL_TOKEN_SHA256,
-  // (optional) SIGNALWIRE_API_TOKEN, TWILIO_AUTH_TOKEN.
+  // SIGNALWIRE_VOICE_API_TOKEN (read-only Voice Logs, used by mark-ended/force-unlock),
+  // (optional) SIGNALWIRE_API_TOKEN. TWILIO_AUTH_TOKEN is NOT needed for the SignalWire pilot.
+  // Step-by-step: docs/STAGING_DEPLOY.md. For a private staging URL you may set
+  // "workers_dev": true in YOUR private copy (or add a custom-domain route).
   "name": "agentbridge-api",
   "main": "src/index.mjs",
   "compatibility_date": "2026-11-08",
@@ -15,6 +18,7 @@
 
     // SignalWire (docs/SIGNALWIRE.md, docs/ROUTING_PLAN.md)
     "SIGNALWIRE_PROJECT_ID": "REPLACE_WITH_PROJECT_UUID",
+    "SIGNALWIRE_SPACE": "REPLACE_WITH_SPACE_SUBDOMAIN", // e.g. "example" for example.signalwire.com
     "SIGNALWIRE_SWML_WEBHOOK_URL": "https://api.example.com/telephony/signalwire/swml",
 
     // Owner policy (placeholders; owner must fill from SignalWire pricing with a source/date)
