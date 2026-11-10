@@ -121,31 +121,23 @@ export function approvedTestCaller(from, env) {
     from === env.TEST_CALLER_E164 &&
     from !== env.US_BRIDGE_DID;
 }
+/**
+ * Twilio is a legacy reference transport and NOT part of the US SignalWire pilot.
+ * The shared SignalWire flag must never activate a second, unmetered provider.
+ * Signed requests are accepted only to return safe Hangup; this code cannot Dial.
+ */
 async function incoming(request,env){
   if(!requireEnv(env))return twiml(hangupXml());
-  const raw=await readBoundedWebhookBody(request);if(raw===null||!await verifyTwilioSignature(request,raw,env.TWILIO_AUTH_TOKEN,env.PUBLIC_BASE_URL))return new Response('Forbidden',{status:403});
+  const raw=await readBoundedWebhookBody(request);
+  if(raw===null||!await verifyTwilioSignature(request,raw,env.TWILIO_AUTH_TOKEN,env.PUBLIC_BASE_URL))
+    return new Response('Forbidden',{status:403});
   const fields=new URLSearchParams(raw);
-  // Duplicate identity/routing fields are ambiguous even when the carrier
-  // signature is valid. Never select the first value and consume a route.
-  if(['To','From','CallSid'].some(field=>fields.getAll(field).length!==1))return twiml(hangupXml());
-  const to=fields.get('To'),sid=fields.get('CallSid'),from=fields.get('From');
-  // A reservation alone must never make the DID an open forwarder. Reject
-  // unknown caller IDs BEFORE reading or consuming a reservation.
-  if(to!==env.US_BRIDGE_DID||!approvedTestCaller(from,env)||!/^CA[a-f0-9]{32}$/i.test(sid||''))return twiml(hangupXml());
-  const now=Math.floor(Date.now()/1000);
-  const approval=OWNER_HASH.test(env.OWNER_APPROVAL_TOKEN_SHA256||'')?" AND r.approved_at IS NOT NULL":'';
-  const row=await env.DB.prepare("SELECT r.id,r.destination FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE a.did=? AND a.status='active' AND r.status='ready' AND r.expires_at>?"+approval+" ORDER BY r.created_at DESC LIMIT 1").bind(to,now).first();
-  if(!row||row.destination!==env.TEST_DESTINATION_E164)return twiml(hangupXml());
-  // Explicit private-test kill switch: a deployed prototype must NEVER
-  // originate an international leg simply because a valid reservation exists.
-  // This flag is not sufficient for public use: caller ID is spoofable.
-  if(env.PRIVATE_TEST_OUTBOUND_ENABLED!=='true')return twiml(hangupXml());
-  // Atomically consume route: no second inbound call may reuse it.
-  const done=await env.DB.prepare("UPDATE reservations SET status='connecting',call_sid=? WHERE id=? AND status='ready' AND expires_at>?").bind(sid,row.id,now).run();
-  if(!done.meta?.changes)return twiml(hangupXml());
-  const base=new URL(env.PUBLIC_BASE_URL);
-  const callback=base.origin+'/telephony/twilio/dial-complete';
-  return twiml(dialXml(row.destination,callback));
+  if(['To','From','CallSid'].some(field=>fields.getAll(field).length!==1))
+    return twiml(hangupXml());
+  // Retain strict identity checks for audit/compatibility, never claim a route.
+  if(fields.get('To')!==env.US_BRIDGE_DID||!approvedTestCaller(fields.get('From'),env)||
+     !/^CA[a-f0-9]{32}$/i.test(fields.get('CallSid')||''))return twiml(hangupXml());
+  return twiml(hangupXml());
 }
 async function dialComplete(request,env){
   if(!requireEnv(env))return new Response('Not configured',{status:503});
