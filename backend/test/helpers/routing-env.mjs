@@ -17,7 +17,7 @@ export async function routingSetup(t,extra={}){
   try{t.mock.timers.enable({apis:['Date'],now:T0*1000});}catch{t.mock.timers.setTime(T0*1000);}
   const DB=createD1();
   DB.raw.prepare("INSERT INTO accounts (id,api_key_sha256,did,status) VALUES ('acct',?,?,'active')").run(await sha256(TOKEN),DID);
-  const env={DB,US_BRIDGE_DID:DID,
+  const env={DB,US_BRIDGE_DID:DID,CALLER_PROOF_MODE:'dtmf_pin',
     SIGNALWIRE_SIGNING_KEY:SIGNING,SIGNALWIRE_PROJECT_ID:PROJECT,SIGNALWIRE_SWML_WEBHOOK_URL:SWML_URL,
     ROUTING_ALLOWED_COUNTRIES:'US,NL',
     ROUTING_DESTINATIONS:JSON.stringify([
