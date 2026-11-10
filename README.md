@@ -61,6 +61,9 @@ Never put real carrier credentials into public site code or the Git repo. No aut
 - [docs/DEVELOPMENT_LOG.md](docs/DEVELOPMENT_LOG.md): append-only record of changes.
 - Separate ChatGPT hourly development automation is intended to make small reviewable PRs; it **does not** auto-merge or deploy changes.
 
+## Chat-first call guidance (read-only preview)
+Use the authenticated HTTP MCP tool `preview_chat_call_flow` or the private local MCP adapter to choose a **Simple**, **Guided** or **Advanced** explanation directly in an agent conversation. Simple is the default. This is a **stateless** choice per tool invocation, not an account preference; a host must pass the selection again to use it in another chat. The tool never reserves a call, confirms compatibility, approves a route, pays, or dials. Every level keeps exactly the same mandatory owner approval, one-use caller proof, native call confirmation and cost/policy checks. For the desired future call experience and current platform restrictions, see [docs/CHAT_CALL_EXPERIENCE.md](docs/CHAT_CALL_EXPERIENCE.md).
+
 ## Product line
 AgentBridge is a **telephone routing layer**, not a new voice agent, and not a method to evade a service's calling restrictions.
 
