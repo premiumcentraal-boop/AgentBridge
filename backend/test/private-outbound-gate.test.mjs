@@ -17,12 +17,12 @@ function request(){
     'x-twilio-signature':signature
   },body});
 }
-function env(flag){
+function env(flag,{ownerHash='a'.repeat(64),approved=true}={}){
   let updates=0;
   return {
     get updates(){return updates;},
     DB:{prepare(sql){
-      if(sql.startsWith('SELECT r.id'))return {bind(){return {first:async()=>({id:'reservation',destination})}}};
+      if(sql.startsWith('SELECT r.id'))return {bind(){return {first:async()=>approved?({id:'reservation',destination}):null}}};
       if(sql.startsWith('UPDATE reservations SET status='))return {bind(){return {run:async()=>{updates++;return {meta:{changes:1}}}}}};
       throw Error('Unexpected database operation: '+sql);
     }},
@@ -51,4 +51,20 @@ test('explicit private-test flag preserves the existing constrained test route o
   assert.match(xml,/<Dial/);
   assert.match(xml,/<Number>\+31201234567<\/Number>/);
   assert.equal(e.updates,1);
+});
+
+test('owner approval configuration fails closed even with signed caller and outbound flag on',async()=>{
+  for(const ownerHash of [undefined,'','invalid','A'.repeat(64)]){
+    const e=env('true',{ownerHash});
+    const xml=await (await worker.fetch(request(),e)).text();
+    assert.match(xml,/<Hangup\\/>/);
+    assert.doesNotMatch(xml,/<Dial/);
+    assert.equal(e.updates,0);
+  }
+});
+test('approved_at must be present before the Twilio route can be claimed',async()=>{
+  const e=env('true',{approved:false});
+  const xml=await (await worker.fetch(request(),e)).text();
+  assert.match(xml,/<Hangup\\/>/);
+  assert.equal(e.updates,0);
 });
