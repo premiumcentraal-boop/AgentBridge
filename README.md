@@ -26,7 +26,7 @@ The static audit checks links, semantic landmarks, form labels and assets; it do
 
 No \`npm install\` is required to run checks or build the public site. \`dist/\` is the deployable static website; do **not** host the repository root as a public document directory.
 
-## Backend: Cloudflare Worker + D1 + Twilio reference
+## Backend: Cloudflare Worker + D1 + SignalWire US private-test preview
 The \`backend/\` directory is a deliberately bounded **test-only reference**:
 - API key authorization via SHA-256 hashes stored in D1
 - \`POST /v1/reservations\` to create a 90-second route, idempotently
@@ -37,7 +37,7 @@ The \`backend/\` directory is a deliberately bounded **test-only reference**:
 - 180-second hard \`<Dial>\` limit, one concurrent route per account, basic hourly preparation throttle
 - **Only the exact \`TEST_DESTINATION_E164\` can be called, and only inbound calls matching \`TEST_CALLER_E164\` are considered**, until a full fraud/billing/consent system exists
 
-### Private deployment checklist
+### Private deployment checklist (historical; see current US pilot gates below)
 1. Obtain carrier approval for your own test use case, country routing and selected US DID. Verify pricing and the relevant platform terms.
 2. Create a Cloudflare D1 test database. Apply \`backend/schema.sql\`.
 3. Copy \`backend/wrangler.example.jsonc\` to \`backend/wrangler.jsonc\`; insert D1 ID, public HTTPS base URL, real US DID, a consenting **single** E.164 test destination, and the E.164 caller ID of your preapproved test origin in \`TEST_CALLER_E164\`.
@@ -84,3 +84,10 @@ These tools return structured JSON for future host-native cards and equivalent t
 ## Routing controls (local branch `routing-fixes`, OFF by default)
 Gated SignalWire routing, owner approval, destination/country/spend caps, DTMF PIN caller proof and a replay ledger are implemented and tested offline. Nothing routes unless the owner sets **both** `PRIVATE_TEST_OUTBOUND_ENABLED=true` and `SIGNALWIRE_CONNECT_ENABLED=true` and fills every placeholder. See [docs/ROUTING_PLAN.md](docs/ROUTING_PLAN.md). Not deployed; no live call verified.
 
+
+
+## US-only private pilot security fixes — feature PR #26, review required
+
+For the current tested branch, start with [docs/US_PRIVATE_PILOT.md](docs/US_PRIVATE_PILOT.md), not the older Twilio-specific setup above. The new branch **retires Twilio inbound dialing**, binds DTMF callbacks to their original reservations, requires an owner-reviewed immutable policy fingerprint, constrains routes to one manually verified US number, budgets both call legs, and adds a fail-closed Voice Logs reconciliation before unlocking a connecting reservation. **None of these features are deployed or approved for a real call.** Keep PRIVATE_TEST_OUTBOUND_ENABLED and SIGNALWIRE_CONNECT_ENABLED unset.
+
+Run `npm run ci`, `npm --prefix local-mcp test` and the **read-only** `npm run d1:preflight -- --remote agentbridge-prototype` only after the private D1 config is reviewed. A separate operator approval is needed to modify remote D1 or deploy any endpoint. Carrier prices, Grok Bot DTMF, and actual SignalWire Voice Logs still require independent live validation.
