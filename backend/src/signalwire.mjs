@@ -40,7 +40,7 @@ const MAX_INVENTORY_BYTES=250_000;
 async function readInventoryResponse(response){
   const oversized=()=>new Error('SignalWire inventory response too large');
   const declared=response.headers?.get('content-length');
-  if(declared!==null&&declared!==undefined&&/^\\d+$/.test(declared.trim())&&
+  if(declared!==null&&declared!==undefined&&/^\d+$/.test(declared.trim())&&
      Number(declared)>MAX_INVENTORY_BYTES){
     try{await response.body?.cancel();}catch{/* best effort */}
     throw oversized();
