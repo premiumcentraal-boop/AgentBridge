@@ -51,7 +51,7 @@ test('US pilot refuses spoofable caller-ID mode even when owner explicitly accep
     const res=await worker.fetch(api('/v1/reservations','POST',
       {destination:DEST,idempotency_key:'no-insecure-caller-proof'}),env);
     assert.equal(res.status,409,JSON.stringify(opts));
-    assert.match((await res.json()).error.message,/DTMF_PROOF_REQUIRED/);
+    assert.match((await res.json()).error.message,/CALLER_AUTH_REQUIRED/);
     const r=await inbound(env,{call_id:CID(1)});
     assert.ok(isHangup(r.doc),'caller-ID alone cannot connect a US trial leg');
     assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservations').get().n,0);
