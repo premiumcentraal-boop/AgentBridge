@@ -181,3 +181,7 @@ Append one dated entry for each substantial incremental development session. Lin
 ## 2026-11-10 — Enforce server-side PIN challenge expiry (PR #29, pending CI)
 - The signed PIN callback previously checked reservation expiry but did not enforce the advertised 60-second challenge window. The PIN handler now reads the original `swml_inbound` event's persisted `received_at` and rejects missing, malformed, future, or >=60-second-old challenges before recording a PIN attempt or claiming a reservation.
 - Added deterministic clock-boundary tests for 59-second acceptance, 60-second rejection while the reservation remains ready, and malformed/future timestamps. These changes are unmerged, un-deployed, and require exact-head CI plus manual review. No live carrier operations or flag changes.
+
+## 2026-11-10 — Concurrent signed PIN callback regression (PR #29)
+- Added a two-call, same-approved-reservation offline race test. Both calls receive a valid PIN prompt, then submit correctly signed PIN callbacks concurrently. Exactly one may emit a connect instruction, exactly one must hang up, and the durable provider-event ledger and carrier-leg table must each contain exactly one successful connection/leg. Subsequent replay of either callback must hang up.
+- The atomic `UPDATE ... WHERE status='ready'` claim remains the production concurrency guard. This test is regression coverage, not a proof of cross-region D1 serialization or actual carrier behavior. Await exact-head GitHub Actions CI; no live calls, routing flags, deployment, or provider resources changed.
