@@ -177,3 +177,7 @@ Append one dated entry for each substantial incremental development session. Lin
 ## 2026-11-10 — PR #29 approved-reservation mode-drift regression
 - Added `backend/test/caller-mode-drift.test.mjs` to exercise an already owner-approved DTMF reservation after runtime configuration is switched to `any_caller` or `capped_caller_id`, with every legacy risk flag enabled and a matching caller number. Both signed inbound requests must hang up without claiming the reservation or creating carrier-leg records.
 - This is offline regression coverage, not proof of live carrier compatibility. The exact branch-head quality gate still requires verification; no routing flags, provider resources, or deployments were changed.
+
+## 2026-11-10 — Enforce server-side PIN challenge expiry (PR #29, pending CI)
+- The signed PIN callback previously checked reservation expiry but did not enforce the advertised 60-second challenge window. The PIN handler now reads the original `swml_inbound` event's persisted `received_at` and rejects missing, malformed, future, or >=60-second-old challenges before recording a PIN attempt or claiming a reservation.
+- Added deterministic clock-boundary tests for 59-second acceptance, 60-second rejection while the reservation remains ready, and malformed/future timestamps. These changes are unmerged, un-deployed, and require exact-head CI plus manual review. No live carrier operations or flag changes.
