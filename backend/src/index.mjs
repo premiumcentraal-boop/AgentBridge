@@ -6,6 +6,7 @@ import {NUMBER_CARD_URI,numberCardResource,readNumberCardResource} from './chat-
 import {blockedReason,destinationDecision,reservationTtlSeconds,maxCostCents,routingCaps,signalWireReservationsConfigured} from './routing-policy.mjs';
 import {callerProofMode,generatePin,pinHash} from './caller-proof.mjs';
 import {SIGNALWIRE_PIN_PATH,signalWireRoutingFlagsOn,handleSignalWireRouting,handleSignalWirePin} from './signalwire-routing.mjs';
+import {pilotPolicy,policyFingerprint} from './approval-policy.mjs';
 /**
  * AgentBridge reference backend — intentionally fail-closed.
  * This is NOT a publicly deployable calling reseller: it only routes to one
@@ -161,21 +162,57 @@ const OWNER_HASH=/^[a-f0-9]{64}$/;
  * bearer token used by the chat agent can never approve its own reservation.
  */
 async function ownerRoute(request,url,env){
-  if(!env.DB||!OWNER_HASH.test(env.OWNER_APPROVAL_TOKEN_SHA256||''))return error('NOT_CONFIGURED','Owner approval is not configured',503);
-  if(request.method!=='POST')return error('METHOD_NOT_ALLOWED','POST required',405);
+  // Owner token never goes to the chat/MCP connector. GET review is separate
+  // from POST approval; both demand the exact independently held owner token.
+  if(!env.DB||!OWNER_HASH.test(env.OWNER_APPROVAL_TOKEN_SHA256||''))
+    return error('NOT_CONFIGURED','Owner approval is not configured',503);
+  const m=url.pathname.match(/^\/v1\/owner\/reservations\/([a-f0-9-]{36})\/(review|approve|mark-ended)$/i);
+  if(!m)return error('NOT_FOUND','Route not found',404);
+  const action=m[2];
+  if(request.method!==(action==='review'?'GET':'POST'))
+    return error('METHOD_NOT_ALLOWED',action==='review'?'GET required':'POST required',405);
   const auth=request.headers.get('authorization')||'';
   const token=auth.startsWith('Bearer ')?auth.slice(7).trim():'';
-  if(token.length<32||token.length>256||!safeEqual(await sha256(token),env.OWNER_APPROVAL_TOKEN_SHA256))return error('UNAUTHORIZED','Owner approval token required',401);
-  const m=url.pathname.match(/^\/v1\/owner\/reservations\/([a-f0-9-]{36})\/(approve|mark-ended)$/i);
-  if(!m)return error('NOT_FOUND','Route not found',404);
+  if(token.length<32||token.length>256||
+     !safeEqual(await sha256(token),env.OWNER_APPROVAL_TOKEN_SHA256))
+    return error('UNAUTHORIZED','Owner approval token required',401);
   const now=Math.floor(Date.now()/1000);
-  if(m[2]==='approve'){
-    const r=await env.DB.prepare("UPDATE reservations SET approved_at=? WHERE id=? AND status='ready' AND expires_at>? AND approved_at IS NULL").bind(now,m[1],now).run();
-    return r.meta?.changes?json({id:m[1],status:'ready',owner_approved:true}):error('CANNOT_APPROVE','Reservation is not ready, already approved, or expired',409);
+  if(action==='mark-ended'){
+    // A human clicking this is not proof that the carrier has terminated both
+    // legs. Keep connecting lock until verified read-only REST reconciliation.
+    return error('CARRIER_RECONCILIATION_REQUIRED',
+      'Call completion has not been verified by the carrier. Reservation remains locked.',409);
   }
-  // Owner confirms in the SignalWire call log that the call ended (no signed status callback yet).
-  const r=await env.DB.prepare("UPDATE reservations SET status='completed',completed_at=? WHERE id=? AND status='connecting' AND provider='signalwire'").bind(now,m[1]).run();
-  return r.meta?.changes?json({id:m[1],status:'completed'}):error('CANNOT_MARK_ENDED','Reservation is not an active SignalWire call',409);
+  const row=await env.DB.prepare('SELECT id,account_id,destination,status,expires_at,approved_at FROM reservations WHERE id=?')
+    .bind(m[1]).first();
+  if(!row||row.status!=='ready'||row.expires_at<=now||row.approved_at!==null)
+    return error('CANNOT_APPROVE','Reservation is expired, consumed, absent or already approved',409);
+  const decision=pilotPolicy(row,env);
+  if(!decision.ok)return error('PILOT_POLICY_BLOCKED',
+    'US-only destination, caller verification or cost/duration caps are missing: '+decision.code,409);
+  const proposal_digest=await policyFingerprint(decision.snapshot);
+  if(action==='review')return json({proposal:decision.snapshot,proposal_digest,
+    explicit_owner_approval_required:true,
+    warning:'Configured rate is NOT a live carrier quote. Verify destination, pricing, actual provider limits and both-leg costs out-of-band.'});
+  const input=await parseJson(request);
+  if(!input||typeof input.proposal_digest!=='string'||
+     !/^[a-f0-9]{64}$/.test(input.proposal_digest)||
+     Object.keys(input).some(k=>k!=='proposal_digest'))
+    return error('INVALID_APPROVAL','Approve requires the digest from an owner-only GET review',422);
+  if(!safeEqual(input.proposal_digest,proposal_digest))
+    return error('PROPOSAL_CHANGED','The destination, rate, caps or expiry changed. Review again.',409);
+  try{
+    await env.DB.prepare('INSERT INTO reservation_approval_bindings (reservation_id,policy_sha256,approved_at) VALUES (?,?,?)')
+      .bind(row.id,proposal_digest,now).run();
+    // Atomic row predicate protects against cancellation/expiry racing approval.
+    const approved=await env.DB.prepare("UPDATE reservations SET approved_at=? WHERE id=? AND status='ready' AND approved_at IS NULL AND expires_at>?")
+      .bind(now,row.id,now).run();
+    if(approved.meta?.changes!==1)return error('CANNOT_APPROVE','Reservation changed while approving. It remains unroutable.',409);
+  }catch{
+    return error('APPROVAL_STORAGE_UNAVAILABLE',
+      'Approval could not be stored safely. Apply migration 0002 or inspect a conflicting review.',503);
+  }
+  return json({id:row.id,status:'ready',owner_approved:true,proposal_digest});
 }
 async function routeRest(request,url,env,account){
   if(url.pathname==='/v1/reservations'&&request.method==='POST'){const input=await parseJson(request);if(!input)return error('INVALID_JSON','Expected a small JSON request');const r=await prepareReservation(account,input,env);return json(r.body,r.status);}
