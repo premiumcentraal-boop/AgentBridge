@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test backend/test/*.test.mjs test/static-security.test.mjs test/deploy-policy.test.mjs",
-    "check": "node --check assets/app.js && node --check backend/src/index.mjs && node --check scripts/build-site.mjs && node --check scripts/provision-test-account.mjs && node --check scripts/audit-site.mjs && node --check backend/src/bounded-body.mjs && node --check backend/src/signalwire.mjs && node --check scripts/check-signalwire.mjs && node --check backend/src/chat-number-tools.mjs && node --check backend/src/chat-card.mjs && node --check local-mcp/server.mjs && node --check local-mcp/src/tools.mjs",
+    "check": "node --check assets/app.js && node --check backend/src/index.mjs && node --check scripts/build-site.mjs && node --check scripts/provision-test-account.mjs && node --check scripts/audit-site.mjs && node --check backend/src/bounded-body.mjs && node --check backend/src/signalwire.mjs && node --check scripts/check-signalwire.mjs && node --check backend/src/chat-number-tools.mjs && node --check backend/src/chat-card.mjs && node --check local-mcp/server.mjs && node --check local-mcp/src/tools.mjs && node --check backend/src/caller-proof.mjs",
     "build:site": "node scripts/build-site.mjs",
     "ci": "npm run check && npm test && npm run build:site && npm run test:site",
     "test:site": "node --test test/site-audit.test.mjs",
