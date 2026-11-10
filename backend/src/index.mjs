@@ -7,6 +7,7 @@ import {blockedReason,destinationDecision,reservationTtlSeconds,maxCostCents,rou
 import {callerProofMode,generatePin,pinHash} from './caller-proof.mjs';
 import {SIGNALWIRE_PIN_PATH,signalWireRoutingFlagsOn,handleSignalWireRouting,handleSignalWirePin} from './signalwire-routing.mjs';
 import {pilotPolicy,policyFingerprint} from './approval-policy.mjs';
+import {fetchCarrierReconciliation} from './carrier-reconciliation.mjs';
 /**
  * AgentBridge reference backend — intentionally fail-closed.
  * This is NOT a publicly deployable calling reseller: it only routes to one
@@ -178,10 +179,23 @@ async function ownerRoute(request,url,env){
     return error('UNAUTHORIZED','Owner approval token required',401);
   const now=Math.floor(Date.now()/1000);
   if(action==='mark-ended'){
-    // A human clicking this is not proof that the carrier has terminated both
-    // legs. Keep connecting lock until verified read-only REST reconciliation.
-    return error('CARRIER_RECONCILIATION_REQUIRED',
-      'Call completion has not been verified by the carrier. Reservation remains locked.',409);
+    // Carrier Voice Logs identify SWML segment IDs (not the stable call_id).
+    // Never unlock a connecting reservation based only on an operator click.
+    const row=await env.DB.prepare("SELECT r.id,r.account_id,r.destination,r.status,r.created_at,r.max_cost_cents,r.provider_call_id,l.provider_segment_id FROM reservations r JOIN reservation_carrier_legs l ON l.reservation_id=r.id WHERE r.id=? AND r.provider='signalwire' AND r.status='connecting'")
+      .bind(m[1]).first();
+    if(!row)return error('CANNOT_MARK_ENDED','No active SignalWire reservation with a carrier segment',409);
+    const checked=await fetchCarrierReconciliation(row,env);
+    if(!checked.ok)return error('CARRIER_RECONCILIATION_REQUIRED',
+      'Carrier has not yet confirmed both call legs and charges: '+checked.code,409);
+    // Verify first; then record carrier charge before releasing the active lock.
+    await env.DB.prepare('UPDATE reservation_carrier_legs SET reconciled_at=?,actual_cost_cents=? WHERE reservation_id=?')
+      .bind(now,checked.actual_cost_cents,row.id).run();
+    const ended=await env.DB.prepare("UPDATE reservations SET status='completed',completed_at=? WHERE id=? AND provider='signalwire' AND status='connecting'")
+      .bind(now,row.id).run();
+    if(ended.meta?.changes!==1)return error('CANNOT_MARK_ENDED','Reservation state changed during reconciliation',409);
+    return json({id:row.id,status:'completed',carrier_confirmed:true,
+      actual_cost_cents:checked.actual_cost_cents,
+      warning:'Charges are from the retrieved carrier records; independently confirm the statement before further calls.'});
   }
   const row=await env.DB.prepare('SELECT id,account_id,destination,status,expires_at,approved_at FROM reservations WHERE id=?')
     .bind(m[1]).first();
