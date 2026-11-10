@@ -149,3 +149,7 @@ Append one dated entry for each substantial incremental development session. Lin
 - `capped_caller_id` is routable in the pilot only with `CALLER_ID_TRUST_ACCEPTED=true` and `US_PILOT_ALLOW_CALLER_ID_PROOF=true`; approval fingerprint binds the trusted caller. Residual spoofing risk documented.
 - Migration 0004 `inbound_call_log` + owner-only `GET /v1/owner/inbound-calls`; the flags-off SWML handler now hangs up (200) on any signed call to the DID, even with blank `TEST_CALLER_E164`, and logs its caller ID.
 - D1 preflight runs Wrangler from `backend/` (fixes EACCES on `/node_modules/.cache`).
+
+## 2026-11-09 — any_caller mode and 15-minute reservations (owner's assistant)
+- Owner: Grok Bot's outbound caller ID rotates per call. New `CALLER_PROOF_MODE=any_caller`, only with `ANY_CALLER_RISK_ACCEPTED=true`; all other guards unchanged; fingerprint records `trusted_caller: "ANY"`.
+- `RESERVATION_TTL_SECONDS` maximum raised from 300 to 900.

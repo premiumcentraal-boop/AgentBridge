@@ -96,8 +96,8 @@ export function routingCaps(env={},mode='none'){
 /** Worst-case cost: whole started minutes at the owner-recorded rate. */
 export function maxCostCents(entry,seconds){return Math.ceil(entry.rate_cents_per_min*Math.ceil(seconds/60));}
 export function utcDayStart(nowSeconds){return nowSeconds-(nowSeconds%86_400);}
-/** Reservation TTL: default 90 s, owner may set 30..300 to allow human approval. */
-export function reservationTtlSeconds(env={}){return intIn(env.RESERVATION_TTL_SECONDS,30,300)??90;}
+/** Reservation TTL: default 90 s, owner may set 30..900 (15 min) to allow human approval and a tap-to-call. */
+export function reservationTtlSeconds(env={}){return intIn(env.RESERVATION_TTL_SECONDS,30,900)??90;}
 
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 /**

@@ -48,6 +48,8 @@ test('caps are all required, bounded, and tighter in caller-ID mode',()=>{
   assert.equal(maxCostCents({rate_cents_per_min:8},61),16);
   assert.equal(reservationTtlSeconds({}),90);
   assert.equal(reservationTtlSeconds({RESERVATION_TTL_SECONDS:'240'}),240);
+  assert.equal(reservationTtlSeconds({RESERVATION_TTL_SECONDS:'900'}),900,'15-minute maximum');
+  assert.equal(reservationTtlSeconds({RESERVATION_TTL_SECONDS:'901'}),90);
   assert.equal(reservationTtlSeconds({RESERVATION_TTL_SECONDS:'9999'}),90);
   assert.equal(utcDayStart(86_400*3+5),86_400*3);
 });

@@ -6,6 +6,8 @@
  *    time against SHA-256(reservation_id ":" pin). Only the hash is stored.
  *  - 'capped_caller_id': trusts TEST_CALLER_E164 ONLY when the owner has set
  *    CALLER_ID_TRUST_ACCEPTED='true', and forces tighter ceilings.
+ *  - 'any_caller': accepts ANY caller during an owner-approved reservation;
+ *    only with ANY_CALLER_RISK_ACCEPTED='true' (owner-accepted risk).
  *  - anything else (default): no caller proof, so no routing.
  */
 export const PIN_DIGITS=8;
@@ -24,6 +26,11 @@ export function callerIdPilotOptIn(env={}){
 }
 export function callerProofMode(env={}){
   if(env.CALLER_PROOF_MODE==='dtmf_pin')return 'dtmf_pin';
+  // 'any_caller': NO caller proof at all. For an owner AI agent whose outbound
+  // caller ID rotates per call. Needs the explicit ANY_CALLER_RISK_ACCEPTED
+  // opt-in; the only protection left is the owner-approved, short-lived,
+  // single-use reservation plus destination/duration/spend caps.
+  if(env.CALLER_PROOF_MODE==='any_caller'&&env.ANY_CALLER_RISK_ACCEPTED==='true')return 'any_caller';
   if(env.CALLER_PROOF_MODE==='capped_caller_id'&&env.CALLER_ID_TRUST_ACCEPTED==='true'&&
      E164.test(env.TEST_CALLER_E164||'')&&env.TEST_CALLER_E164!==env.US_BRIDGE_DID)return 'capped_caller_id';
   return 'none';
