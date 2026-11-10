@@ -45,8 +45,38 @@ export async function inspectSignalWireNumbers(config, fetchImpl=fetch){
     headers:{authorization:'Basic '+btoa(projectId+':'+apiToken),accept:'application/json'}
   });
   if(!response.ok)throw new Error('SignalWire project number inventory unavailable ('+response.status+')');
-  const body=await response.text();
-  if(body.length>250_000)throw new Error('SignalWire inventory response too large');
+  // Bound upstream bytes while streaming: Content-Length is not trustworthy.
+  // Never buffer an unbounded carrier response or expose its contents in errors.
+  const limit=250_000;
+  const advertised=response.headers?.get('content-length');
+  if(advertised!==null&&advertised!==undefined&&
+     /^\\d+$/.test(advertised)&&Number(advertised)>limit)
+    throw new Error('SignalWire inventory response too large');
+  if(!response.body?.getReader)throw new Error('Invalid SignalWire inventory response');
+  const reader=response.body.getReader();
+  const chunks=[];
+  let size=0;
+  try{
+    while(true){
+      const {done,value}=await reader.read();
+      if(done)break;
+      size+=value.byteLength;
+      if(size>limit){
+        await reader.cancel().catch(()=>{});
+        throw new Error('SignalWire inventory response too large');
+      }
+      chunks.push(value);
+    }
+  }catch(error){
+    if(error?.message==='SignalWire inventory response too large')throw error;
+    throw new Error('Invalid SignalWire inventory response');
+  }finally{reader.releaseLock();}
+  const bytes=new Uint8Array(size);
+  let offset=0;
+  for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+  let body;
+  try{body=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}
+  catch{throw new Error('Invalid SignalWire inventory response');}
   let payload;
   try{payload=JSON.parse(body);}catch{throw new Error('Invalid SignalWire inventory response');}
   if(!Array.isArray(payload?.data))throw new Error('Invalid SignalWire inventory response');
