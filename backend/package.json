@@ -1,0 +1,16 @@
+{
+  "name": "agentbridge-backend",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Private AgentBridge Worker tooling. Pinned Wrangler only; the Worker itself has no runtime dependencies.",
+  "type": "module",
+  "scripts": {
+    "wrangler": "wrangler"
+  },
+  "devDependencies": {
+    "wrangler": "4.159.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,88 @@
+/**
+ * Read-only SignalWire Voice Logs reconciliation.
+ * A SWML call_id identifies the call; voice logs are keyed by segment_id.
+ * We require terminal inbound + single child outbound segments, no pagination,
+ * coherent E.164 participants and finite carrier charges before unlocking D1.
+ *
+ * Endpoints (SignalWire REST "Voice Logs", read-only):
+ *   GET https://{space}.signalwire.com/api/voice/logs/{id}
+ *   GET https://{space}.signalwire.com/api/voice/logs?created_after=...&page_size=1000
+ * Documented log fields used here (docs: /docs/apis/rest/voice-logs/list-voice-logs):
+ *   id (uuid), from, to, direction (inbound|outbound|outbound-api|outbound-dial),
+ *   status (queued|initiated|ringing|in-progress|busy|failed|no-answer|canceled|
+ *   completed|ended|answered|created|ending|joined), charge (double, dollars),
+ *   parent_id (nullable), and list pagination links.next (absent on last page).
+ * Neither endpoint places a call or changes provider settings.
+ *
+ * Any missing, unexpected or contradictory field keeps the reservation LOCKED;
+ * the owner-only force-unlock route is the documented escape hatch. This
+ * function never throws.
+ */
+import {validateConnection} from './signalwire.mjs';
+import {readBoundedWebhookBody} from './bounded-body.mjs';
+const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const MAX_RESPONSE=65_536;
+const MAX_LIST_RESPONSE=256*1024;
+// Only states SignalWire documents as final. 'ending'/'in-progress' etc. stay locked.
+export const INBOUND_TERMINAL=new Set(['completed','ended']);
+export const OUTBOUND_TERMINAL=new Set(['completed','ended','busy','failed','no-answer','canceled']);
+export const OUTBOUND_DIRECTIONS=new Set(['outbound','outbound-dial','outbound-api']);
+function failed(code){return {ok:false,code};}
+function safeMoney(value){
+  return typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=1000;
+}
+function isObj(x){return x!==null&&typeof x==='object'&&!Array.isArray(x);}
+export async function fetchCarrierReconciliation(row,env,fetchImpl=fetch){
+  try{return await reconcile(row,env,fetchImpl);}
+  catch{return failed('RECONCILIATION_ERROR');}
+}
+async function reconcile(row,env,fetchImpl){
+  if(!row||!UUID.test(row.provider_segment_id||'')||
+     !UUID.test(row.provider_call_id||'')||!Number.isSafeInteger(row.created_at)||
+     !Number.isSafeInteger(row.max_cost_cents))
+    return failed('MISSING_CARRIER_IDENTIFIERS');
+  const config={space:env.SIGNALWIRE_SPACE,projectId:env.SIGNALWIRE_PROJECT_ID,
+    apiToken:env.SIGNALWIRE_VOICE_API_TOKEN};
+  try{validateConnection(config);}catch{return failed('VOICE_LOG_CREDENTIALS_REQUIRED');}
+  const prefix='https://'+config.space+'.signalwire.com/api/voice/logs';
+  const headers={authorization:'Basic '+btoa(config.projectId+':'+config.apiToken),accept:'application/json'};
+  const get=async(url,max=MAX_RESPONSE)=>{
+    const response=await fetchImpl(url,{method:'GET',redirect:'error',cache:'no-store',headers,
+      signal:AbortSignal.timeout(8000)});
+    if(!response?.ok)return null;
+    const raw=await readBoundedWebhookBody(response,max);
+    if(raw===null)return null;
+    try{return JSON.parse(raw);}catch{return null;}
+  };
+  let inbound,listing;
+  try{
+    inbound=await get(prefix+'/'+row.provider_segment_id);
+    const q=new URL(prefix);
+    q.searchParams.set('created_after',new Date((row.created_at-120)*1000).toISOString());
+    q.searchParams.set('page_size','1000');
+    listing=await get(q.toString(),MAX_LIST_RESPONSE);
+  }catch{return failed('CARRIER_LOOKUP_UNAVAILABLE');}
+  if(!isObj(inbound)||!isObj(listing)||!Array.isArray(listing.data))
+    return failed('INCOMPLETE_CARRIER_LOGS');
+  if(isObj(listing.links)&&listing.links.next)return failed('PAGINATED_CARRIER_LOGS');
+  if(inbound.id!==row.provider_segment_id)return failed('INBOUND_LOG_MISMATCH');
+  if(inbound.direction!=='inbound'||inbound.to!==env.US_BRIDGE_DID)
+    return failed('INBOUND_LOG_MISMATCH');
+  if(!INBOUND_TERMINAL.has(inbound.status))return failed('INBOUND_CARRIER_NOT_TERMINAL');
+  if(!safeMoney(inbound.charge))return failed('INBOUND_CHARGE_UNKNOWN');
+  const children=listing.data.filter(x=>isObj(x)&&x.parent_id===inbound.id);
+  // Exactly one outbound leg is expected in this one-destination trial.
+  // Multiple children might be additional billable legs: manual review required.
+  if(children.length!==1)return failed('UNVERIFIED_OUTBOUND_LEGS');
+  const child=children[0];
+  if(typeof child.id!=='string'||!child.id||child.id===inbound.id||
+     !OUTBOUND_DIRECTIONS.has(child.direction)||child.to!==row.destination)
+    return failed('OUTBOUND_LOG_MISMATCH');
+  if(!OUTBOUND_TERMINAL.has(child.status))return failed('OUTBOUND_CARRIER_NOT_TERMINAL');
+  if(!safeMoney(child.charge))return failed('OUTBOUND_CHARGE_UNKNOWN');
+  const total=Math.ceil(Math.round((inbound.charge+child.charge)*1e6)/1e4);
+  if(total>row.max_cost_cents)return failed('ACTUAL_CHARGE_EXCEEDS_RESERVED_CAP');
+  return {ok:true,inbound_segment_id:inbound.id,outbound_segment_id:child.id,
+    outbound_status:child.status,actual_cost_cents:total,
+    source:'verified_project_voice_logs',terminal:true};
+}

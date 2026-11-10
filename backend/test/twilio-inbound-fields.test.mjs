@@ -48,12 +48,14 @@ test('signed duplicate or absent inbound routing identity never reads or consume
     }
   }
 });
-test('single signed routing identity still permits the explicitly enabled private test path',async()=>{
+test('single signed routing identity still hangs up with SignalWire-only pilot flags',async()=>{
   const env=fixture();
   const form=new URLSearchParams({To:did,From:caller,CallSid:sid});
   const response=await worker.fetch(signedRequest(form.toString()),env);
   assert.equal(response.status,200);
-  assert.match(await response.text(),/<Dial/);
-  assert.equal(env.reads,1);
-  assert.equal(env.writes,1);
+  const xml=await response.text();
+  assert.match(xml,/<Hangup\/>/);
+  assert.doesNotMatch(xml,/<Dial/);
+  assert.equal(env.reads,0);
+  assert.equal(env.writes,0);
 });

@@ -53,6 +53,10 @@ not owner-only. Never paste tokens into chat, commits or command-line arguments.
 
 Supersedes draft PR #17 (`scripts/local-number-mcp.mjs`, a dependency-free adapter). Its bounded-input and strict-argument test cases were adapted into `local-mcp/test/local-mcp.test.mjs`. This version uses the official MCP SDK for protocol negotiation, serves the MCP Apps number card, accepts omitted `arguments` for zero-argument tools, caps stdin buffering at 256 KiB, and has a CI job.
 
+## Updating the live Grok Bot computer after merge
+
+The setup script now defaults to **fresh origin/main** and fails closed if the checkout is dirty or diverged. It does not silently restore the old `local-mcp` branch. After a reviewed PR is merged, the operator must explicitly resync the cloud-computer checkout and restart the local connector. Never give it billing, routing or owner approval secrets. It remains four **read-only** tools; the Worker-based pilot is a separate backend that must not be imported here.
+
 ## Rebuild / test
 
 ```bash

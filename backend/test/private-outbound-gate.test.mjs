@@ -43,12 +43,12 @@ test('a signed, matching inbound request cannot dial without explicit private-te
     assert.equal(e.updates,0,'reservation must not be consumed by denied call');
   }
 });
-test('explicit private-test flag preserves the existing constrained test route only',async()=>{
+test('SignalWire routing flag must never activate legacy Twilio (no second provider)',async()=>{
   const e=env('true');
   const res=await worker.fetch(request(),e);
   assert.equal(res.status,200);
   const xml=await res.text();
-  assert.match(xml,/<Dial/);
-  assert.match(xml,/<Number>\+31201234567<\/Number>/);
-  assert.equal(e.updates,1);
+  assert.match(xml,/<Hangup\/>/);
+  assert.doesNotMatch(xml,/<Dial/);
+  assert.equal(e.updates,0);
 });

@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.mjs';
-import {routingSetup,api,owner,T0,DEST,INTL,DID,TOKEN} from './helpers/routing-env.mjs';
+import {routingSetup,api,owner,approveReservation,T0,DEST,INTL,DID,TOKEN} from './helpers/routing-env.mjs';
 
 test('SignalWire-only config serves the reservation API without any Twilio settings',async t=>{
   const {env}=await routingSetup(t);
@@ -11,8 +11,10 @@ test('SignalWire-only config serves the reservation API without any Twilio setti
   assert.equal(r.status,201);
   const b=await r.json();
   assert.equal(b.status,'ready');assert.equal(b.owner_approval_required,true);
-  assert.equal(b.caller_proof,'none');assert.equal(b.dtmf_pin,undefined);
-  assert.deepEqual(b.estimate,{rate_cents_per_min:2,rate_source:'owner-recorded test rate',max_call_seconds:180,max_cost_cents:6,price_verified:false});
+  assert.equal(b.caller_proof,'dtmf_pin');assert.match(b.dtmf_pin,/^\d{8}$/);
+  assert.deepEqual(b.estimate,{rate_cents_per_min:2,rate_source:'owner-recorded test rate',
+    inbound_rate_cents_per_min:1,inbound_rate_source:'operator-reviewed inbound rate',
+    inbound_estimated_max_minutes:4,max_call_seconds:60,max_cost_cents:6,price_verified:false});
   assert.equal(b.expires_at,new Date((T0+240)*1000).toISOString());
   const list=await (await worker.fetch(api('/mcp','POST',{jsonrpc:'2.0',id:1,method:'tools/list'}),env)).json();
   assert.ok(list.result.tools.some(x=>x.name==='prepare_international_call'));
@@ -46,20 +48,20 @@ test('two-step approval: only the separate owner token can approve, once, before
   assert.equal((await worker.fetch(owner(b.id,'approve',TOKEN),env)).status,401,'account/MCP token cannot approve');
   assert.equal((await worker.fetch(owner(b.id,'approve','x'.repeat(40)),env)).status,401);
   assert.equal((await worker.fetch(new Request('https://api.example.com/v1/owner/reservations/'+b.id+'/approve'),env)).status,405);
-  assert.equal((await worker.fetch(owner(b.id),{...env,OWNER_APPROVAL_TOKEN_SHA256:undefined})).status,503);
-  const ok=await worker.fetch(owner(b.id),env);
+  assert.equal((await approveReservation({...env,OWNER_APPROVAL_TOKEN_SHA256:undefined},b.id)).status,503);
+  const ok=await approveReservation(env,b.id);
   assert.equal(ok.status,200);
-  assert.equal((await worker.fetch(owner(b.id),env)).status,409,'approve twice');
+  assert.equal((await approveReservation(env,b.id)).status,409,'approve twice');
   assert.equal(DB.raw.prepare('SELECT approved_at FROM reservations WHERE id=?').get(b.id).approved_at,T0);
   const c=await (await worker.fetch(api('/v1/reservations/'+b.id+'/cancel','POST'),env)).json();
   assert.equal(c.status,'cancelled');
   const late=await (await worker.fetch(api('/v1/reservations','POST',{destination:DEST,idempotency_key:'approve-0002'}),env)).json();
   at(T0+240);
-  assert.equal((await worker.fetch(owner(late.id),env)).status,409,'approve after expiry');
+  assert.equal((await approveReservation(env,late.id)).status,409,'approve after expiry');
   assert.equal((await worker.fetch(owner(late.id,'mark-ended'),env)).status,409,'mark-ended needs an active SignalWire call');
 });
 
-test('legacy Twilio route also requires owner approval once owner approval is configured',async t=>{
+test('legacy Twilio route remains hangup-only even after owner approval',async t=>{
   const {createHmac}=await import('node:crypto');
   const {env:base}=await routingSetup(t);
   const env={...base,PUBLIC_BASE_URL:'https://api.example.com',TEST_DESTINATION_E164:DEST,
@@ -71,6 +73,6 @@ test('legacy Twilio route also requires owner approval once owner approval is co
     return new Request(url,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded',
       'x-twilio-signature':createHmac('sha1','private-test-auth-token').update(signed).digest('base64')},body:form.toString()});};
   assert.doesNotMatch(await (await worker.fetch(incoming(),env)).text(),/<Dial/);
-  await worker.fetch(owner(b.id),env);
-  assert.match(await (await worker.fetch(incoming(),env)).text(),/<Dial/);
+  await approveReservation(env,b.id);
+  assert.doesNotMatch(await (await worker.fetch(incoming(),env)).text(),/<Dial/);
 });

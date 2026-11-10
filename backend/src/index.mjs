@@ -6,6 +6,8 @@ import {NUMBER_CARD_URI,numberCardResource,readNumberCardResource} from './chat-
 import {blockedReason,destinationDecision,reservationTtlSeconds,maxCostCents,routingCaps,signalWireReservationsConfigured} from './routing-policy.mjs';
 import {callerProofMode,generatePin,pinHash} from './caller-proof.mjs';
 import {SIGNALWIRE_PIN_PATH,signalWireRoutingFlagsOn,handleSignalWireRouting,handleSignalWirePin} from './signalwire-routing.mjs';
+import {pilotPolicy,policyFingerprint} from './approval-policy.mjs';
+import {fetchCarrierReconciliation} from './carrier-reconciliation.mjs';
 /**
  * AgentBridge reference backend — intentionally fail-closed.
  * This is NOT a publicly deployable calling reseller: it only routes to one
@@ -81,13 +83,16 @@ export async function prepareReservation(account,requestData,env){
   const now=Math.floor(Date.now()/1000);
   await env.DB.prepare("UPDATE reservations SET status='expired' WHERE account_id=? AND status='ready' AND expires_at <= ?").bind(account.id,now).run();
   const existing=await env.DB.prepare('SELECT id,destination,status,expires_at FROM reservations WHERE account_id=? AND idempotency_key=?').bind(account.id,key).first();
-  if(existing){if(existing.destination!==destination)return {status:409,body:{error:{code:'IDEMPOTENCY_CONFLICT',message:'Idempotency key used for a different destination'}}};const terminal={id:existing.id,status:existing.status==='ready'&&existing.expires_at<=now?'expired':existing.status,expires_at:new Date(existing.expires_at*1000).toISOString(),us_access_number:null,retry:'new_idempotency_key_required'};if(terminal.status==='expired')return {status:409,body:{error:{code:'RESERVATION_EXPIRED',message:'Reservation expired. Use a new idempotency key.'},reservation:terminal}};if(existing.status!=='ready')return {status:409,body:{error:{code:'RESERVATION_NOT_READY',message:'This reservation was consumed or closed. Use a new idempotency key.'},reservation:terminal}};return {status:200,body:reservationView(existing,account.did,now)};}
+  if(existing){if(existing.destination!==destination)return {status:409,body:{error:{code:'IDEMPOTENCY_CONFLICT',message:'Idempotency key used for a different destination'}}};const terminal={id:existing.id,status:existing.status==='ready'&&existing.expires_at<=now?'expired':existing.status,expires_at:new Date(existing.expires_at*1000).toISOString(),us_access_number:null,retry:'new_idempotency_key_required'};if(terminal.status==='expired')return {status:409,body:{error:{code:'RESERVATION_EXPIRED',message:'Reservation expired. Use a new idempotency key.'},reservation:terminal}};if(existing.status!=='ready')return {status:409,body:{error:{code:'RESERVATION_NOT_READY',message:'This reservation was consumed or closed. Use a new idempotency key.'},reservation:terminal}};return {status:200,body:reservationView(existing,account.did,now,routingCaps(env,callerProofMode(env))?.maxSeconds??MAX_CALL_SECONDS)};}
   const active=await env.DB.prepare("SELECT id FROM reservations WHERE account_id=? AND status IN ('ready','connecting') LIMIT 1").bind(account.id).first();
   if(active)return {status:409,body:{error:{code:'BRIDGE_BUSY',message:'An active or unresolved call is already reserved'}}};
   const count=await env.DB.prepare('SELECT COUNT(*) AS n FROM reservations WHERE account_id=? AND created_at >= ?').bind(account.id,now-3600).first();
   if(Number(count?.n||0)>=10)return {status:429,body:{error:{code:'RATE_LIMIT',message:'Prototype hourly request limit reached'}}};
   const id=crypto.randomUUID();
   const ttl=reservationTtlSeconds(env);
+  // Validate the complete pilot policy before inserting any ready reservation.
+  const proposal=swRouting&&policy?.ok?pilotPolicy({id,account_id:account.id,destination,status:'ready',expires_at:now+ttl},env):null;
+  if(proposal&&!proposal.ok)return {status:409,body:{error:{code:'US_PILOT_NOT_READY',message:'US trial configuration is incomplete: '+proposal.code}}};
   const mode=swRouting&&policy?.ok?callerProofMode(env):'none';
   const pin=mode==='dtmf_pin'?generatePin():null;
   try{
@@ -97,18 +102,23 @@ export async function prepareReservation(account,requestData,env){
   catch{return {status:409,body:{error:{code:'BRIDGE_BUSY',message:'A reservation is already active. Retry after it is closed'}}};}
   const body=reservationView({id,destination,status:'ready',expires_at:now+ttl},account.did,now);
   if(swRouting&&policy?.ok){
-    const caps=routingCaps(env,mode);
     body.owner_approval_required=true;
     body.caller_proof=mode;
-    body.estimate={rate_cents_per_min:policy.entry.rate_cents_per_min,rate_source:policy.entry.rate_source,
-      max_call_seconds:caps?.maxSeconds??null,max_cost_cents:caps?maxCostCents(policy.entry,caps.maxSeconds):null,price_verified:false};
+    body.max_call_seconds=proposal.snapshot.max_call_seconds;
+    body.estimate={rate_cents_per_min:policy.entry.rate_cents_per_min,
+      rate_source:policy.entry.rate_source,
+      inbound_rate_cents_per_min:proposal.snapshot.inbound_rate_cents_per_min,
+      inbound_rate_source:proposal.snapshot.inbound_rate_source,
+      inbound_estimated_max_minutes:proposal.snapshot.inbound_estimated_max_minutes,
+      max_call_seconds:proposal.snapshot.max_call_seconds,
+      max_cost_cents:proposal.snapshot.estimated_max_cost_cents,price_verified:false};
     if(pin){body.dtmf_pin=pin;body.dtmf_instructions='After the call connects, send these 8 digits followed by #. Shown once; single use.';}
     body.warning='Not routable until the owner approves it out-of-band. Routing also requires both owner flags. Estimate uses the owner-recorded rate, not a live quote.';
   }
   return {status:201,body};
 }
-function reservationView(item,did,now=Math.floor(Date.now()/1000)){const status=item.status==='ready'&&item.expires_at<=now?'expired':item.status;return {id:item.id,destination:item.destination,us_access_number:status==='ready'?did:null,status,expires_at:new Date(item.expires_at*1000).toISOString(),max_call_seconds:MAX_CALL_SECONDS,warning:status==='ready'?'Verify destination and obtain user approval before Grok Bot places its native US call. Prototype only; no live quote or billing.':'This reservation cannot be used to place a call. Create a new reservation with a new idempotency key.'};}
-async function getReservation(account,id,env){const row=await env.DB.prepare('SELECT id,destination,status,expires_at FROM reservations WHERE id=? AND account_id=?').bind(id,account.id).first();return row?json(reservationView(row,account.did)):error('NOT_FOUND','Reservation not found',404);}
+function reservationView(item,did,now=Math.floor(Date.now()/1000),maxSeconds=MAX_CALL_SECONDS){const status=item.status==='ready'&&item.expires_at<=now?'expired':item.status;return {id:item.id,destination:item.destination,us_access_number:status==='ready'?did:null,status,expires_at:new Date(item.expires_at*1000).toISOString(),max_call_seconds:maxSeconds,warning:status==='ready'?'Verify destination and obtain user approval before Grok Bot places its native US call. Prototype only; no live quote or billing.':'This reservation cannot be used to place a call. Create a new reservation with a new idempotency key.'};}
+async function getReservation(account,id,env){const row=await env.DB.prepare('SELECT id,destination,status,expires_at FROM reservations WHERE id=? AND account_id=?').bind(id,account.id).first();return row?json(reservationView(row,account.did,undefined,routingCaps(env,callerProofMode(env))?.maxSeconds??MAX_CALL_SECONDS)):error('NOT_FOUND','Reservation not found',404);}
 async function cancelReservation(account,id,env){const change=await env.DB.prepare("UPDATE reservations SET status='cancelled' WHERE id=? AND account_id=? AND status='ready' AND expires_at> ?").bind(id,account.id,Math.floor(Date.now()/1000)).run();return change.meta?.changes?json({id,status:'cancelled'}):error('CANNOT_CANCEL','Reservation does not exist or is no longer ready',409);}
 /**
  * Private-test inbound gate. Caller ID is a weak, spoofable signal, so this
@@ -121,31 +131,23 @@ export function approvedTestCaller(from, env) {
     from === env.TEST_CALLER_E164 &&
     from !== env.US_BRIDGE_DID;
 }
+/**
+ * Twilio is a legacy reference transport and NOT part of the US SignalWire pilot.
+ * The shared SignalWire flag must never activate a second, unmetered provider.
+ * Signed requests are accepted only to return safe Hangup; this code cannot Dial.
+ */
 async function incoming(request,env){
   if(!requireEnv(env))return twiml(hangupXml());
-  const raw=await readBoundedWebhookBody(request);if(raw===null||!await verifyTwilioSignature(request,raw,env.TWILIO_AUTH_TOKEN,env.PUBLIC_BASE_URL))return new Response('Forbidden',{status:403});
+  const raw=await readBoundedWebhookBody(request);
+  if(raw===null||!await verifyTwilioSignature(request,raw,env.TWILIO_AUTH_TOKEN,env.PUBLIC_BASE_URL))
+    return new Response('Forbidden',{status:403});
   const fields=new URLSearchParams(raw);
-  // Duplicate identity/routing fields are ambiguous even when the carrier
-  // signature is valid. Never select the first value and consume a route.
-  if(['To','From','CallSid'].some(field=>fields.getAll(field).length!==1))return twiml(hangupXml());
-  const to=fields.get('To'),sid=fields.get('CallSid'),from=fields.get('From');
-  // A reservation alone must never make the DID an open forwarder. Reject
-  // unknown caller IDs BEFORE reading or consuming a reservation.
-  if(to!==env.US_BRIDGE_DID||!approvedTestCaller(from,env)||!/^CA[a-f0-9]{32}$/i.test(sid||''))return twiml(hangupXml());
-  const now=Math.floor(Date.now()/1000);
-  const approval=OWNER_HASH.test(env.OWNER_APPROVAL_TOKEN_SHA256||'')?" AND r.approved_at IS NOT NULL":'';
-  const row=await env.DB.prepare("SELECT r.id,r.destination FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE a.did=? AND a.status='active' AND r.status='ready' AND r.expires_at>?"+approval+" ORDER BY r.created_at DESC LIMIT 1").bind(to,now).first();
-  if(!row||row.destination!==env.TEST_DESTINATION_E164)return twiml(hangupXml());
-  // Explicit private-test kill switch: a deployed prototype must NEVER
-  // originate an international leg simply because a valid reservation exists.
-  // This flag is not sufficient for public use: caller ID is spoofable.
-  if(env.PRIVATE_TEST_OUTBOUND_ENABLED!=='true')return twiml(hangupXml());
-  // Atomically consume route: no second inbound call may reuse it.
-  const done=await env.DB.prepare("UPDATE reservations SET status='connecting',call_sid=? WHERE id=? AND status='ready' AND expires_at>?").bind(sid,row.id,now).run();
-  if(!done.meta?.changes)return twiml(hangupXml());
-  const base=new URL(env.PUBLIC_BASE_URL);
-  const callback=base.origin+'/telephony/twilio/dial-complete';
-  return twiml(dialXml(row.destination,callback));
+  if(['To','From','CallSid'].some(field=>fields.getAll(field).length!==1))
+    return twiml(hangupXml());
+  // Retain strict identity checks for audit/compatibility, never claim a route.
+  if(fields.get('To')!==env.US_BRIDGE_DID||!approvedTestCaller(fields.get('From'),env)||
+     !/^CA[a-f0-9]{32}$/i.test(fields.get('CallSid')||''))return twiml(hangupXml());
+  return twiml(hangupXml());
 }
 async function dialComplete(request,env){
   if(!requireEnv(env))return new Response('Not configured',{status:503});
@@ -168,22 +170,128 @@ const OWNER_HASH=/^[a-f0-9]{64}$/;
  * owner token whose SHA-256 is OWNER_APPROVAL_TOKEN_SHA256. The account/MCP
  * bearer token used by the chat agent can never approve its own reservation.
  */
+/** Run statements atomically via D1 batch (one transaction); sequential fallback for stand-ins. */
+async function runAtomic(env,statements){
+  if(typeof env.DB.batch==='function')return env.DB.batch(statements);
+  const out=[];for(const s of statements)out.push(await s.run());return out;
+}
+async function connectingRow(env,id){
+  return env.DB.prepare("SELECT r.id,r.account_id,r.destination,r.status,r.provider,r.created_at,r.max_cost_cents,r.provider_call_id,l.provider_segment_id FROM reservations r LEFT JOIN reservation_carrier_legs l ON l.reservation_id=r.id WHERE r.id=? AND r.status='connecting'")
+    .bind(id).first();
+}
+async function completeReconciled(env,row,checked,now){
+  // Verified first; record carrier charge and release the lock in one batch.
+  const results=await runAtomic(env,[
+    env.DB.prepare('UPDATE reservation_carrier_legs SET reconciled_at=?,actual_cost_cents=? WHERE reservation_id=?')
+      .bind(now,checked.actual_cost_cents,row.id),
+    env.DB.prepare("UPDATE reservations SET status='completed',completed_at=? WHERE id=? AND provider='signalwire' AND status='connecting'")
+      .bind(now,row.id)
+  ]);
+  if(results?.[1]?.meta?.changes!==1)return error('CANNOT_MARK_ENDED','Reservation state changed during reconciliation',409);
+  return json({id:row.id,status:'completed',carrier_confirmed:true,
+    actual_cost_cents:checked.actual_cost_cents,
+    warning:'Charges are from the retrieved carrier records; independently confirm the statement before further calls.'});
+}
 async function ownerRoute(request,url,env){
-  if(!env.DB||!OWNER_HASH.test(env.OWNER_APPROVAL_TOKEN_SHA256||''))return error('NOT_CONFIGURED','Owner approval is not configured',503);
-  if(request.method!=='POST')return error('METHOD_NOT_ALLOWED','POST required',405);
+  // Owner token never goes to the chat/MCP connector. GET review is separate
+  // from POST approval; both demand the exact independently held owner token.
+  if(!env.DB||!OWNER_HASH.test(env.OWNER_APPROVAL_TOKEN_SHA256||''))
+    return error('NOT_CONFIGURED','Owner approval is not configured',503);
+  const m=url.pathname.match(/^\/v1\/owner\/reservations\/([a-f0-9-]{36})\/(review|approve|mark-ended|force-unlock)$/i);
+  if(!m)return error('NOT_FOUND','Route not found',404);
+  const action=m[2];
+  if(request.method!==(action==='review'?'GET':'POST'))
+    return error('METHOD_NOT_ALLOWED',action==='review'?'GET required':'POST required',405);
   const auth=request.headers.get('authorization')||'';
   const token=auth.startsWith('Bearer ')?auth.slice(7).trim():'';
-  if(token.length<32||token.length>256||!safeEqual(await sha256(token),env.OWNER_APPROVAL_TOKEN_SHA256))return error('UNAUTHORIZED','Owner approval token required',401);
-  const m=url.pathname.match(/^\/v1\/owner\/reservations\/([a-f0-9-]{36})\/(approve|mark-ended)$/i);
-  if(!m)return error('NOT_FOUND','Route not found',404);
+  if(token.length<32||token.length>256||
+     !safeEqual(await sha256(token),env.OWNER_APPROVAL_TOKEN_SHA256))
+    return error('UNAUTHORIZED','Owner approval token required',401);
   const now=Math.floor(Date.now()/1000);
-  if(m[2]==='approve'){
-    const r=await env.DB.prepare("UPDATE reservations SET approved_at=? WHERE id=? AND status='ready' AND expires_at>? AND approved_at IS NULL").bind(now,m[1],now).run();
-    return r.meta?.changes?json({id:m[1],status:'ready',owner_approved:true}):error('CANNOT_APPROVE','Reservation is not ready, already approved, or expired',409);
+  if(action==='mark-ended'){
+    // Carrier Voice Logs identify SWML segment IDs (not the stable call_id).
+    // Never unlock a connecting reservation based only on an operator click.
+    const row=await connectingRow(env,m[1]);
+    if(!row||!row.provider_segment_id||row.provider!=='signalwire')
+      return error('CANNOT_MARK_ENDED','No active SignalWire reservation with a carrier segment',409);
+    const checked=await fetchCarrierReconciliation(row,env);
+    if(!checked.ok)return error('CARRIER_RECONCILIATION_REQUIRED',
+      'Carrier has not yet confirmed both call legs and charges: '+checked.code+
+      '. If the call has definitely ended in the SignalWire dashboard, use owner force-unlock.',409);
+    return completeReconciled(env,row,checked,now);
   }
-  // Owner confirms in the SignalWire call log that the call ended (no signed status callback yet).
-  const r=await env.DB.prepare("UPDATE reservations SET status='completed',completed_at=? WHERE id=? AND status='connecting' AND provider='signalwire'").bind(now,m[1]).run();
-  return r.meta?.changes?json({id:m[1],status:'completed'}):error('CANNOT_MARK_ENDED','Reservation is not an active SignalWire call',409);
+  if(action==='force-unlock'){
+    // Owner-only escape hatch for a reservation stuck in 'connecting' (for
+    // example, unexpected Voice Logs fields). Carrier reconciliation is tried
+    // first; only if it fails does an explicit {force:true, reason} unlock,
+    // which is recorded in owner_actions and still counts toward daily caps.
+    const input=await parseJson(request);
+    if(!input||Object.keys(input).some(k=>!['force','reason'].includes(k))||
+       (input.force!==undefined&&typeof input.force!=='boolean')||
+       (input.reason!==undefined&&typeof input.reason!=='string'))
+      return error('INVALID_FORCE_UNLOCK','Body must be JSON {"force":true,"reason":"..."}',422);
+    const row=await connectingRow(env,m[1]);
+    if(!row)return error('CANNOT_UNLOCK','Reservation is not stuck in connecting',409);
+    let carrierCode='NO_CARRIER_SEGMENT';
+    if(row.provider==='signalwire'&&row.provider_segment_id){
+      const checked=await fetchCarrierReconciliation(row,env);
+      if(checked.ok)return completeReconciled(env,row,checked,now);
+      carrierCode=checked.code;
+    }
+    const reason=typeof input.reason==='string'?input.reason.trim():'';
+    if(input.force!==true||reason.length<8||reason.length>500||/[\u0000-\u001f\u007f]/.test(reason))
+      return error('FORCE_REQUIRED','Carrier reconciliation failed ('+carrierCode+
+        '). Confirm in the SignalWire dashboard that the call ended, then retry with force=true and a reason (8-500 characters).',409);
+    try{
+      const results=await runAtomic(env,[
+        env.DB.prepare("INSERT INTO owner_actions (id,reservation_id,action,prior_status,carrier_code,reason,created_at) VALUES (?,?,'force_unlock','connecting',?,?,?)")
+          .bind(crypto.randomUUID(),row.id,carrierCode,reason,now),
+        env.DB.prepare("UPDATE reservations SET status='failed',completed_at=? WHERE id=? AND status='connecting'")
+          .bind(now,row.id)
+      ]);
+      if(results?.[1]?.meta?.changes!==1)
+        return error('CANNOT_UNLOCK','Reservation state changed during unlock',409);
+    }catch{
+      return error('AUDIT_STORAGE_UNAVAILABLE','Force unlock not applied: apply migration 0003 (owner_actions) first.',503);
+    }
+    return json({id:row.id,status:'failed',force_unlocked:true,carrier_code:carrierCode,
+      warning:'Unlocked without carrier proof. Check the SignalWire dashboard for any still-active call and its charges. This call still counts toward the daily cap.'});
+  }
+  const row=await env.DB.prepare('SELECT id,account_id,destination,status,expires_at,approved_at FROM reservations WHERE id=?')
+    .bind(m[1]).first();
+  if(!row||row.status!=='ready'||row.expires_at<=now||row.approved_at!==null)
+    return error('CANNOT_APPROVE','Reservation is expired, consumed, absent or already approved',409);
+  const decision=pilotPolicy(row,env);
+  if(!decision.ok)return error('PILOT_POLICY_BLOCKED',
+    'US-only destination, caller verification or cost/duration caps are missing: '+decision.code,409);
+  const proposal_digest=await policyFingerprint(decision.snapshot);
+  if(action==='review')return json({proposal:decision.snapshot,proposal_digest,
+    explicit_owner_approval_required:true,
+    warning:'Configured rate is NOT a live carrier quote. Verify destination, pricing, actual provider limits and both-leg costs out-of-band.'});
+  const input=await parseJson(request);
+  if(!input||typeof input.proposal_digest!=='string'||
+     !/^[a-f0-9]{64}$/.test(input.proposal_digest)||
+     Object.keys(input).some(k=>k!=='proposal_digest'))
+    return error('INVALID_APPROVAL','Approve requires the digest from an owner-only GET review',422);
+  if(!safeEqual(input.proposal_digest,proposal_digest))
+    return error('PROPOSAL_CHANGED','The destination, rate, caps or expiry changed. Review again.',409);
+  try{
+    // A binding left over from an earlier, interrupted approval of this still
+    // UNAPPROVED reservation is overwritten; an approved one never is. Both
+    // statements run in one D1 batch (a single transaction) when available.
+    const results=await runAtomic(env,[
+      env.DB.prepare("INSERT INTO reservation_approval_bindings (reservation_id,policy_sha256,approved_at) SELECT id,?,? FROM reservations WHERE id=? AND status='ready' AND approved_at IS NULL AND expires_at>? ON CONFLICT(reservation_id) DO UPDATE SET policy_sha256=excluded.policy_sha256,approved_at=excluded.approved_at WHERE (SELECT approved_at FROM reservations WHERE id=excluded.reservation_id) IS NULL")
+        .bind(proposal_digest,now,row.id,now),
+      // Atomic row predicate protects against cancellation/expiry racing approval.
+      env.DB.prepare("UPDATE reservations SET approved_at=? WHERE id=? AND status='ready' AND approved_at IS NULL AND expires_at>? AND EXISTS (SELECT 1 FROM reservation_approval_bindings b WHERE b.reservation_id=reservations.id AND b.policy_sha256=?)")
+        .bind(now,row.id,now,proposal_digest)
+    ]);
+    if(results?.[1]?.meta?.changes!==1)return error('CANNOT_APPROVE','Reservation changed while approving. It remains unroutable.',409);
+  }catch{
+    return error('APPROVAL_STORAGE_UNAVAILABLE',
+      'Approval could not be stored safely. Apply migration 0002 or inspect a conflicting review.',503);
+  }
+  return json({id:row.id,status:'ready',owner_approved:true,proposal_digest});
 }
 async function routeRest(request,url,env,account){
   if(url.pathname==='/v1/reservations'&&request.method==='POST'){const input=await parseJson(request);if(!input)return error('INVALID_JSON','Expected a small JSON request');const r=await prepareReservation(account,input,env);return json(r.body,r.status);}
@@ -219,7 +327,7 @@ async function handleMcp(request,account,env){
     else if(name==='search_available_numbers')result=await searchAvailableNumbers(account,args,env);
     else if(!reservationApiReady(env))result={status:503,body:{error:{code:'NOT_CONFIGURED',message:'Calling is not configured; read-only tools remain available.'}}};
     else if(name==='prepare_international_call')result=await prepareReservation(account,args,env);
-    else if(name==='get_call_status'){if(!/^[a-f0-9-]{36}$/i.test(args.reservation_id||''))result={status:422,body:{error:'Invalid reservation ID'}};else {const row=await env.DB.prepare('SELECT id,destination,status,expires_at FROM reservations WHERE id=? AND account_id=?').bind(args.reservation_id,account.id).first();result={status:row?200:404,body:row?reservationView(row,account.did):{error:'Not found'}};}}
+    else if(name==='get_call_status'){if(!/^[a-f0-9-]{36}$/i.test(args.reservation_id||''))result={status:422,body:{error:'Invalid reservation ID'}};else {const row=await env.DB.prepare('SELECT id,destination,status,expires_at FROM reservations WHERE id=? AND account_id=?').bind(args.reservation_id,account.id).first();result={status:row?200:404,body:row?reservationView(row,account.did,undefined,routingCaps(env,callerProofMode(env))?.maxSeconds??MAX_CALL_SECONDS):{error:'Not found'}};}}
     else if(name==='cancel_international_call'){if(!/^[a-f0-9-]{36}$/i.test(args.reservation_id||''))result={status:422,body:{error:'Invalid reservation ID'}};else {const r=await env.DB.prepare("UPDATE reservations SET status='cancelled' WHERE id=? AND account_id=? AND status='ready' AND expires_at> ?").bind(args.reservation_id,account.id,Math.floor(Date.now()/1000)).run();result={status:r.meta?.changes?200:409,body:r.meta?.changes?{status:'cancelled'}:{error:'Not ready or not found'}};}}
     else return fault(-32601,'Unknown tool');
     const output={content:[{type:'text',text:JSON.stringify(result.body)}],isError:result.status>=400};

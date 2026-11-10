@@ -1,6 +1,6 @@
-# Routing plan: from read-only to one approved call (US first, then international)
+# Routing plan: from read-only to one approved call (historical design notes)
 
-Written 2026-11-09 against branch `local-mcp` (based on `main` 84fc990). Read with
+**HISTORICAL DESIGN DOCUMENT:** Sections below describe the former branch and unimplemented aspirations and are not authoritative runtime instructions. The latest US-only gated implementation and remaining blockers are in [US_PRIVATE_PILOT.md](US_PRIVATE_PILOT.md). No live calls, purchases, deployment or routing-flag changes were approved by this plan.\n\nWritten 2026-11-09 against branch `local-mcp` (based on `main` 84fc990). Read with
 [NORTH_STAR.md](NORTH_STAR.md), [SIGNALWIRE.md](SIGNALWIRE.md),
 [CHAT_FIRST_MCP.md](CHAT_FIRST_MCP.md), [ROADMAP.md](ROADMAP.md) and issues
 [#3](https://github.com/premiumcentraal-boop/AgentBridge/issues/3) and
@@ -8,7 +8,7 @@ Written 2026-11-09 against branch `local-mcp` (based on `main` 84fc990). Read wi
 
 **Where things stand today**
 - The SignalWire Project credentials work. The owner's US DID is in the Project and is set as `US_BRIDGE_DID`. Read-only tools work through the local stdio MCP server (`local-mcp/`).
-- **Routing is off.** The Worker's SignalWire endpoint (`handleSignalWireSwml` in `backend/src/signalwire.mjs`) has three limits:
+- **Routing was off at the time of this original design.** When both explicit flags are OFF, `handleSignalWireSwml` still hangs up. Once both flags are ON, the modern router in `backend/src/signalwire-routing.mjs` may connect only after all gates in the current US-only plan; never infer safety from this historical section. Former behavior:
   - it only ever returns **hangup** SWML;
   - it never reads D1 reservations;
   - it cannot connect a call.

@@ -19,7 +19,8 @@
 import {readBoundedWebhookBody} from './bounded-body.mjs';
 import {SIGNALWIRE_SWML_PATH,signalWireHangup,signalWireConnectPlan,verifySignalWireSwmlSignature} from './signalwire.mjs';
 import {callerProofMode,verifyPin,MAX_PIN_ATTEMPTS,PIN_DIGITS} from './caller-proof.mjs';
-import {destinationDecision,routingCaps,maxCostCents,utcDayStart,signalWireReservationsConfigured} from './routing-policy.mjs';
+import {routingCaps,utcDayStart,signalWireReservationsConfigured} from './routing-policy.mjs';
+import {pilotPolicy,verifyApprovalBinding} from './approval-policy.mjs';
 
 export const SIGNALWIRE_PIN_PATH='/telephony/signalwire/swml/pin';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -51,7 +52,7 @@ async function readSigned(request,env,configuredUrl,path){
 }
 function callMatches(call,env){
   return call&&call.project_id===env.SIGNALWIRE_PROJECT_ID&&call.direction==='inbound'&&call.type==='phone'&&
-    UUID.test(call.call_id||'')&&call.to_number===env.US_BRIDGE_DID&&
+    UUID.test(call.call_id||'')&&UUID.test(call.segment_id||'')&&call.to_number===env.US_BRIDGE_DID&&
     E164.test(call.from_number||'')&&call.from_number!==call.to_number;
 }
 /** Durable replay guard: one row per (call_id, event_type). Returns false on replay. */
@@ -67,17 +68,19 @@ async function setOutcome(env,callId,eventType,outcome,reservationId=null){
     .bind(outcome,reservationId,callId,eventType).run();
 }
 async function findRoutable(env,now){
-  return env.DB.prepare("SELECT r.id,r.account_id,r.destination,r.pin_sha256,r.pin_attempts FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE a.did=? AND a.status='active' AND r.status='ready' AND r.approved_at IS NOT NULL AND r.expires_at>? ORDER BY r.created_at DESC LIMIT 1")
+  return env.DB.prepare("SELECT r.id,r.account_id,r.destination,r.expires_at,r.status,r.pin_sha256,r.pin_attempts FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE a.did=? AND a.status='active' AND r.status='ready' AND r.approved_at IS NOT NULL AND r.expires_at>? ORDER BY r.created_at DESC LIMIT 1")
     .bind(env.US_BRIDGE_DID,now).first();
 }
 /** Policy + caps; returns {ok, caps, cost, code}. */
 async function policyCheck(env,row,mode,now){
-  const decision=destinationDecision(row.destination,env);
-  if(!decision.ok)return {ok:false,code:decision.code};
+  const proposal=pilotPolicy(row,env);
+  if(!proposal.ok)return {ok:false,code:proposal.code};
+  if(proposal.snapshot.caller_proof!==mode)return {ok:false,code:'CALLER_MODE_CHANGED'};
+  // A separate owner token must approve the EXACT current destination,
+  // duration, country, rate source and budget; a changed quote is not approved.
+  if(!await verifyApprovalBinding(env,row))return {ok:false,code:'APPROVAL_BINDING_MISSING_OR_STALE'};
   const caps=routingCaps(env,mode);
-  if(!caps)return {ok:false,code:'CAPS_NOT_CONFIGURED'};
-  const cost=maxCostCents(decision.entry,caps.maxSeconds);
-  if(cost>caps.maxCentsPerCall)return {ok:false,code:'PER_CALL_SPEND_CAP'};
+  const cost=proposal.snapshot.estimated_max_cost_cents;
   const usage=await env.DB.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(max_cost_cents),0) AS c FROM reservations WHERE account_id=? AND claimed_at>=?')
     .bind(row.account_id,utcDayStart(now)).first();
   if(Number(usage?.n||0)+1>caps.maxCallsPerDay)return {ok:false,code:'DAILY_CALL_CAP'};
@@ -85,10 +88,18 @@ async function policyCheck(env,row,mode,now){
   return {ok:true,caps,cost};
 }
 /** Atomic single claim; the one-active-reservation index also blocks concurrent routes. */
-async function claim(env,row,callId,check,now){
+async function claim(env,row,callId,segmentId,check,now){
+  if(!UUID.test(segmentId))return false;
   const r=await env.DB.prepare("UPDATE reservations SET status='connecting',provider='signalwire',provider_call_id=?,claimed_at=?,max_call_seconds=?,max_cost_cents=? WHERE id=? AND status='ready' AND approved_at IS NOT NULL AND expires_at>?")
     .bind(callId,now,check.caps.maxSeconds,check.cost,row.id,now).run();
-  return r.meta?.changes===1;
+  if(r.meta?.changes!==1)return false;
+  // Persist the Voice Logs segment identity BEFORE emitting connect. If this
+  // insert fails, no paid SWML is returned and the reservation stays locked.
+  try{
+    await env.DB.prepare('INSERT INTO reservation_carrier_legs (reservation_id,provider_segment_id,claimed_at) VALUES (?,?,?)')
+      .bind(row.id,segmentId,now).run();
+    return true;
+  }catch{return false;}
 }
 function connectFor(env,row,check){
   return swml(signalWireConnectPlan(row.destination,env.US_BRIDGE_DID,{maxDuration:check.caps.maxSeconds,timeout:30}));
@@ -111,7 +122,7 @@ export async function handleSignalWireRouting(request,env={}){
   if(!check.ok){await setOutcome(env,call.call_id,'swml_inbound',check.code,row.id);return hangup();}
   if(mode==='capped_caller_id'){
     if(call.from_number!==env.TEST_CALLER_E164){await setOutcome(env,call.call_id,'swml_inbound','CALLER_MISMATCH',row.id);return hangup();}
-    if(!await claim(env,row,call.call_id,check,now)){await setOutcome(env,call.call_id,'swml_inbound','CLAIM_LOST',row.id);return hangup();}
+    if(!await claim(env,row,call.call_id,call.segment_id,check,now)){await setOutcome(env,call.call_id,'swml_inbound','CLAIM_LOST',row.id);return hangup();}
     await setOutcome(env,call.call_id,'swml_inbound','connect',row.id);
     return connectFor(env,row,check);
   }
@@ -135,14 +146,18 @@ export async function handleSignalWirePin(request,env={}){
   const call=read.body?.call;
   if(!callMatches(call,env))return text('Forbidden',403);
   const now=Math.floor(Date.now()/1000);
-  const started=await env.DB.prepare("SELECT 1 AS ok FROM provider_events WHERE provider='signalwire' AND provider_call_id=? AND event_type='swml_inbound' AND outcome='pin_requested'")
+  // A PIN must authenticate the reservation chosen by THIS call's first webhook.
+  // Selecting the newest ready reservation here would allow a delayed call from A
+  // to consume B after A is cancelled/expired and B becomes ready.
+  const started=await env.DB.prepare("SELECT reservation_id FROM provider_events WHERE provider='signalwire' AND provider_call_id=? AND event_type='swml_inbound' AND outcome='pin_requested'")
     .bind(call.call_id).first();
-  if(!started)return hangup();
+  if(!started?.reservation_id||!UUID.test(started.reservation_id))return hangup();
   if(!await recordEvent(env,call.call_id,'swml_pin',now))return hangup();
-  const row=await findRoutable(env,now);
-  if(!row||!row.pin_sha256){await setOutcome(env,call.call_id,'swml_pin','no_approved_reservation');return hangup();}
-  const bumped=await env.DB.prepare("UPDATE reservations SET pin_attempts=pin_attempts+1 WHERE id=? AND status='ready' AND pin_attempts<?")
-    .bind(row.id,MAX_PIN_ATTEMPTS).run();
+  const row=await env.DB.prepare("SELECT r.id,r.account_id,r.destination,r.expires_at,r.status,r.pin_sha256,r.pin_attempts FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE r.id=? AND a.did=? AND a.status='active' AND r.status='ready' AND r.approved_at IS NOT NULL AND r.expires_at>?")
+    .bind(started.reservation_id,env.US_BRIDGE_DID,now).first();
+  if(!row||!row.pin_sha256){await setOutcome(env,call.call_id,'swml_pin','original_reservation_unavailable',started.reservation_id);return hangup();}
+  const bumped=await env.DB.prepare("UPDATE reservations SET pin_attempts=pin_attempts+1 WHERE id=? AND status='ready' AND approved_at IS NOT NULL AND expires_at>? AND pin_attempts<?")
+    .bind(row.id,now,MAX_PIN_ATTEMPTS).run();
   if(!bumped.meta?.changes){await setOutcome(env,call.call_id,'swml_pin','PIN_LOCKED',row.id);return hangup();}
   const raw=read.body?.params?.digits??read.body?.vars?.prompt_value;
   const digits=typeof raw==='string'?raw.replace(/#$/,''):'';
@@ -154,7 +169,7 @@ export async function handleSignalWirePin(request,env={}){
   }
   const check=await policyCheck(env,row,'dtmf_pin',now);
   if(!check.ok){await setOutcome(env,call.call_id,'swml_pin',check.code,row.id);return hangup();}
-  if(!await claim(env,row,call.call_id,check,now)){await setOutcome(env,call.call_id,'swml_pin','CLAIM_LOST',row.id);return hangup();}
+  if(!await claim(env,row,call.call_id,call.segment_id,check,now)){await setOutcome(env,call.call_id,'swml_pin','CLAIM_LOST',row.id);return hangup();}
   await setOutcome(env,call.call_id,'swml_pin','connect',row.id);
   return connectFor(env,row,check);
 }

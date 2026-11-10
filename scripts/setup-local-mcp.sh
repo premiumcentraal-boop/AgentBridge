@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Idempotent rebuild of the AgentBridge local stdio MCP server on this box.
-# - restores /workspace/AgentBridge (clone, or local-mcp bundle if provided)
+# - clones or fast-forwards a CLEAN main checkout; never restores stale local-mcp branch
 # - installs a checksum-verified Node 22 into /workspace/.tools/node22
 # - npm ci for local-mcp, runs the full test suite and a stdio smoke test
 # Never prints credential values; never pushes, deploys, buys or calls.
@@ -8,8 +8,9 @@ set -euo pipefail
 REPO_URL="${AGENTBRIDGE_REPO_URL:-https://github.com/premiumcentraal-boop/AgentBridge}"
 REPO_DIR="${AGENTBRIDGE_DIR:-/workspace/AgentBridge}"
 TOOLS="${AGENTBRIDGE_TOOLS:-/workspace/.tools}"
-BUNDLE="${AGENTBRIDGE_BUNDLE:-}"   # optional git bundle containing branch local-mcp
-BRANCH=local-mcp
+# Default to merged, reviewed main. Never silently use the old local-mcp branch.
+# An explicit ref override is intended only for an isolated developer test.
+TARGET_REF="${AGENTBRIDGE_SETUP_REF:-main}"
 
 log(){ printf '[setup-local-mcp] %s\n' "$*" >&2; }
 
@@ -34,25 +35,27 @@ if [ ! -d "$REPO_DIR/.git" ]; then
   git clone "$REPO_URL" "$REPO_DIR"
 fi
 cd "$REPO_DIR"
-if ! git rev-parse --verify -q "$BRANCH" >/dev/null; then
-  if [ -n "$BUNDLE" ] && [ -f "$BUNDLE" ]; then
-    log "restoring branch $BRANCH from bundle"
-    git fetch "$BUNDLE" "$BRANCH:$BRANCH"
-  else
-    log "branch $BRANCH not found locally and no AGENTBRIDGE_BUNDLE given"; exit 1
-  fi
-fi
+# Preserve any edits and secrets. Stale branches are NOT acceptable by default.
 if [ -n "$(git status --porcelain)" ]; then
-  log "working tree has local changes; not switching branches"
-else
-  git checkout -q "$BRANCH"
+  log "working tree is dirty; refusing to switch or test stale source. Save changes first."
+  exit 1
 fi
-git fetch -q origin main || log "could not fetch origin/main (offline?)"
-if git merge-base --is-ancestor origin/main HEAD 2>/dev/null; then
-  log "local-mcp contains origin/main"
+if [ "$TARGET_REF" = main ]; then
+  git fetch origin main
+  if git rev-parse --verify -q refs/heads/main >/dev/null; then
+    git checkout -q main
+  else
+    git checkout -q -b main --track origin/main
+  fi
+  git merge --ff-only origin/main
+  [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] || {
+    log "main does not match freshly fetched origin/main"; exit 1;
+  }
 else
-  log "NOTE: origin/main has new commits not in $BRANCH; review and rebase manually"
+  log "WARNING: explicitly using non-main ref $TARGET_REF; verify this choice"
+  git checkout -q "$TARGET_REF"
 fi
+log "using reviewed revision $(git rev-parse HEAD)"
 
 # 3. Dependencies (lockfile-exact)
 (cd local-mcp && npm ci --no-audit --no-fund >&2)

@@ -119,3 +119,27 @@ Append one dated entry for each substantial incremental development session. Lin
 - Phase 2: owner allowlist + country/premium/NANP-non-US blocking, required caps, configurable TTL, owner-only two-step approval endpoint and scripts, SignalWire-only reservation API; Twilio route requires approval when owner approval is configured.
 - Phase 5: gated SignalWire connect behind both owner flags; flags-off behaviour unchanged (hangup-only, no D1). Status callbacks TODO (signing undocumented). No live calls, deploy or provider writes.
 
+
+
+## 2026-11-09 — US-only fail-closed carrier pilot hardening (draft PR #26, not deployed)
+- Reviewed earlier security findings and open parallel draft PR #25. Drafted a larger US-pilot candidate on a separate branch instead of merging overlapping, incomplete work.
+- Hard-disabled legacy Twilio inbound dialing (hangup-only), closing the shared flag cross-provider exposure. Bound each DTMF PIN callback to the original reservation captured in provider_events and added replacement-reservation regression coverage.
+- Added mandatory owner-only proposal review with a SHA-256 fingerprint of immutable US destination, expiry, caller proof, both recorded per-minute rates/sources and time/cost caps. A second out-of-band owner request must supply the exact digest. Carrier routing revalidates it before connect; missing migration or stale policy fails closed.
+- Added conservative one-US-destination gate, a 60-second maximum outgoing connect, at most one claimed call/day and a $1 maximum **estimated** spend/day. Cost estimate reserves outbound duration and four started minutes of inbound leg overhead. These values are not verified prices or hard carrier spending caps.
+- Required signed incoming segment IDs and stored the inbound segment on claim. Manual mark-ended now asks read-only SignalWire Voice Logs for terminal inbound plus one matching terminal child, reconciles their recorded charges, and refuses to release when missing/inconsistent/over budget. Carrier schema and real-world behavior are NOT verified.
+- Added tracked 0002 D1 approval/segment tables, read-only migration preflight (detects partially/manual applied 0001) and a fast-forward-only main sync in local MCP setup. Added regression tests and operator checklist docs/US_PRIVATE_PILOT.md.
+- All coding, CI and documentation work uses fake fixture numbers; **no deploy, switch change, actual calls, number purchases, real provider keys, Cloudflare secrets or external billing**. Full final CI and independent review still required; phase is not authorized for live calls.
+
+
+## 2026-11-09 — Eliminate spoofable caller-ID-only proof from US pilot (PR #26 continuation)
+- Enforced CALLER_PROOF_MODE='dtmf_pin' in the US pilot policy before any ready reservation is created. The older capped_caller_id mode remains parseable for compatibility but is non-routable in this pilot, even with CALLER_ID_TRUST_ACCEPTED=true. This prevents signed carrier webhooks and spoofable caller IDs alone from authorizing domestic forwarding.
+- Updated the routing integration suite to demonstrate caller-ID mode fails closed, while signed DTMF PIN still binds a call to its reviewed reservation and rejects replay, invalid settings and exhausted daily allowance. Updated default pilot fixtures, config template and owner checklist accordingly.
+- Grok Bot native DTMF support remains unverified, and unavailability of DTMF is now an explicit stop condition, not permission to fall back to caller ID.
+
+## 2026-11-09 — PR #26 follow-ups (owner's assistant)
+- Owner-only `force-unlock` for reservations stuck in `connecting`: retries carrier reconciliation, then requires `force:true` + reason, audited in new `owner_actions` (migration 0003), still counts toward the daily cap. CLI: `owner-reservation.mjs force-unlock`.
+- Voice Logs reconciliation aligned with SignalWire's published fields (`id`, `to`, `direction`, `status`, `charge`, `parent_id`, `links.next`); accepts documented terminal states (`completed`/`ended`, unanswered B-leg states) and `outbound-dial`; never throws; specific lock codes; float-safe cents.
+- Owner approval stored atomically (D1 batch); a stale binding for an unapproved reservation is overwritten, an approved one never is.
+- Wrangler pinned at 4.159.0 in `backend/package.json`; `docs/STAGING_DEPLOY.md` owner runbook; D1 preflight now prints a migration plan and baseline SQL (0001 never scheduled twice).
+- README/SIGNALWIRE docs now point carriers at `/telephony/signalwire/swml`; Twilio route documented as hangup-only.
+- No deploys, secrets, carrier changes, flag changes or calls.

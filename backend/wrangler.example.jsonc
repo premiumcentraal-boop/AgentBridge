@@ -1,12 +1,15 @@
 {
   // Copy to backend/wrangler.jsonc (git-ignored) and fill in. Secrets go in
   // `wrangler secret put`, never here: SIGNALWIRE_SIGNING_KEY, OWNER_APPROVAL_TOKEN_SHA256,
-  // (optional) SIGNALWIRE_API_TOKEN, TWILIO_AUTH_TOKEN.
+  // SIGNALWIRE_VOICE_API_TOKEN (read-only Voice Logs, used by mark-ended/force-unlock),
+  // (optional) SIGNALWIRE_API_TOKEN. TWILIO_AUTH_TOKEN is NOT needed for the SignalWire pilot.
+  // Step-by-step: docs/STAGING_DEPLOY.md. For a private staging URL you may set
+  // "workers_dev": true in YOUR private copy (or add a custom-domain route).
   "name": "agentbridge-api",
   "main": "src/index.mjs",
   "compatibility_date": "2026-11-08",
   "workers_dev": false,
-  "d1_databases": [{"binding":"DB","database_name":"agentbridge-prototype","database_id":"REPLACE_WITH_YOUR_D1_DATABASE_ID"}],
+  "d1_databases": [{"binding":"DB","database_name":"agentbridge-prototype","database_id":"REPLACE_WITH_YOUR_D1_DATABASE_ID","migrations_dir":"migrations"}],
   "vars": {
     "PUBLIC_BASE_URL": "https://api.example.com",
     "US_BRIDGE_DID": "+12025550123",
@@ -15,20 +18,29 @@
 
     // SignalWire (docs/SIGNALWIRE.md, docs/ROUTING_PLAN.md)
     "SIGNALWIRE_PROJECT_ID": "REPLACE_WITH_PROJECT_UUID",
+    "SIGNALWIRE_SPACE": "REPLACE_WITH_SPACE_SUBDOMAIN", // e.g. "example" for example.signalwire.com
     "SIGNALWIRE_SWML_WEBHOOK_URL": "https://api.example.com/telephony/signalwire/swml",
 
     // Owner policy (placeholders; owner must fill from SignalWire pricing with a source/date)
     "ROUTING_DESTINATIONS": "[{\"e164\":\"+12125550100\",\"country\":\"US\",\"rate_cents_per_min\":0,\"rate_source\":\"REPLACE: SignalWire rate + date\"}]",
     "ROUTING_ALLOWED_COUNTRIES": "US",
-    "ROUTING_MAX_CALL_SECONDS": "180",
-    "ROUTING_MAX_CALLS_PER_DAY": "3",
+    "ROUTING_MAX_CALL_SECONDS": "60",
+    "ROUTING_MAX_CALLS_PER_DAY": "1",
     "ROUTING_MAX_SPEND_CENTS_PER_CALL": "REPLACE",
     "ROUTING_MAX_SPEND_CENTS_PER_DAY": "REPLACE",
     "RESERVATION_TTL_SECONDS": "240",
 
-    // Caller proof: "dtmf_pin" or "capped_caller_id" (the latter also needs CALLER_ID_TRUST_ACCEPTED="true").
-    // Unset = no routing.
-    "CALLER_PROOF_MODE": "",
+    // First US-only private pilot: exactly one purchased/verified US destination.
+    "US_PILOT_TEST_DESTINATION": "+12125550100",
+    "US_PILOT_DESTINATION_VERIFIED": "", // owner must check carrier eligibility, then explicitly set true
+    // Estimated inbound A-leg cost, additionally to destination outbound B-leg.
+    // Values MUST come from a dated SignalWire price source; never assume zero.
+    "US_PILOT_INBOUND_RATE_CENTS_PER_MIN": "REPLACE",
+    "US_PILOT_INBOUND_RATE_SOURCE": "REPLACE: provider source and date",
+
+    // US PILOT: DTMF PIN is mandatory; capped_caller_id is rejected as spoofable.
+    // Unset or other mode = no US pilot reservation or forwarding.
+    "CALLER_PROOF_MODE": "", // owner may set "dtmf_pin" only after DTMF capability confirmed
     "CALLER_ID_TRUST_ACCEPTED": "",
 
     // OWNER KILL SWITCHES: routing happens only when BOTH are exactly "true". Leave empty.

@@ -29,6 +29,18 @@ export function createD1(opts){
         async run(){log.push(sql);const r=db.prepare(sql).run(...params);return {meta:{changes:Number(r.changes)}};}
       });
       return make([]);
+    },
+    // Mirrors D1 batch(): statements run sequentially inside one transaction;
+    // any error rolls back every statement in the batch.
+    async batch(statements){
+      log.push('BATCH');
+      db.exec('BEGIN');
+      try{
+        const out=[];
+        for(const s of statements)out.push(await s.run());
+        db.exec('COMMIT');
+        return out;
+      }catch(e){db.exec('ROLLBACK');throw e;}
     }
   };
   return D1;
