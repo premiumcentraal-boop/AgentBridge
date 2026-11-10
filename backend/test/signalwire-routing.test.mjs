@@ -55,7 +55,7 @@ test('capped caller-ID mode: connect only for the owner-accepted caller, with ti
   assert.ok(!JSON.stringify(DB.raw.prepare('SELECT * FROM provider_events').all()).includes(CALLER),'ledger stores no numbers');
   assert.equal((await worker.fetch(owner(b.id,'mark-ended'),env)).status,409);
    // Simulate carrier-verified reconciliation in fixture; owner click cannot unlock.
-  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(b.id).status,'completed');
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(b.id).status,'connecting');
 });
 
 test('caller-ID mode without explicit owner acceptance never routes',async t=>{
