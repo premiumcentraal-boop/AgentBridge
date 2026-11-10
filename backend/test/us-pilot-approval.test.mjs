@@ -95,3 +95,34 @@ test('mark-ended cannot unlock a connecting SignalWire call without reconciled v
   assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(created.id).status,'connecting',
     'without a Voice-scoped credential or proven termination, lock persists');
 });
+
+test('approval is atomic: a failing reservation update rolls back the stored fingerprint',async t=>{
+  const {env,DB}=await routingSetup(t);
+  const created=await (await reserve(env,'us-pilot-atomic-1')).json();
+  const review=await (await worker.fetch(owner(created.id,'review'),env)).json();
+  DB.raw.exec("CREATE TRIGGER block_approve BEFORE UPDATE OF approved_at ON reservations BEGIN SELECT RAISE(ABORT,'simulated D1 failure'); END");
+  const failed=await worker.fetch(owner(created.id,'approve',undefined,review.proposal_digest),env);
+  assert.equal(failed.status,503);
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_approval_bindings').get().n,0,'no leftover binding');
+  DB.raw.exec('DROP TRIGGER block_approve');
+  const ok=await worker.fetch(owner(created.id,'approve',undefined,review.proposal_digest),env);
+  assert.equal(ok.status,200,'owner can simply retry');
+});
+
+test('a stale leftover binding for an UNAPPROVED reservation is overwritten; an approved one never is',async t=>{
+  const {env,DB}=await routingSetup(t);
+  const created=await (await reserve(env,'us-pilot-stale-1')).json();
+  DB.raw.prepare('INSERT INTO reservation_approval_bindings (reservation_id,policy_sha256,approved_at) VALUES (?,?,?)')
+    .run(created.id,'f'.repeat(64),T0-10);
+  const review=await (await worker.fetch(owner(created.id,'review'),env)).json();
+  const ok=await worker.fetch(owner(created.id,'approve',undefined,review.proposal_digest),env);
+  assert.equal(ok.status,200);
+  assert.equal(DB.raw.prepare('SELECT policy_sha256 FROM reservation_approval_bindings WHERE reservation_id=?').get(created.id).policy_sha256,
+    review.proposal_digest);
+  // Once approved, a second approve cannot rewrite the binding.
+  assert.equal((await worker.fetch(owner(created.id,'approve',undefined,review.proposal_digest),env)).status,409);
+  const before=DB.raw.prepare('SELECT * FROM reservation_approval_bindings WHERE reservation_id=?').get(created.id);
+  DB.raw.prepare("INSERT INTO reservation_approval_bindings (reservation_id,policy_sha256,approved_at) SELECT id,?,? FROM reservations WHERE id=? ON CONFLICT(reservation_id) DO UPDATE SET policy_sha256=excluded.policy_sha256 WHERE (SELECT approved_at FROM reservations WHERE id=excluded.reservation_id) IS NULL")
+    .run('e'.repeat(64),T0,created.id);
+  assert.deepEqual({...DB.raw.prepare('SELECT * FROM reservation_approval_bindings WHERE reservation_id=?').get(created.id)},{...before});
+});
