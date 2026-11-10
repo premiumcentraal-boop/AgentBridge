@@ -25,14 +25,7 @@ export function pilotPolicy(row,env){
   if(env.US_PILOT_DESTINATION_VERIFIED!=='true')
     return {ok:false,code:'US_PILOT_DESTINATION_NOT_ATTESTED'};
   const mode=callerProofMode(env);
-  // First US pilot MUST prove possession of the one-use challenge. Signed carrier
-  // requests and caller-ID matching do NOT authenticate the calling person.
-  // The legacy opt-in capped caller-ID mode remains in the library for
-  // historical compatibility, but is explicitly non-routable in this pilot.
-  // Exception: capped_caller_id with BOTH CALLER_ID_TRUST_ACCEPTED=true and
-  // US_PILOT_ALLOW_CALLER_ID_PROOF=true (owner-accepted spoofing risk).
-  // any_caller is only reachable via callerProofMode() with ANY_CALLER_RISK_ACCEPTED=true.
-  if(mode!=='dtmf_pin'&&mode!=='any_caller'&&!callerIdPilotOptIn(env))return {ok:false,code:'DTMF_PROOF_REQUIRED'};
+  // A signed provider webhook proves the carrier, not the human caller.\n  // An approved reservation is not itself a caller credential. Reject the\n  // unauthenticated any_caller mode even if legacy risk opt-ins are set.\n  if(mode==='any_caller')return {ok:false,code:'CALLER_AUTH_REQUIRED'};\n  if(mode!=='dtmf_pin'&&!callerIdPilotOptIn(env))return {ok:false,code:'DTMF_PROOF_REQUIRED'};
   const caps=routingCaps(env,mode);
   if(!caps)return {ok:false,code:'CAPS_NOT_CONFIGURED'};
   if(caps.maxSeconds>PILOT_MAX_SECONDS||caps.maxCallsPerDay>PILOT_MAX_CALLS_PER_DAY||
