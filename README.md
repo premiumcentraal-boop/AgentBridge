@@ -32,19 +32,21 @@ The \`backend/\` directory is a deliberately bounded **test-only reference**:
 - \`POST /v1/reservations\` to create a 90-second route, idempotently
 - \`GET /v1/reservations/:id\` and \`POST /v1/reservations/:id/cancel\`
 - \`POST /mcp\` with tools: \`prepare_international_call\`, \`get_call_status\`, \`cancel_international_call\`
-- \`POST /telephony/twilio/incoming\` verifies Twilio signatures and atomically consumes a route
-- \`POST /telephony/twilio/dial-complete\` records the high-level outcome
-- 180-second hard \`<Dial>\` limit, one concurrent route per account, basic hourly preparation throttle
+- \`POST /telephony/signalwire/swml\` (+ \`/swml/pin\`): signed SignalWire SWML webhook; hangup-only unless both owner flags are on, then a 60-second, PIN-gated, owner-approved US pilot connect
+- \`/v1/owner/reservations/:id/review|approve|mark-ended|force-unlock\`: owner-token-only controls
+- \`POST /telephony/twilio/incoming\`: legacy Twilio reference route; verifies signatures and **always hangs up** (it can no longer forward calls)
+- one concurrent route per account, basic hourly preparation throttle
 - **Only the exact \`TEST_DESTINATION_E164\` can be called, and only inbound calls matching \`TEST_CALLER_E164\` are considered**, until a full fraud/billing/consent system exists
 
-### Private deployment checklist (historical; see current US pilot gates below)
-1. Obtain carrier approval for your own test use case, country routing and selected US DID. Verify pricing and the relevant platform terms.
-2. Create a Cloudflare D1 test database. Apply \`backend/schema.sql\`.
-3. Copy \`backend/wrangler.example.jsonc\` to \`backend/wrangler.jsonc\`; insert D1 ID, public HTTPS base URL, real US DID, a consenting **single** E.164 test destination, and the E.164 caller ID of your preapproved test origin in \`TEST_CALLER_E164\`.
-4. Add \`TWILIO_AUTH_TOKEN\` via \`wrangler secret put\`, never in source control. Configure the carrier to send signed form POSTs to \`/telephony/twilio/incoming\`.
-5. Generate a scoped token and seed the account manually with \`node scripts/provision-test-account.mjs +1YOURDID\`; store the token privately. The script prints SQL; it does not execute it.
-6. Start a private staging deployment. Test \`GET /health\`. Make a consenting phone call, verify audio and observed carrier costs.
-7. Only after verification, test with Grok Bot's **native** calling feature and explicit user approval.
+### Private deployment checklist
+Follow **[docs/STAGING_DEPLOY.md](docs/STAGING_DEPLOY.md)** (owner runbook) and [docs/US_PRIVATE_PILOT.md](docs/US_PRIVATE_PILOT.md). In short:
+1. Obtain carrier approval for your own test use case and US DID; verify pricing and platform terms.
+2. Install the pinned Wrangler (\`npm --prefix backend ci\`), create a Cloudflare D1 test database, apply \`backend/schema.sql\`, run the read-only migration preflight, then migrations 0001-0003.
+3. Copy \`backend/wrangler.example.jsonc\` to the git-ignored \`backend/wrangler.jsonc\` and fill it in; keep both routing flags empty.
+4. Put \`SIGNALWIRE_SIGNING_KEY\`, \`OWNER_APPROVAL_TOKEN_SHA256\` and \`SIGNALWIRE_VOICE_API_TOKEN\` in \`wrangler secret put\`, never in source control.
+5. Seed the account with \`node scripts/provision-test-account.mjs +1YOURDID\` (prints SQL; does not execute it).
+6. Deploy private staging, test \`GET /health\`, and point the number's inbound **SWML webhook** at \`/telephony/signalwire/swml\` (not the Twilio URL).
+7. Test A (hangup only, flags off), then, with a separate explicit owner decision, Test B (one PIN-gated 60-second US forward), then turn the flags off again.
 
 **Important:** This is not approved for public paid use. Shared phone numbers, fluctuating AI caller IDs, caller-ID based access, stuck connecting calls, missing callback retries, exact carrier billing, multiple providers, KYC, fraud protection and regulatory obligations remain unresolved. Time-limited DID access alone is **not sufficient anti-fraud protection** for a commercial relay. **Caller ID can be spoofed**, so \`TEST_CALLER_E164\` is only a conservative additional private-test guard, not proof of identity or an authorization mechanism suitable for public service. Carrier-verified origin or a cryptographic per-call challenge remains required before expansion.
 

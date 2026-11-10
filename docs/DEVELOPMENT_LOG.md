@@ -135,3 +135,11 @@ Append one dated entry for each substantial incremental development session. Lin
 - Enforced CALLER_PROOF_MODE='dtmf_pin' in the US pilot policy before any ready reservation is created. The older capped_caller_id mode remains parseable for compatibility but is non-routable in this pilot, even with CALLER_ID_TRUST_ACCEPTED=true. This prevents signed carrier webhooks and spoofable caller IDs alone from authorizing domestic forwarding.
 - Updated the routing integration suite to demonstrate caller-ID mode fails closed, while signed DTMF PIN still binds a call to its reviewed reservation and rejects replay, invalid settings and exhausted daily allowance. Updated default pilot fixtures, config template and owner checklist accordingly.
 - Grok Bot native DTMF support remains unverified, and unavailability of DTMF is now an explicit stop condition, not permission to fall back to caller ID.
+
+## 2026-11-09 — PR #26 follow-ups (owner's assistant)
+- Owner-only `force-unlock` for reservations stuck in `connecting`: retries carrier reconciliation, then requires `force:true` + reason, audited in new `owner_actions` (migration 0003), still counts toward the daily cap. CLI: `owner-reservation.mjs force-unlock`.
+- Voice Logs reconciliation aligned with SignalWire's published fields (`id`, `to`, `direction`, `status`, `charge`, `parent_id`, `links.next`); accepts documented terminal states (`completed`/`ended`, unanswered B-leg states) and `outbound-dial`; never throws; specific lock codes; float-safe cents.
+- Owner approval stored atomically (D1 batch); a stale binding for an unapproved reservation is overwritten, an approved one never is.
+- Wrangler pinned at 4.159.0 in `backend/package.json`; `docs/STAGING_DEPLOY.md` owner runbook; D1 preflight now prints a migration plan and baseline SQL (0001 never scheduled twice).
+- README/SIGNALWIRE docs now point carriers at `/telephony/signalwire/swml`; Twilio route documented as hangup-only.
+- No deploys, secrets, carrier changes, flag changes or calls.

@@ -47,24 +47,35 @@ The read-only API checker and signed SWML webhook use different credentials. The
 - [Calling SWML JSON payload](https://signalwire.com/docs/swml/reference/calling)
 - [SWML connect to phone](https://signalwire.com/docs/swml/reference/calling/connect)
 
-## Gated routing (branch `routing-fixes`, off by default)
+## Gated routing (merged; off by default)
 
-`index.mjs` sends `/telephony/signalwire/swml` to `handleSignalWireRouting()` **only** when `PRIVATE_TEST_OUTBOUND_ENABLED` and `SIGNALWIRE_CONNECT_ENABLED` are both exactly `true`. Otherwise the hangup-only handler above runs unchanged.
+`index.mjs` sends `/telephony/signalwire/swml` to `handleSignalWireRouting()` **only** when `PRIVATE_TEST_OUTBOUND_ENABLED` and `SIGNALWIRE_CONNECT_ENABLED` are both exactly `true`. Otherwise the hangup-only handler above runs unchanged. The legacy Twilio route (`/telephony/twilio/incoming`) always hangs up and is not part of this flow.
 
 The router returns `connect` only after all of these pass:
 - a valid `X-Signalwire-SHA256-Signature` over the exact configured URL + raw body;
-- project, DID, inbound direction and phone type match;
+- project, DID, inbound direction, phone type, `call_id` and `segment_id` match;
 - the call ID is not already in the `provider_events` ledger;
-- caller proof passes (`CALLER_PROOF_MODE`);
-- an owner-approved, unexpired reservation exists;
-- the destination is allowlisted and in an allowed country, outside blocked ranges;
-- per-call and per-day caps allow it;
-- the atomic claim succeeds.
+- `CALLER_PROOF_MODE=dtmf_pin`: an 8-digit, one-use PIN for **the reservation selected by this call's first webhook** (caller-ID-only mode is refused for the US pilot);
+- the US pilot policy: exactly `US_PILOT_TEST_DESTINATION`, attested, US only, at most 60 s, 1 call/day and $1 estimated (both legs);
+- an owner approval whose stored fingerprint matches the current destination, rates, caps, caller proof and expiry (`GET .../review`, then `POST .../approve` with `proposal_digest`);
+- the atomic claim succeeds and the SWML `segment_id` is stored before `connect` is returned.
 
 In DTMF mode, the second fetch goes to `/telephony/signalwire/swml/pin`. SignalWire signs `transfer` fetches to external URLs, per its webhook-security guide, and the Worker verifies that path's exact URL.
 
-The emitted SWML uses only `answer`, `prompt` (with `silence:1`, no TTS), `transfer`, `connect` and `hangup`. There is no AI, recording, transcription or streaming.
+The emitted SWML uses only `answer`, `prompt` (with `silence:1`, no TTS), `transfer`, `connect` (with `max_duration`) and `hangup`. There is no AI, recording, transcription or streaming.
 
-Status callbacks are not used yet (TODO): their signing is undocumented.
+### Ending a call and releasing the lock
 
-Apply `backend/migrations/0001_routing_controls.sql` after `schema.sql`. See [ROUTING_PLAN.md](ROUTING_PLAN.md#progress-branch-routing-fixes-local-only-2026-11-09) for the owner placeholders.
+- `POST /v1/owner/reservations/:id/mark-ended` reads SignalWire **Voice Logs** (read-only, `SIGNALWIRE_VOICE_API_TOKEN`): `GET /api/voice/logs/{segment_id}` and `GET /api/voice/logs?created_after=...&page_size=1000`. It uses the documented fields `id`, `to`, `direction`, `status`, `charge` (dollars) and `parent_id`, and `links.next` for pagination. It unlocks only for a terminal inbound log (`completed`/`ended`) plus exactly one terminal child (`outbound`, `outbound-dial` or `outbound-api`) to the reserved destination, with charges within the reserved estimate. Anything missing or unexpected keeps the lock and returns a specific code.
+- `POST /v1/owner/reservations/:id/force-unlock` is the owner-only escape hatch. It retries reconciliation first; otherwise it needs `{"force":true,"reason":"..."}`, writes an `owner_actions` audit row, marks the reservation `failed` and still counts it toward the daily cap.
+
+Status callbacks are not used yet: their signing is undocumented.
+
+### Migrations
+
+Apply after `schema.sql`, using the read-only preflight first (`node scripts/d1-migration-preflight.mjs --remote <db>`):
+- `0001_routing_controls.sql`: reservation columns + `provider_events` ledger (`ALTER TABLE`; **not** re-runnable, the preflight never schedules it twice);
+- `0002_approval_bindings.sql`: approval fingerprints and carrier segment IDs;
+- `0003_owner_actions.sql`: force-unlock audit log.
+
+The full owner runbook (deploy, secrets, webhook URL, Test A hangup-only, Test B capped forward) is [STAGING_DEPLOY.md](STAGING_DEPLOY.md).

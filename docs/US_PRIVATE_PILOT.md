@@ -1,9 +1,11 @@
 # AgentBridge US-only private pilot — release-gated checklist
 
+Owner command-by-command runbook: [STAGING_DEPLOY.md](STAGING_DEPLOY.md).
+
 **Status: code review and offline validation, NOT cleared to place a forwarded call.**
 This document describes the safe order to reach a first **US-to-US** consenting test, not international calling, a resale product, or Grok Bot compatibility proof. All routing flags stay OFF during setup and testing of infrastructure. No automatic deployment, telecom API provisioning or carrier calls are performed by the repository.
 
-## Built controls (draft PR #26; only apply after review and green CI)
+## Built controls (merged via PR #26)
 
 1. The legacy Twilio signed inbound webhook always responds with Hangup; the shared PRIVATE_TEST_OUTBOUND_ENABLED variable cannot enable a second unmetered provider.
 2. SignalWire's original inbound call ID and **segment ID** must be signed and valid; each PIN transfer is bound to its original approved reservation. PIN hashes are one-use and attempts capped. Caller ID by itself is spoofable.
@@ -11,7 +13,7 @@ This document describes the safe order to reach a first **US-to-US** consenting 
 4. The estimate includes the owner-recorded outbound B-leg rate and an extra four started minutes of inbound A-leg rate for PIN/answer/ringing overhead. Source strings must be provided for both. Actual carrier costs can differ, and the app must not represent these as live quotes.
 5. A separate owner token GET **/v1/owner/reservations/:id/review** returns the immutable exact destination, expiration, both rates, caller proof, policy caps and proposed spend. The owner, not Grok Bot, reviews those numbers. POST **/v1/owner/reservations/:id/approve** requires JSON containing the reviewed proposal_digest; the database stores a one-use fingerprint. Routing validates this fingerprint again. Reconfiguring price, country, rate source, caller mode or cap invalidates the approval.
 6. The routed SWML response is generated only for approved, unexpired, signed and one-time claimed SignalWire calls while *both* PRIVATE_TEST_OUTBOUND_ENABLED and SIGNALWIRE_CONNECT_ENABLED equal the exact string 'true'. Any failed check hangs up.
-7. Active reservations remain locked until **/v1/owner/reservations/:id/mark-ended** successfully verifies both the signed-call-associated SignalWire Voice Logs A-leg and exactly one B-leg, terminal status, expected DID/destination and recorded charges through a read-only scoped Voice API token. Missing, incomplete, paginated, mismatched, excessive, duplicated or nonterminal records do not unlock. This still requires live carrier schema verification.
+7. Active reservations remain locked until **/v1/owner/reservations/:id/mark-ended** successfully verifies both the signed-call-associated SignalWire Voice Logs A-leg and exactly one B-leg, terminal status, expected DID/destination and recorded charges through a read-only scoped Voice API token. Missing, incomplete, paginated, mismatched, excessive, duplicated or nonterminal records do not unlock. Field names follow SignalWire's published Voice Logs API; live behaviour still needs one real call to confirm. If a call stays locked after it has visibly ended, the owner-only **/v1/owner/reservations/:id/force-unlock** retries reconciliation, then requires `force:true` and a reason, writes an `owner_actions` audit row (migration 0003) and still counts the call toward the daily cap.
 
 ## Operator-side prerequisites — NO forwarding until all are confirmed
 
@@ -25,7 +27,7 @@ This document describes the safe order to reach a first **US-to-US** consenting 
 
 ## D1 migration safety
 
-The original schema is in backend/schema.sql. The additive but non-repeatable **0001_routing_controls.sql** adds columns with ALTER TABLE. **0002_approval_bindings.sql** creates immutable approval and carrier-leg tables. Do not simply rerun 0001 over an existing D1 that already has those columns.
+The original schema is in backend/schema.sql. The additive but non-repeatable **0001_routing_controls.sql** adds columns with ALTER TABLE. **0002_approval_bindings.sql** creates immutable approval and carrier-leg tables. **0003_owner_actions.sql** creates the force-unlock audit table. 0002/0003 are re-runnable; the preflight prints a plan that never schedules 0001 when its columns already exist, and prints the `d1_migrations` baseline SQL for a hand-applied 0001. Do not simply rerun 0001 over an existing D1 that already has those columns.
 
 1. Identify the correct Cloudflare account/database ID and make a recoverable **backup** before any D1 migration.
 2. From the repository root, ensure the private backend/wrangler.jsonc has the correct D1 binding and migrations_dir='migrations'. Never check it into Git.
