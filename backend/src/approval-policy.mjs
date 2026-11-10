@@ -6,12 +6,15 @@
  *
  * No provider API calls, AI voice, or payment actions.
  */
-import {callerProofMode} from './caller-proof.mjs';
+import {callerProofMode,callerIdPilotOptIn} from './caller-proof.mjs';
 import {destinationDecision,routingCaps,maxCostCents} from './routing-policy.mjs';
 
-export const PILOT_MAX_SECONDS=60;
-export const PILOT_MAX_CALLS_PER_DAY=1;
+// Hard US-pilot ceilings. Owner config may only be stricter.
+export const PILOT_MAX_SECONDS=600;
+export const PILOT_MAX_CALLS_PER_DAY=4;
 export const PILOT_MAX_SPEND_CENTS=100;
+// Started A-leg minutes budgeted on top of the B-leg: answer/PIN + ring timeout.
+export const PILOT_INBOUND_OVERHEAD_MINUTES=3;
 export function pilotPolicy(row,env){
   if(!row||row.status!=='ready'||!Number.isSafeInteger(row.expires_at))
     return {ok:false,code:'RESERVATION_NOT_READY'};
@@ -26,16 +29,18 @@ export function pilotPolicy(row,env){
   // requests and caller-ID matching do NOT authenticate the calling person.
   // The legacy opt-in capped caller-ID mode remains in the library for
   // historical compatibility, but is explicitly non-routable in this pilot.
-  if(mode!=='dtmf_pin')return {ok:false,code:'DTMF_PROOF_REQUIRED'};
+  // Exception: capped_caller_id with BOTH CALLER_ID_TRUST_ACCEPTED=true and
+  // US_PILOT_ALLOW_CALLER_ID_PROOF=true (owner-accepted spoofing risk).
+  if(mode!=='dtmf_pin'&&!callerIdPilotOptIn(env))return {ok:false,code:'DTMF_PROOF_REQUIRED'};
   const caps=routingCaps(env,mode);
   if(!caps)return {ok:false,code:'CAPS_NOT_CONFIGURED'};
   if(caps.maxSeconds>PILOT_MAX_SECONDS||caps.maxCallsPerDay>PILOT_MAX_CALLS_PER_DAY||
     caps.maxCentsPerCall>PILOT_MAX_SPEND_CENTS||caps.maxCentsPerDay>PILOT_MAX_SPEND_CENTS)
     return {ok:false,code:'US_PILOT_CAPS_EXCEEDED'};
   // Reserve exposure for BOTH legs (inbound A-leg + onward B-leg).
-  // Until provider billing is verified, budget four started A-leg minutes:
-  // PIN/answer, ring timeout and the 60-second B-leg. This is an estimate,
-  // NOT a carrier-side hard dollar limit.
+  // Until provider billing is verified, budget the B-leg's started minutes plus
+  // PILOT_INBOUND_OVERHEAD_MINUTES of A-leg (answer/PIN, ring timeout). This is
+  // an estimate, NOT a carrier-side hard dollar limit.
   const inboundRate=Number(env.US_PILOT_INBOUND_RATE_CENTS_PER_MIN);
   if(typeof env.US_PILOT_INBOUND_RATE_CENTS_PER_MIN!=='string'||
      !/^\d+(?:\.\d{1,4})?$/.test(env.US_PILOT_INBOUND_RATE_CENTS_PER_MIN)||
@@ -43,7 +48,7 @@ export function pilotPolicy(row,env){
      typeof env.US_PILOT_INBOUND_RATE_SOURCE!=='string'||
      !env.US_PILOT_INBOUND_RATE_SOURCE.trim())
     return {ok:false,code:'US_PILOT_INBOUND_RATE_UNVERIFIED'};
-  const inboundMaxMinutes=4;
+  const inboundMaxMinutes=Math.ceil(caps.maxSeconds/60)+PILOT_INBOUND_OVERHEAD_MINUTES;
   const outboundCost=maxCostCents(decision.entry,caps.maxSeconds);
   const inboundCost=Math.ceil(inboundRate*inboundMaxMinutes);
   const maxCost=outboundCost+inboundCost;
@@ -53,6 +58,8 @@ export function pilotPolicy(row,env){
   const snapshot={
     reservation_id:row.id,account_id:row.account_id,destination:row.destination,
     expires_at:row.expires_at,country:'US',caller_proof:mode,
+    // Caller-ID mode: the approval is bound to the exact trusted caller number.
+    ...(mode==='capped_caller_id'?{trusted_caller:env.TEST_CALLER_E164,caller_id_spoofable:true}:{}),
     rate_cents_per_min:decision.entry.rate_cents_per_min,
     rate_source:decision.entry.rate_source,
     inbound_rate_cents_per_min:inboundRate,

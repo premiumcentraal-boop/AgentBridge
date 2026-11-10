@@ -32,7 +32,13 @@ test('flags off (any combination short of both exactly "true"): hangup-only and 
     const p=await worker.fetch(swml({call:call(),params:{digits:'12345678'}},PIN_URL),e);
     assert.notEqual(p.status,200,'PIN endpoint does not exist while flags are off');
   }
-  assert.equal(DB.log.length,before,'legacy path never touches D1');
+  // The hangup-only path only appends to the owner-readable inbound call log.
+  assert.ok(DB.log.slice(before).every(sql=>sql.startsWith('INSERT OR IGNORE INTO inbound_call_log')),
+    'legacy path never reads or changes reservations');
+  const logged=DB.raw.prepare('SELECT handler,from_number,caller_matches_test_caller,outcome FROM inbound_call_log').all();
+  assert.equal(logged.length,1,'one row per call id, retries ignored');
+  assert.deepEqual({...logged[0]},{handler:'swml_hangup_only',from_number:CALLER,caller_matches_test_caller:1,outcome:'hangup_known_caller'});
+  assert.equal(DB.raw.prepare("SELECT status FROM reservations WHERE id=?").get(b.id).status,'ready');
 });
 
 test('US pilot refuses spoofable caller-ID mode even when owner explicitly accepts risk',async t=>{

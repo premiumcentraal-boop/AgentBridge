@@ -21,6 +21,7 @@ import {SIGNALWIRE_SWML_PATH,signalWireHangup,signalWireConnectPlan,verifySignal
 import {callerProofMode,verifyPin,MAX_PIN_ATTEMPTS,PIN_DIGITS} from './caller-proof.mjs';
 import {routingCaps,utcDayStart,signalWireReservationsConfigured} from './routing-policy.mjs';
 import {pilotPolicy,verifyApprovalBinding} from './approval-policy.mjs';
+import {logInboundCall} from './inbound-call-log.mjs';
 
 export const SIGNALWIRE_PIN_PATH='/telephony/signalwire/swml/pin';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -113,6 +114,7 @@ export async function handleSignalWireRouting(request,env={}){
   const call=read.body?.call;
   if(!callMatches(call,env))return text('Forbidden',403);
   const mode=callerProofMode(env);
+  await logInboundCall(env,call,'swml_routing','mode_'+mode);
   if(mode==='none')return hangup();
   const now=Math.floor(Date.now()/1000);
   if(!await recordEvent(env,call.call_id,'swml_inbound',now))return hangup();

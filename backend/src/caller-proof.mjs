@@ -14,6 +14,14 @@ export const CALLER_ID_MODE_MAX_SECONDS=120;
 export const CALLER_ID_MODE_MAX_CALLS_PER_DAY=3;
 const E164=/^\+[1-9]\d{7,14}$/;
 
+/**
+ * Second, US-pilot-specific owner opt-in that makes capped_caller_id routable
+ * in the pilot (e.g. for an AI voice agent that cannot send DTMF). Caller ID
+ * is still spoofable: this is an accepted residual risk, not authentication.
+ */
+export function callerIdPilotOptIn(env={}){
+  return env.US_PILOT_ALLOW_CALLER_ID_PROOF==='true'&&callerProofMode(env)==='capped_caller_id';
+}
 export function callerProofMode(env={}){
   if(env.CALLER_PROOF_MODE==='dtmf_pin')return 'dtmf_pin';
   if(env.CALLER_PROOF_MODE==='capped_caller_id'&&env.CALLER_ID_TRUST_ACCEPTED==='true'&&

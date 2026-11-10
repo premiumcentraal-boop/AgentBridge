@@ -114,10 +114,14 @@ test('Worker SWML endpoint is always no-dial, including signed allowed calls',as
 test('Worker rejects forged, mismatched or misconfigured SignalWire inbound requests',async()=>{
   const noSig=await worker.fetch(makeRequest({call},webUrl,false),config);
   assert.equal(noSig.status,403);
+  // A correctly signed call from an unknown caller gets a free hangup (logged), never a connect.
   const wrongCaller=await worker.fetch(makeRequest({
     call:{...call,from_number:'+12125550178'}
   }),config);
-  assert.equal(wrongCaller.status,403);
+  assert.equal(wrongCaller.status,200);
+  assert.deepEqual(await wrongCaller.json(),signalWireHangup());
+  const badFrom=await worker.fetch(makeRequest({call:{...call,from_number:'anonymous'}}),config);
+  assert.equal(badFrom.status,403);
   const wrongProject=await worker.fetch(makeRequest({
     call:{...call,project_id:'11111111-1111-4111-8111-111111111111'}
   }),config);
@@ -167,4 +171,28 @@ test('SWML body exactly at byte cap passes the size gate and reaches signature c
     headers:{'content-type':'application/json'},body});
   const result=await worker.fetch(request,config);
   assert.equal(result.status,403);
+});
+
+test('blank TEST_CALLER_E164: signed calls still hang up cleanly and the caller ID is logged for the owner',async()=>{
+  const {createD1}=await import('./helpers/d1.mjs');
+  const DB=createD1();
+  const env={...config,TEST_CALLER_E164:'',TEST_DESTINATION_E164:'',DB};
+  const agent='+14155550123';
+  const r=await worker.fetch(makeRequest({call:{...call,from_number:agent}}),env);
+  assert.equal(r.status,200);
+  assert.deepEqual(await r.json(),signalWireHangup());
+  // SignalWire retry with the same call_id is not logged twice.
+  await worker.fetch(makeRequest({call:{...call,from_number:agent}}),env);
+  const rows=DB.raw.prepare('SELECT * FROM inbound_call_log').all();
+  assert.equal(rows.length,1);
+  assert.equal(rows[0].from_number,agent);
+  assert.equal(rows[0].to_number,config.US_BRIDGE_DID);
+  assert.equal(rows[0].caller_matches_test_caller,0);
+  assert.equal(rows[0].outcome,'hangup_unknown_caller');
+  assert.ok(!JSON.stringify(rows).includes(config.SIGNALWIRE_SIGNING_KEY));
+  // Unsigned/forged requests are rejected and never logged.
+  assert.equal((await worker.fetch(makeRequest({call:{...call,call_id:'48313c74-b321-4c08-a3ea-7123449130ab'}},webUrl,false),env)).status,403);
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM inbound_call_log').get().n,1);
+  // No reservations were read or created.
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservations').get().n,0);
 });

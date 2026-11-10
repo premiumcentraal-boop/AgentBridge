@@ -38,11 +38,11 @@ cd .. && node scripts/d1-migration-preflight.mjs --remote agentbridge-prototype 
 ```
 
 Read the preflight output before writing anything:
-- `OK ... will apply: 0001..., 0002..., 0003...` → run `npx wrangler d1 migrations apply agentbridge-prototype --remote`.
+- `OK ... will apply: 0001..., 0002..., 0003..., 0004...` → run `npx wrangler d1 migrations apply agentbridge-prototype --remote`.
 - `NOTICE ... already present but not recorded` (exit 2) → 0001 was applied by hand earlier. **Do not re-run it** (its `ALTER TABLE` statements cannot be repeated). Run the printed `INSERT OR IGNORE INTO d1_migrations ...` baseline command, re-run the preflight, then `migrations apply`.
 - `BLOCKED: partial schema` → stop; restore from the backup or reconcile by hand.
 
-0002 and 0003 only use `CREATE ... IF NOT EXISTS` and are safe to re-run.
+0002, 0003 and 0004 only use `CREATE ... IF NOT EXISTS` and are safe to re-run.
 
 Create the agent account row (prints a one-time agent token and the SQL; nothing is executed):
 
@@ -59,19 +59,19 @@ npx wrangler d1 execute agentbridge-prototype --remote --command "<the INSERT it
 | `d1_databases[0].database_id` | from step 2 |
 | `PUBLIC_BASE_URL` | `<WORKER_URL>` |
 | `US_BRIDGE_DID` | `<BRIDGE_DID>` |
-| `TEST_CALLER_E164` | `<MY_PHONE>` (the hangup-only handler answers only this caller) |
+| `TEST_CALLER_E164` | `<MY_PHONE>`; may stay blank until you know it: signed calls are hung up and logged in `inbound_call_log` |
 | `TEST_DESTINATION_E164` | `<US_DEST>` |
 | `SIGNALWIRE_PROJECT_ID` | project UUID |
 | `SIGNALWIRE_SPACE` | space subdomain only (no `https://`, no `.signalwire.com`) |
 | `SIGNALWIRE_SWML_WEBHOOK_URL` | `<WORKER_URL>/telephony/signalwire/swml` (must match exactly) |
 | `ROUTING_DESTINATIONS` | `[{"e164":"<US_DEST>","country":"US","rate_cents_per_min":<outbound rate>,"rate_source":"SignalWire pricing page, <date>"}]` |
 | `ROUTING_ALLOWED_COUNTRIES` | `US` |
-| `ROUTING_MAX_CALL_SECONDS` / `ROUTING_MAX_CALLS_PER_DAY` | `60` / `1` (pilot maximum) |
+| `ROUTING_MAX_CALL_SECONDS` / `ROUTING_MAX_CALLS_PER_DAY` | e.g. `60` / `1`; pilot maximum `600` / `4` |
 | `ROUTING_MAX_SPEND_CENTS_PER_CALL` / `_PER_DAY` | at most `100` |
 | `US_PILOT_TEST_DESTINATION` | `<US_DEST>` |
 | `US_PILOT_DESTINATION_VERIFIED` | `true` only after you confirmed `<US_DEST>` consents and is reachable from your account |
 | `US_PILOT_INBOUND_RATE_CENTS_PER_MIN` / `_SOURCE` | inbound rate and its source/date |
-| `CALLER_PROOF_MODE` | `dtmf_pin` (the only routable pilot mode) |
+| `CALLER_PROOF_MODE` | `dtmf_pin` (recommended), or `capped_caller_id` with `CALLER_ID_TRUST_ACCEPTED=true` and `US_PILOT_ALLOW_CALLER_ID_PROOF=true` (spoofable; see US_PRIVATE_PILOT.md) |
 | `PRIVATE_TEST_OUTBOUND_ENABLED`, `SIGNALWIRE_CONNECT_ENABLED` | **leave empty** |
 
 ## 4. Deploy (flags OFF) and secrets
@@ -96,7 +96,7 @@ In the SignalWire dashboard, set `<BRIDGE_DID>`'s inbound call handler to an **e
 
 1. Call `<BRIDGE_DID>` from `<MY_PHONE>`. Expected: the call ends immediately.
 2. In SignalWire's call logs confirm one short inbound call and **no** outbound leg. Cost: one inbound minute.
-3. A call from any other phone is refused (the Worker answers 403, the carrier ends the call).
+3. Read the caller ID that reached the Worker: `curl -s -H "authorization: Bearer $AGENTBRIDGE_OWNER_TOKEN" <WORKER_URL>/v1/owner/inbound-calls`. Calls from any number get the same free hangup and are logged; forged/unsigned requests get 403 and are not logged.
 
 ## 7. Test B: one capped forward (separate explicit owner decision)
 

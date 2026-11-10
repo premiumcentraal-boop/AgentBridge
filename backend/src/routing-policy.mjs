@@ -3,9 +3,10 @@
  * (docs/ROUTING_PLAN.md phase 2). Pure functions; all limits are owner
  * configuration. Missing or invalid configuration means "do not route".
  */
-import {CALLER_ID_MODE_MAX_SECONDS,CALLER_ID_MODE_MAX_CALLS_PER_DAY} from './caller-proof.mjs';
+import {CALLER_ID_MODE_MAX_SECONDS,CALLER_ID_MODE_MAX_CALLS_PER_DAY,callerIdPilotOptIn} from './caller-proof.mjs';
 
-export const HARD_MAX_CALL_SECONDS=180;
+// Absolute ceiling for any onward leg (10 minutes). Owners choose lower values.
+export const HARD_MAX_CALL_SECONDS=600;
 const E164=/^\+[1-9]\d{7,14}$/;
 const US_NUMBER=/^\+1([2-9]\d{2})([2-9]\d{2})\d{4}$/;
 /** ISO country -> calling code. Unknown countries are rejected (extend deliberately). */
@@ -85,7 +86,10 @@ export function routingCaps(env={},mode='none'){
   const maxCentsPerCall=intIn(env.ROUTING_MAX_SPEND_CENTS_PER_CALL,1,10_000);
   const maxCentsPerDay=intIn(env.ROUTING_MAX_SPEND_CENTS_PER_DAY,1,50_000);
   if([maxSeconds,maxCallsPerDay,maxCentsPerCall,maxCentsPerDay].includes(null))return null;
-  if(mode==='capped_caller_id')return {maxSeconds:Math.min(maxSeconds,CALLER_ID_MODE_MAX_SECONDS),
+  // Caller-ID mode keeps tighter ceilings unless the owner made the explicit
+  // US-pilot opt-in (US_PILOT_ALLOW_CALLER_ID_PROOF); the pilot policy then
+  // applies its own hard duration, call-count and spend limits.
+  if(mode==='capped_caller_id'&&!callerIdPilotOptIn(env))return {maxSeconds:Math.min(maxSeconds,CALLER_ID_MODE_MAX_SECONDS),
     maxCallsPerDay:Math.min(maxCallsPerDay,CALLER_ID_MODE_MAX_CALLS_PER_DAY),maxCentsPerCall,maxCentsPerDay};
   return {maxSeconds,maxCallsPerDay,maxCentsPerCall,maxCentsPerDay};
 }

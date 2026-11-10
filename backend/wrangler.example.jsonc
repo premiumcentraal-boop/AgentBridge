@@ -24,8 +24,8 @@
     // Owner policy (placeholders; owner must fill from SignalWire pricing with a source/date)
     "ROUTING_DESTINATIONS": "[{\"e164\":\"+12125550100\",\"country\":\"US\",\"rate_cents_per_min\":0,\"rate_source\":\"REPLACE: SignalWire rate + date\"}]",
     "ROUTING_ALLOWED_COUNTRIES": "US",
-    "ROUTING_MAX_CALL_SECONDS": "60",
-    "ROUTING_MAX_CALLS_PER_DAY": "1",
+    "ROUTING_MAX_CALL_SECONDS": "60", // pilot maximum 600 (10 minutes)
+    "ROUTING_MAX_CALLS_PER_DAY": "1", // pilot maximum 4
     "ROUTING_MAX_SPEND_CENTS_PER_CALL": "REPLACE",
     "ROUTING_MAX_SPEND_CENTS_PER_DAY": "REPLACE",
     "RESERVATION_TTL_SECONDS": "240",
@@ -40,8 +40,12 @@
 
     // US PILOT: DTMF PIN is mandatory; capped_caller_id is rejected as spoofable.
     // Unset or other mode = no US pilot reservation or forwarding.
-    "CALLER_PROOF_MODE": "", // owner may set "dtmf_pin" only after DTMF capability confirmed
+    "CALLER_PROOF_MODE": "", // "dtmf_pin" (recommended) or "capped_caller_id" (see next two)
+    // Caller-ID mode for the US pilot (e.g. an AI voice agent that cannot send DTMF) needs
+    // BOTH of these set to "true" plus an exact TEST_CALLER_E164. Caller ID is SPOOFABLE:
+    // anyone who fakes that number during an approved reservation window can use the leg.
     "CALLER_ID_TRUST_ACCEPTED": "",
+    "US_PILOT_ALLOW_CALLER_ID_PROOF": "",
 
     // OWNER KILL SWITCHES: routing happens only when BOTH are exactly "true". Leave empty.
     "PRIVATE_TEST_OUTBOUND_ENABLED": "",

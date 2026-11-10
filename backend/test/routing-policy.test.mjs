@@ -35,8 +35,14 @@ test('caps are all required, bounded, and tighter in caller-ID mode',()=>{
   const caps={ROUTING_MAX_CALL_SECONDS:'180',ROUTING_MAX_CALLS_PER_DAY:'5',ROUTING_MAX_SPEND_CENTS_PER_CALL:'100',ROUTING_MAX_SPEND_CENTS_PER_DAY:'300'};
   assert.deepEqual(routingCaps(caps,'dtmf_pin'),{maxSeconds:180,maxCallsPerDay:5,maxCentsPerCall:100,maxCentsPerDay:300});
   assert.deepEqual(routingCaps(caps,'capped_caller_id'),{maxSeconds:120,maxCallsPerDay:3,maxCentsPerCall:100,maxCentsPerDay:300});
+  assert.deepEqual(routingCaps({...caps,ROUTING_MAX_CALL_SECONDS:'600'},'dtmf_pin').maxSeconds,600,'10-minute hard ceiling');
+  // Pilot opt-in lifts the generic caller-ID clamp (pilot policy applies its own limits).
+  const optIn={...caps,ROUTING_MAX_CALL_SECONDS:'600',CALLER_PROOF_MODE:'capped_caller_id',CALLER_ID_TRUST_ACCEPTED:'true',
+    US_PILOT_ALLOW_CALLER_ID_PROOF:'true',TEST_CALLER_E164:'+12125550177',US_BRIDGE_DID:'+12025550123'};
+  assert.equal(routingCaps(optIn,'capped_caller_id').maxSeconds,600);
+  assert.equal(routingCaps({...optIn,US_PILOT_ALLOW_CALLER_ID_PROOF:'1'},'capped_caller_id').maxSeconds,120);
   for(const k of Object.keys(caps))assert.equal(routingCaps({...caps,[k]:undefined}),null,k);
-  assert.equal(routingCaps({...caps,ROUTING_MAX_CALL_SECONDS:'181'}),null);
+  assert.equal(routingCaps({...caps,ROUTING_MAX_CALL_SECONDS:'601'}),null);
   assert.equal(routingCaps({...caps,ROUTING_MAX_CALL_SECONDS:'1e2'}),null);
   assert.equal(maxCostCents({rate_cents_per_min:1.2},180),4);
   assert.equal(maxCostCents({rate_cents_per_min:8},61),16);
