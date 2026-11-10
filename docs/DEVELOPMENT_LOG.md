@@ -163,3 +163,7 @@ Append one dated entry for each substantial incremental development session. Lin
 ## 2026-11-10 — PR #29 CI triage: restore parsed security guards
 - GitHub Actions run 42756542946 failed (`npm run ci`: 117 passed, 6 failed). Review of the exact PR head found literal `\\n` sequences in `approval-policy.mjs` and `signalwire-routing.mjs` where actual newlines were intended; these placed the `any_caller` rejection conditions inside `//` comments, so the critical security fix was ineffective.
 - Replaced the six escaped newline tokens with real line breaks in those two modules on the existing PR branch. This restores executable policy and inbound-handler guards. Await a fresh quality-gate run on the corrected head; the earlier failing CI does not validate the correction. No carrier operation or deployment.
+
+## 2026-11-10 — Close caller-ID proof bypass in draft PR #29
+- The remaining `capped_caller_id` opt-in could claim a chargeable reservation based only on a spoofable `From` number. Restricted US pilot policy to `dtmf_pin` exclusively; all other proof modes now fail with `CALLER_AUTH_REQUIRED` regardless of owner risk flags. The signed inbound handler independently hangs up before reservation lookup/event claims for non-DTMF modes, and the direct connect path was removed.
+- Added offline regressions for denied reservation creation, matching signed caller-ID hangup, and policy refusal. Existing legacy success tests may require updating; verify exact PR head CI before review. No carrier actions, routing flags, deployment, payments, or calls.
