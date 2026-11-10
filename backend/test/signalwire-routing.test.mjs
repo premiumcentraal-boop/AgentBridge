@@ -168,3 +168,47 @@ test('daily call cap counts claimed calls across reservations',async t=>{
   const b=await reserve(env,'daily-cap-0002');await approveReservation(env,b.id);
   assert.ok(isHangup((await inbound(env,{call_id:CID(61)})).doc),'daily cap applies before prompt');
 });
+
+
+test('DTMF challenge freshness is enforced server-side even while reservation is ready',async t=>{
+  const {env,DB,at}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const b=await reserve(env,'challenge-window-boundary');
+  await approveReservation(env,b.id);
+  const id=CID(210);
+  await inbound(env,{call_id:id});
+  const event=DB.raw.prepare("SELECT received_at FROM provider_events WHERE provider_call_id=? AND event_type='swml_inbound'").get(id);
+  assert.equal(event.received_at,T0);
+  at(T0+59);
+  const within=await pin(env,id,b.dtmf_pin);
+  assert.equal(connectOf(within.doc)?.to,DEST,'59-second challenge remains valid');
+
+  // Separate ready reservation: 60-second challenge must fail, despite the
+  // reservation itself still being unexpired and the PIN being correct.
+  DB.raw.prepare("UPDATE reservations SET status='completed' WHERE id=?").run(b.id);
+  at(T0+60);
+  const c=await reserve(env,'challenge-exact-sixty');
+  await approveReservation(env,c.id);
+  const id2=CID(211);
+  await inbound(env,{call_id:id2});
+  at(T0+120);
+  assert.ok(isHangup((await pin(env,id2,c.dtmf_pin)).doc),'exactly 60 seconds expires');
+  assert.deepEqual({...DB.raw.prepare('SELECT status,pin_attempts FROM reservations WHERE id=?').get(c.id)},
+    {status:'ready',pin_attempts:0},'expired challenge cannot consume or mutate reservation');
+});
+
+test('DTMF challenge rejects malformed and future timestamps without burning PIN',async t=>{
+  const {env,DB,at}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const b=await reserve(env,'challenge-invalid-time');
+  await approveReservation(env,b.id);
+  const id=CID(212);
+  await inbound(env,{call_id:id});
+  const update=DB.raw.prepare("UPDATE provider_events SET received_at=? WHERE provider_call_id=? AND event_type='swml_inbound'");
+  for(const value of [T0+1,null,-1]){
+    update.run(value,id);
+    assert.ok(isHangup((await pin(env,id,b.dtmf_pin)).doc),String(value));
+  }
+  assert.equal(DB.raw.prepare('SELECT pin_attempts FROM reservations WHERE id=?').get(b.id).pin_attempts,0);
+  update.run(T0,id);
+  at(T0+1);
+  assert.equal(connectOf((await pin(env,id,b.dtmf_pin)).doc)?.to,DEST,'valid original timestamp works');
+});
