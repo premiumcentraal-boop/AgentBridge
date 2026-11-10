@@ -90,6 +90,9 @@ export async function prepareReservation(account,requestData,env){
   if(Number(count?.n||0)>=10)return {status:429,body:{error:{code:'RATE_LIMIT',message:'Prototype hourly request limit reached'}}};
   const id=crypto.randomUUID();
   const ttl=reservationTtlSeconds(env);
+  // Validate the complete pilot policy before inserting any ready reservation.
+  const proposal=swRouting&&policy?.ok?pilotPolicy({id,account_id:account.id,destination,status:'ready',expires_at:now+ttl},env):null;
+  if(proposal&&!proposal.ok)return {status:409,body:{error:{code:'US_PILOT_NOT_READY',message:'US trial configuration is incomplete: '+proposal.code}}};
   const mode=swRouting&&policy?.ok?callerProofMode(env):'none';
   const pin=mode==='dtmf_pin'?generatePin():null;
   try{
@@ -99,11 +102,16 @@ export async function prepareReservation(account,requestData,env){
   catch{return {status:409,body:{error:{code:'BRIDGE_BUSY',message:'A reservation is already active. Retry after it is closed'}}};}
   const body=reservationView({id,destination,status:'ready',expires_at:now+ttl},account.did,now);
   if(swRouting&&policy?.ok){
-    const caps=routingCaps(env,mode);
     body.owner_approval_required=true;
     body.caller_proof=mode;
-    body.estimate={rate_cents_per_min:policy.entry.rate_cents_per_min,rate_source:policy.entry.rate_source,
-      max_call_seconds:caps?.maxSeconds??null,max_cost_cents:caps?maxCostCents(policy.entry,caps.maxSeconds):null,price_verified:false};
+    body.max_call_seconds=proposal.snapshot.max_call_seconds;
+    body.estimate={rate_cents_per_min:policy.entry.rate_cents_per_min,
+      rate_source:policy.entry.rate_source,
+      inbound_rate_cents_per_min:proposal.snapshot.inbound_rate_cents_per_min,
+      inbound_rate_source:proposal.snapshot.inbound_rate_source,
+      inbound_estimated_max_minutes:proposal.snapshot.inbound_estimated_max_minutes,
+      max_call_seconds:proposal.snapshot.max_call_seconds,
+      max_cost_cents:proposal.snapshot.estimated_max_cost_cents,price_verified:false};
     if(pin){body.dtmf_pin=pin;body.dtmf_instructions='After the call connects, send these 8 digits followed by #. Shown once; single use.';}
     body.warning='Not routable until the owner approves it out-of-band. Routing also requires both owner flags. Estimate uses the owner-recorded rate, not a live quote.';
   }
