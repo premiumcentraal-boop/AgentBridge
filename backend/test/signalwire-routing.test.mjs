@@ -103,7 +103,7 @@ test('DTMF follow-up cannot switch to a later reservation after first one is can
   await worker.fetch(owner(second.id),env);
   const wrongCall=await pin(env,CID(101),second.dtmf_pin);
   assert.ok(isHangup(wrongCall.doc),'old call must not claim new approved reservation');
-  assert.deepEqual(DB.raw.prepare('SELECT status,pin_attempts FROM reservations WHERE id=?').get(second.id),
+  assert.deepEqual({...DB.raw.prepare('SELECT status,pin_attempts FROM reservations WHERE id=?').get(second.id)},
     {status:'ready',pin_attempts:0},'later reservation is unconsumed');
   await inbound(env,{call_id:CID(102)});
   const right=await pin(env,CID(102),second.dtmf_pin);
