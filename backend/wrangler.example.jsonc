@@ -6,7 +6,7 @@
   "main": "src/index.mjs",
   "compatibility_date": "2026-11-08",
   "workers_dev": false,
-  "d1_databases": [{"binding":"DB","database_name":"agentbridge-prototype","database_id":"REPLACE_WITH_YOUR_D1_DATABASE_ID"}],
+  "d1_databases": [{"binding":"DB","database_name":"agentbridge-prototype","database_id":"REPLACE_WITH_YOUR_D1_DATABASE_ID","migrations_dir":"migrations"}],
   "vars": {
     "PUBLIC_BASE_URL": "https://api.example.com",
     "US_BRIDGE_DID": "+12025550123",
@@ -20,11 +20,19 @@
     // Owner policy (placeholders; owner must fill from SignalWire pricing with a source/date)
     "ROUTING_DESTINATIONS": "[{\"e164\":\"+12125550100\",\"country\":\"US\",\"rate_cents_per_min\":0,\"rate_source\":\"REPLACE: SignalWire rate + date\"}]",
     "ROUTING_ALLOWED_COUNTRIES": "US",
-    "ROUTING_MAX_CALL_SECONDS": "180",
-    "ROUTING_MAX_CALLS_PER_DAY": "3",
+    "ROUTING_MAX_CALL_SECONDS": "60",
+    "ROUTING_MAX_CALLS_PER_DAY": "1",
     "ROUTING_MAX_SPEND_CENTS_PER_CALL": "REPLACE",
     "ROUTING_MAX_SPEND_CENTS_PER_DAY": "REPLACE",
     "RESERVATION_TTL_SECONDS": "240",
+
+    // First US-only private pilot: exactly one purchased/verified US destination.
+    "US_PILOT_TEST_DESTINATION": "+12125550100",
+    "US_PILOT_DESTINATION_VERIFIED": "", // owner must check carrier eligibility, then explicitly set true
+    // Estimated inbound A-leg cost, additionally to destination outbound B-leg.
+    // Values MUST come from a dated SignalWire price source; never assume zero.
+    "US_PILOT_INBOUND_RATE_CENTS_PER_MIN": "REPLACE",
+    "US_PILOT_INBOUND_RATE_SOURCE": "REPLACE: provider source and date",
 
     // Caller proof: "dtmf_pin" or "capped_caller_id" (the latter also needs CALLER_ID_TRUST_ACCEPTED="true").
     // Unset = no routing.
