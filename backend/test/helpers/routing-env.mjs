@@ -48,7 +48,10 @@ export async function approveReservation(env,id,token=OWNER){
   return worker.fetch(owner(id,'approve',token,body.proposal_digest),env);
 }
 export function call(over={}){
-  return {project_id:PROJECT,call_id:over.call_id||'38313c74-b321-4c08-a3ea-7123449130ab',direction:'inbound',type:'phone',
+  const id=over.call_id||'38313c74-b321-4c08-a3ea-7123449130ab';
+  // SignalWire Voice Logs are keyed by segment_id (distinct from call_id).
+  const segment='4'+id.slice(1);
+  return {project_id:PROJECT,call_id:id,segment_id:segment,direction:'inbound',type:'phone',
     from_number:CALLER,to_number:DID,...over};
 }
 export function swml(payload,url=SWML_URL,{sign=true,key=SIGNING,signUrl=url}={}){
