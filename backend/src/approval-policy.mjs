@@ -32,7 +32,7 @@ export function pilotPolicy(row,env){
   // NOT a carrier-side hard dollar limit.
   const inboundRate=Number(env.US_PILOT_INBOUND_RATE_CENTS_PER_MIN);
   if(typeof env.US_PILOT_INBOUND_RATE_CENTS_PER_MIN!=='string'||
-     !/^\\d+(?:\\.\\d{1,4})?$/.test(env.US_PILOT_INBOUND_RATE_CENTS_PER_MIN)||
+     !/^\d+(?:\.\d{1,4})?$/.test(env.US_PILOT_INBOUND_RATE_CENTS_PER_MIN)||
      !Number.isFinite(inboundRate)||inboundRate<=0||inboundRate>1000||
      typeof env.US_PILOT_INBOUND_RATE_SOURCE!=='string'||
      !env.US_PILOT_INBOUND_RATE_SOURCE.trim())
