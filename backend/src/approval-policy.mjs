@@ -26,7 +26,21 @@ export function pilotPolicy(row,env){
   if(caps.maxSeconds>PILOT_MAX_SECONDS||caps.maxCallsPerDay>PILOT_MAX_CALLS_PER_DAY||
     caps.maxCentsPerCall>PILOT_MAX_SPEND_CENTS||caps.maxCentsPerDay>PILOT_MAX_SPEND_CENTS)
     return {ok:false,code:'US_PILOT_CAPS_EXCEEDED'};
-  const maxCost=maxCostCents(decision.entry,caps.maxSeconds);
+  // Reserve exposure for BOTH legs (inbound A-leg + onward B-leg).
+  // Until provider billing is verified, budget four started A-leg minutes:
+  // PIN/answer, ring timeout and the 60-second B-leg. This is an estimate,
+  // NOT a carrier-side hard dollar limit.
+  const inboundRate=Number(env.US_PILOT_INBOUND_RATE_CENTS_PER_MIN);
+  if(typeof env.US_PILOT_INBOUND_RATE_CENTS_PER_MIN!=='string'||
+     !/^\\d+(?:\\.\\d{1,4})?$/.test(env.US_PILOT_INBOUND_RATE_CENTS_PER_MIN)||
+     !Number.isFinite(inboundRate)||inboundRate<=0||inboundRate>1000||
+     typeof env.US_PILOT_INBOUND_RATE_SOURCE!=='string'||
+     !env.US_PILOT_INBOUND_RATE_SOURCE.trim())
+    return {ok:false,code:'US_PILOT_INBOUND_RATE_UNVERIFIED'};
+  const inboundMaxMinutes=4;
+  const outboundCost=maxCostCents(decision.entry,caps.maxSeconds);
+  const inboundCost=Math.ceil(inboundRate*inboundMaxMinutes);
+  const maxCost=outboundCost+inboundCost;
   if(maxCost>caps.maxCentsPerCall||maxCost>caps.maxCentsPerDay)
     return {ok:false,code:'SPEND_ESTIMATE_EXCEEDS_CAP'};
   // The source is operator-supplied and NEVER a verified real-time carrier quote.
@@ -35,6 +49,9 @@ export function pilotPolicy(row,env){
     expires_at:row.expires_at,country:'US',caller_proof:mode,
     rate_cents_per_min:decision.entry.rate_cents_per_min,
     rate_source:decision.entry.rate_source,
+    inbound_rate_cents_per_min:inboundRate,
+    inbound_rate_source:env.US_PILOT_INBOUND_RATE_SOURCE.trim(),
+    inbound_estimated_max_minutes:inboundMaxMinutes,
     max_call_seconds:caps.maxSeconds,max_calls_per_day:caps.maxCallsPerDay,
     max_spend_cents_per_call:caps.maxCentsPerCall,
     max_spend_cents_per_day:caps.maxCentsPerDay,
