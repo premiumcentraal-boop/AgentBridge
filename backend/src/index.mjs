@@ -170,12 +170,34 @@ const OWNER_HASH=/^[a-f0-9]{64}$/;
  * owner token whose SHA-256 is OWNER_APPROVAL_TOKEN_SHA256. The account/MCP
  * bearer token used by the chat agent can never approve its own reservation.
  */
+/** Run statements atomically via D1 batch (one transaction); sequential fallback for stand-ins. */
+async function runAtomic(env,statements){
+  if(typeof env.DB.batch==='function')return env.DB.batch(statements);
+  const out=[];for(const s of statements)out.push(await s.run());return out;
+}
+async function connectingRow(env,id){
+  return env.DB.prepare("SELECT r.id,r.account_id,r.destination,r.status,r.provider,r.created_at,r.max_cost_cents,r.provider_call_id,l.provider_segment_id FROM reservations r LEFT JOIN reservation_carrier_legs l ON l.reservation_id=r.id WHERE r.id=? AND r.status='connecting'")
+    .bind(id).first();
+}
+async function completeReconciled(env,row,checked,now){
+  // Verified first; record carrier charge and release the lock in one batch.
+  const results=await runAtomic(env,[
+    env.DB.prepare('UPDATE reservation_carrier_legs SET reconciled_at=?,actual_cost_cents=? WHERE reservation_id=?')
+      .bind(now,checked.actual_cost_cents,row.id),
+    env.DB.prepare("UPDATE reservations SET status='completed',completed_at=? WHERE id=? AND provider='signalwire' AND status='connecting'")
+      .bind(now,row.id)
+  ]);
+  if(results?.[1]?.meta?.changes!==1)return error('CANNOT_MARK_ENDED','Reservation state changed during reconciliation',409);
+  return json({id:row.id,status:'completed',carrier_confirmed:true,
+    actual_cost_cents:checked.actual_cost_cents,
+    warning:'Charges are from the retrieved carrier records; independently confirm the statement before further calls.'});
+}
 async function ownerRoute(request,url,env){
   // Owner token never goes to the chat/MCP connector. GET review is separate
   // from POST approval; both demand the exact independently held owner token.
   if(!env.DB||!OWNER_HASH.test(env.OWNER_APPROVAL_TOKEN_SHA256||''))
     return error('NOT_CONFIGURED','Owner approval is not configured',503);
-  const m=url.pathname.match(/^\/v1\/owner\/reservations\/([a-f0-9-]{36})\/(review|approve|mark-ended)$/i);
+  const m=url.pathname.match(/^\/v1\/owner\/reservations\/([a-f0-9-]{36})\/(review|approve|mark-ended|force-unlock)$/i);
   if(!m)return error('NOT_FOUND','Route not found',404);
   const action=m[2];
   if(request.method!==(action==='review'?'GET':'POST'))
@@ -189,21 +211,51 @@ async function ownerRoute(request,url,env){
   if(action==='mark-ended'){
     // Carrier Voice Logs identify SWML segment IDs (not the stable call_id).
     // Never unlock a connecting reservation based only on an operator click.
-    const row=await env.DB.prepare("SELECT r.id,r.account_id,r.destination,r.status,r.created_at,r.max_cost_cents,r.provider_call_id,l.provider_segment_id FROM reservations r JOIN reservation_carrier_legs l ON l.reservation_id=r.id WHERE r.id=? AND r.provider='signalwire' AND r.status='connecting'")
-      .bind(m[1]).first();
-    if(!row)return error('CANNOT_MARK_ENDED','No active SignalWire reservation with a carrier segment',409);
+    const row=await connectingRow(env,m[1]);
+    if(!row||!row.provider_segment_id||row.provider!=='signalwire')
+      return error('CANNOT_MARK_ENDED','No active SignalWire reservation with a carrier segment',409);
     const checked=await fetchCarrierReconciliation(row,env);
     if(!checked.ok)return error('CARRIER_RECONCILIATION_REQUIRED',
-      'Carrier has not yet confirmed both call legs and charges: '+checked.code,409);
-    // Verify first; then record carrier charge before releasing the active lock.
-    await env.DB.prepare('UPDATE reservation_carrier_legs SET reconciled_at=?,actual_cost_cents=? WHERE reservation_id=?')
-      .bind(now,checked.actual_cost_cents,row.id).run();
-    const ended=await env.DB.prepare("UPDATE reservations SET status='completed',completed_at=? WHERE id=? AND provider='signalwire' AND status='connecting'")
-      .bind(now,row.id).run();
-    if(ended.meta?.changes!==1)return error('CANNOT_MARK_ENDED','Reservation state changed during reconciliation',409);
-    return json({id:row.id,status:'completed',carrier_confirmed:true,
-      actual_cost_cents:checked.actual_cost_cents,
-      warning:'Charges are from the retrieved carrier records; independently confirm the statement before further calls.'});
+      'Carrier has not yet confirmed both call legs and charges: '+checked.code+
+      '. If the call has definitely ended in the SignalWire dashboard, use owner force-unlock.',409);
+    return completeReconciled(env,row,checked,now);
+  }
+  if(action==='force-unlock'){
+    // Owner-only escape hatch for a reservation stuck in 'connecting' (for
+    // example, unexpected Voice Logs fields). Carrier reconciliation is tried
+    // first; only if it fails does an explicit {force:true, reason} unlock,
+    // which is recorded in owner_actions and still counts toward daily caps.
+    const input=await parseJson(request);
+    if(!input||Object.keys(input).some(k=>!['force','reason'].includes(k))||
+       (input.force!==undefined&&typeof input.force!=='boolean')||
+       (input.reason!==undefined&&typeof input.reason!=='string'))
+      return error('INVALID_FORCE_UNLOCK','Body must be JSON {"force":true,"reason":"..."}',422);
+    const row=await connectingRow(env,m[1]);
+    if(!row)return error('CANNOT_UNLOCK','Reservation is not stuck in connecting',409);
+    let carrierCode='NO_CARRIER_SEGMENT';
+    if(row.provider==='signalwire'&&row.provider_segment_id){
+      const checked=await fetchCarrierReconciliation(row,env);
+      if(checked.ok)return completeReconciled(env,row,checked,now);
+      carrierCode=checked.code;
+    }
+    const reason=typeof input.reason==='string'?input.reason.trim():'';
+    if(input.force!==true||reason.length<8||reason.length>500||/[\u0000-\u001f\u007f]/.test(reason))
+      return error('FORCE_REQUIRED','Carrier reconciliation failed ('+carrierCode+
+        '). Confirm in the SignalWire dashboard that the call ended, then retry with force=true and a reason (8-500 characters).',409);
+    try{
+      const results=await runAtomic(env,[
+        env.DB.prepare("INSERT INTO owner_actions (id,reservation_id,action,prior_status,carrier_code,reason,created_at) VALUES (?,?,'force_unlock','connecting',?,?,?)")
+          .bind(crypto.randomUUID(),row.id,carrierCode,reason,now),
+        env.DB.prepare("UPDATE reservations SET status='failed',completed_at=? WHERE id=? AND status='connecting'")
+          .bind(now,row.id)
+      ]);
+      if(results?.[1]?.meta?.changes!==1)
+        return error('CANNOT_UNLOCK','Reservation state changed during unlock',409);
+    }catch{
+      return error('AUDIT_STORAGE_UNAVAILABLE','Force unlock not applied: apply migration 0003 (owner_actions) first.',503);
+    }
+    return json({id:row.id,status:'failed',force_unlocked:true,carrier_code:carrierCode,
+      warning:'Unlocked without carrier proof. Check the SignalWire dashboard for any still-active call and its charges. This call still counts toward the daily cap.'});
   }
   const row=await env.DB.prepare('SELECT id,account_id,destination,status,expires_at,approved_at FROM reservations WHERE id=?')
     .bind(m[1]).first();
@@ -224,12 +276,17 @@ async function ownerRoute(request,url,env){
   if(!safeEqual(input.proposal_digest,proposal_digest))
     return error('PROPOSAL_CHANGED','The destination, rate, caps or expiry changed. Review again.',409);
   try{
-    await env.DB.prepare('INSERT INTO reservation_approval_bindings (reservation_id,policy_sha256,approved_at) VALUES (?,?,?)')
-      .bind(row.id,proposal_digest,now).run();
-    // Atomic row predicate protects against cancellation/expiry racing approval.
-    const approved=await env.DB.prepare("UPDATE reservations SET approved_at=? WHERE id=? AND status='ready' AND approved_at IS NULL AND expires_at>?")
-      .bind(now,row.id,now).run();
-    if(approved.meta?.changes!==1)return error('CANNOT_APPROVE','Reservation changed while approving. It remains unroutable.',409);
+    // A binding left over from an earlier, interrupted approval of this still
+    // UNAPPROVED reservation is overwritten; an approved one never is. Both
+    // statements run in one D1 batch (a single transaction) when available.
+    const results=await runAtomic(env,[
+      env.DB.prepare("INSERT INTO reservation_approval_bindings (reservation_id,policy_sha256,approved_at) SELECT id,?,? FROM reservations WHERE id=? AND status='ready' AND approved_at IS NULL AND expires_at>? ON CONFLICT(reservation_id) DO UPDATE SET policy_sha256=excluded.policy_sha256,approved_at=excluded.approved_at WHERE (SELECT approved_at FROM reservations WHERE id=excluded.reservation_id) IS NULL")
+        .bind(proposal_digest,now,row.id,now),
+      // Atomic row predicate protects against cancellation/expiry racing approval.
+      env.DB.prepare("UPDATE reservations SET approved_at=? WHERE id=? AND status='ready' AND approved_at IS NULL AND expires_at>? AND EXISTS (SELECT 1 FROM reservation_approval_bindings b WHERE b.reservation_id=reservations.id AND b.policy_sha256=?)")
+        .bind(now,row.id,now,proposal_digest)
+    ]);
+    if(results?.[1]?.meta?.changes!==1)return error('CANNOT_APPROVE','Reservation changed while approving. It remains unroutable.',409);
   }catch{
     return error('APPROVAL_STORAGE_UNAVAILABLE',
       'Approval could not be stored safely. Apply migration 0002 or inspect a conflicting review.',503);
