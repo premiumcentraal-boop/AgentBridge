@@ -122,8 +122,9 @@ export async function handleSignalWireRouting(request,env={}){
   if(!row){await setOutcome(env,call.call_id,'swml_inbound','no_approved_reservation');return hangup();}
   const check=await policyCheck(env,row,mode,now);
   if(!check.ok){await setOutcome(env,call.call_id,'swml_inbound',check.code,row.id);return hangup();}
-  if(mode==='capped_caller_id'){
-    if(call.from_number!==env.TEST_CALLER_E164){await setOutcome(env,call.call_id,'swml_inbound','CALLER_MISMATCH',row.id);return hangup();}
+  if(mode==='capped_caller_id'||mode==='any_caller'){
+    // any_caller: the first signed inbound call during the approved window claims it.
+    if(mode==='capped_caller_id'&&call.from_number!==env.TEST_CALLER_E164){await setOutcome(env,call.call_id,'swml_inbound','CALLER_MISMATCH',row.id);return hangup();}
     if(!await claim(env,row,call.call_id,call.segment_id,check,now)){await setOutcome(env,call.call_id,'swml_inbound','CLAIM_LOST',row.id);return hangup();}
     await setOutcome(env,call.call_id,'swml_inbound','connect',row.id);
     return connectFor(env,row,check);

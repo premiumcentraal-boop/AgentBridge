@@ -28,7 +28,7 @@
     "ROUTING_MAX_CALLS_PER_DAY": "1", // pilot maximum 4
     "ROUTING_MAX_SPEND_CENTS_PER_CALL": "REPLACE",
     "ROUTING_MAX_SPEND_CENTS_PER_DAY": "REPLACE",
-    "RESERVATION_TTL_SECONDS": "240",
+    "RESERVATION_TTL_SECONDS": "240", // 30..900
 
     // First US-only private pilot: exactly one purchased/verified US destination.
     "US_PILOT_TEST_DESTINATION": "+12125550100",
@@ -46,6 +46,9 @@
     // anyone who fakes that number during an approved reservation window can use the leg.
     "CALLER_ID_TRUST_ACCEPTED": "",
     "US_PILOT_ALLOW_CALLER_ID_PROOF": "",
+    // "any_caller" mode accepts ANY calling number during an owner-approved reservation
+    // (for an AI agent whose caller ID rotates). Needs ANY_CALLER_RISK_ACCEPTED="true".
+    "ANY_CALLER_RISK_ACCEPTED": "",
 
     // OWNER KILL SWITCHES: routing happens only when BOTH are exactly "true". Leave empty.
     "PRIVATE_TEST_OUTBOUND_ENABLED": "",

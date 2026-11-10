@@ -31,7 +31,8 @@ export function pilotPolicy(row,env){
   // historical compatibility, but is explicitly non-routable in this pilot.
   // Exception: capped_caller_id with BOTH CALLER_ID_TRUST_ACCEPTED=true and
   // US_PILOT_ALLOW_CALLER_ID_PROOF=true (owner-accepted spoofing risk).
-  if(mode!=='dtmf_pin'&&!callerIdPilotOptIn(env))return {ok:false,code:'DTMF_PROOF_REQUIRED'};
+  // any_caller is only reachable via callerProofMode() with ANY_CALLER_RISK_ACCEPTED=true.
+  if(mode!=='dtmf_pin'&&mode!=='any_caller'&&!callerIdPilotOptIn(env))return {ok:false,code:'DTMF_PROOF_REQUIRED'};
   const caps=routingCaps(env,mode);
   if(!caps)return {ok:false,code:'CAPS_NOT_CONFIGURED'};
   if(caps.maxSeconds>PILOT_MAX_SECONDS||caps.maxCallsPerDay>PILOT_MAX_CALLS_PER_DAY||
@@ -60,6 +61,7 @@ export function pilotPolicy(row,env){
     expires_at:row.expires_at,country:'US',caller_proof:mode,
     // Caller-ID mode: the approval is bound to the exact trusted caller number.
     ...(mode==='capped_caller_id'?{trusted_caller:env.TEST_CALLER_E164,caller_id_spoofable:true}:{}),
+    ...(mode==='any_caller'?{trusted_caller:'ANY',any_caller_risk_accepted:true}:{}),
     rate_cents_per_min:decision.entry.rate_cents_per_min,
     rate_source:decision.entry.rate_source,
     inbound_rate_cents_per_min:inboundRate,

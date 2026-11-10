@@ -68,6 +68,12 @@ The owner's own AI voice agent may place a normal phone call that cannot send DT
 
 **Residual risk accepted by the owner:** caller ID can be spoofed. Anyone who knows the bridge number and the trusted caller number and calls with a forged caller ID **while an approved reservation is ready** can take that one capped leg to the single allowlisted destination. Exposure is bounded by: one reservation at a time, its short TTL, the 10-minute leg cap, at most 4 calls/day and $1/day estimated. Keep reservations short-lived, approve only right before a call, and prefer `dtmf_pin` whenever the caller can send digits.
 
+## Any-caller mode (owner opt-in, no caller proof)
+
+Some AI calling agents (including the owner's Grok Bot voice agent) present a **different caller ID on every call**, so neither DTMF nor caller-ID matching works. `CALLER_PROOF_MODE=any_caller` with `ANY_CALLER_RISK_ACCEPTED=true` accepts **any** calling number. Still enforced: signed SignalWire webhook, both routing flags, an owner-reviewed and fingerprinted reservation (the fingerprint records `trusted_caller: "ANY"`), one allowlisted US destination, single-use atomic claim, the reservation TTL (max 900 s), the 600 s leg cap and the daily call/spend caps. The actual From number is logged in `inbound_call_log`.
+
+**Residual risk:** whoever calls the bridge number first while an approved reservation is ready gets that one leg to the allowlisted destination. Approve a reservation only right before the call, keep the TTL short, and turn the flags off afterwards.
+
 ## Learning the caller ID
 
 Every correctly signed inbound call to the bridge number (any caller, flags on or off) is written to `inbound_call_log` (migration 0004): caller and called number, handler, outcome, time. Read it with the owner token: `GET /v1/owner/inbound-calls?limit=20`, or `cd backend && npx wrangler d1 execute <db> --remote --command "SELECT * FROM inbound_call_log ORDER BY id DESC LIMIT 20"`. With the flags off such calls get a free hangup. Delete rows older than 30 days.
