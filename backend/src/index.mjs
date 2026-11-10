@@ -9,6 +9,7 @@ import {SIGNALWIRE_PIN_PATH,signalWireRoutingFlagsOn,handleSignalWireRouting,han
 import {pilotPolicy,policyFingerprint} from './approval-policy.mjs';
 import {fetchCarrierReconciliation} from './carrier-reconciliation.mjs';
 import {recentInboundCalls} from './inbound-call-log.mjs';
+import {previewChatCallFlow} from './chat-experience.mjs';
 /**
  * AgentBridge reference backend — intentionally fail-closed.
  * This is NOT a publicly deployable calling reseller: it only routes to one
@@ -311,6 +312,7 @@ async function routeRest(request,url,env,account){
   return error('NOT_FOUND','Route not found',404);
 }
 const CHAT_NUMBER_TOOLS=[
+  {name:'preview_chat_call_flow',title:'Choose how much guidance you want',description:'Read-only call-flow preview: simple, guided or advanced. Changes presentation only; no saved preference, route, approval or phone call.',annotations:{readOnlyHint:true,destructiveHint:false},inputSchema:{type:'object',properties:{difficulty:{type:'string',enum:['simple','guided','advanced'],description:'Simple by default; choose how much explanation to show in chat'}},additionalProperties:false}},
   {name:'get_bridge_setup',title:'My AgentBridge setup',description:'Preview assigned US bridge number and next setup step. No provider request, payment or call.',annotations:{readOnlyHint:true,destructiveHint:false},inputSchema:{type:'object',properties:{},additionalProperties:false}},
   {name:'list_my_numbers',title:'My US bridge number',description:'Check whether the account-assigned voice DID appears in the private SignalWire Project. Does not expose other project numbers.',annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:true},inputSchema:{type:'object',properties:{},additionalProperties:false}},
   {name:'search_available_numbers',title:'Find US number candidates',description:'Read-only search for at most five local voice numbers by area code. No prices, holds or purchases.',annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:true},inputSchema:{type:'object',properties:{area_code:{type:'string',pattern:'^[2-9][0-9]{2}$',description:'Three-digit US area code, such as 202 or 618'}},required:['area_code'],additionalProperties:false}}
@@ -332,7 +334,8 @@ async function handleMcp(request,account,env){
   if(rpc.method==='resources/read')return response(readNumberCardResource(rpc.params.uri));
   if(rpc.method==='tools/call'){
     const name=rpc.params?.name,args=rpc.params?.arguments||{};let result;
-    if(name==='get_bridge_setup')result=getBridgeSetup(account,env);
+    if(name==='preview_chat_call_flow')result=previewChatCallFlow(args);
+    else if(name==='get_bridge_setup')result=getBridgeSetup(account,env);
     else if(name==='list_my_numbers')result=await listMyNumbers(account,env);
     else if(name==='search_available_numbers')result=await searchAvailableNumbers(account,args,env);
     else if(!reservationApiReady(env))result={status:503,body:{error:{code:'NOT_CONFIGURED',message:'Calling is not configured; read-only tools remain available.'}}};
