@@ -8,3 +8,15 @@ CREATE TABLE IF NOT EXISTS reservation_approval_bindings (
 );
 CREATE INDEX IF NOT EXISTS approval_bindings_created
   ON reservation_approval_bindings(approved_at);
+
+-- Carrier logs identify the SWML segment ID, not just the call's stable call_id.
+-- Store the claimed leg's segment ID only; reconciliation is read-only until
+-- BOTH the inbound and its child outbound logs have terminal status.
+CREATE TABLE IF NOT EXISTS reservation_carrier_legs (
+  reservation_id TEXT PRIMARY KEY REFERENCES reservations(id) ON DELETE RESTRICT,
+  provider_segment_id TEXT NOT NULL UNIQUE,
+  claimed_at INTEGER NOT NULL,
+  reconciled_at INTEGER,
+  actual_cost_cents INTEGER CHECK(actual_cost_cents>=0)
+);
+CREATE INDEX IF NOT EXISTS carrier_legs_claimed ON reservation_carrier_legs(claimed_at);
