@@ -59,7 +59,7 @@ test('two-step approval: only the separate owner token can approve, once, before
   assert.equal((await worker.fetch(owner(late.id,'mark-ended'),env)).status,409,'mark-ended needs an active SignalWire call');
 });
 
-test('legacy Twilio route also requires owner approval once owner approval is configured',async t=>{
+test('legacy Twilio route remains hangup-only even after owner approval',async t=>{
   const {createHmac}=await import('node:crypto');
   const {env:base}=await routingSetup(t);
   const env={...base,PUBLIC_BASE_URL:'https://api.example.com',TEST_DESTINATION_E164:DEST,
