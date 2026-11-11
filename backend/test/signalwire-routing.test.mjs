@@ -268,3 +268,30 @@ for(const [kind,trigger] of [
     assert.equal(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_pin'").get(retryId).outcome,'connect');
   });
 }
+
+
+test('PIN callback: compound silent event and reservation-reset failures roll back atomically',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const reservation=await reserve(env,'pin-compound-silent-1');
+  assert.equal((await approveReservation(env,reservation.id)).status,200);
+  const firstId=CID(330);
+  const retryId=CID(331);
+  const challenge=await inbound(env,{call_id:firstId});
+  assert.ok(challenge.doc.sections.main.some(x=>x.prompt),'initial signed call requests PIN');
+  DB.raw.exec("CREATE TRIGGER ignore_pin_connect_compound BEFORE UPDATE OF outcome ON provider_events WHEN NEW.outcome='connect' AND NEW.event_type='swml_pin' BEGIN SELECT RAISE(IGNORE); END");
+  DB.raw.exec("CREATE TRIGGER ignore_pin_reset_compound BEFORE UPDATE OF status ON reservations WHEN OLD.status='connecting' AND NEW.status='ready' BEGIN SELECT RAISE(IGNORE); END");
+  const failed=await pin(env,firstId,reservation.dtmf_pin);
+  assert.equal(failed.status,200,'failed transaction returns valid SWML');
+  assert.ok(isHangup(failed.doc),'never connect after two silent database faults');
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'ready','transaction must roll back claim');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,0,'no orphaned leg');
+  assert.notEqual(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_pin'").get(firstId)?.outcome,'connect','no false connect event');
+  DB.raw.exec('DROP TRIGGER ignore_pin_connect_compound');
+  DB.raw.exec('DROP TRIGGER ignore_pin_reset_compound');
+  const next=await inbound(env,{call_id:retryId});
+  assert.ok(next.doc.sections.main.some(x=>x.prompt),'new signed call can request PIN');
+  assert.equal(connectOf((await pin(env,retryId,reservation.dtmf_pin)).doc)?.to,DEST,'fresh PIN callback connects after recovery');
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,1);
+  assert.equal(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_pin'").get(retryId).outcome,'connect');
+});
