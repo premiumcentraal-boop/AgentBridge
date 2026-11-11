@@ -356,3 +356,27 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
   because the supported browser-control tool is unavailable in this session.
 - Reuses the same owner-private [mobile Site](https://agentbridge-worldwide.premiumcentraal.chatgpt.site)
   and [PR #39](https://github.com/premiumcentraal-boop/AgentBridge/pull/39).
+
+## 2026-11-11 — opposite-edge country connections and call states
+
+- Added twelve pairings that start at opposite edges and meet at one central
+  point over a 60-second score. All 16 flags appear; approaches remain straight
+  or make one rounded turn. Country circles ride the line heads and dissolve
+  before they overlap in the middle.
+- Country lines fade after meeting. Only after they have cleared does a green
+  telephone, check mark and “Call connected” appear, hold and fade away.
+- Grouped each pair's lines, flags and call icon into one paint layer. Newest
+  pairs paint last. Previous-cycle copies and native visibility gates preserve
+  that order at the minute seam without reordering or restarting animated nodes.
+- Preserved reduced-motion stills, explicit play override, pause/play and
+  off-screen/hidden-tab suspension. No browser animation rendering loop added.
+- Validation covers opposite edges, exact simultaneous meetings, flag clearance,
+  matching native drawing/motion timing, line-before-call sequencing, fading,
+  newest-on-top layering through every launch and two full minutes of repeats.
+  Root CI includes 147 backend/security tests, seven structural checks over
+  21 pages and eight geometry/DOM tests.
+- Inspected six coded SVG artwork samples, separate from browser playback/layout
+  QA. Browser playback, layout, touch and screen-reader verification remain
+  pending because the supported browser-control tool is unavailable here.
+- Reuses the same owner-private [mobile Site](https://agentbridge-worldwide.premiumcentraal.chatgpt.site)
+  and [PR #39](https://github.com/premiumcentraal-boop/AgentBridge/pull/39).

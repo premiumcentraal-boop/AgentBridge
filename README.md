@@ -6,7 +6,7 @@
 The new product experience is prepared for **agentbridge.victor.ceo**, with a dedicated
 AgentBridge tab in the `victor-ceo` repository, following Meridian’s integration.
 
-- `/` — real React/Astryx product page, animated country-flag transit map, product walkthrough and rendered studio preview.
+- `/` — real React/Astryx product page, animated country-to-call connections, product walkthrough and rendered studio preview.
 - `/studio/demo/` — interactive sample workspace; changes reset when the tab reloads. The old `/studio/?demo=1` link still works.
 - `/design/` — three original design boards (Signal, Material, Atlas) with floating call navigation and an interactive component preview; also under **Design boards** in the studio. See [design rationale and references](docs/DESIGN_DIRECTIONS.md).
 - `/studio/` — private operator sign-in; server-backed route drafts, search, archive, activity,
@@ -51,17 +51,17 @@ work before JavaScript starts. The original `/design/` gallery remains available
 - `/studio/demo/{routes,connection,activity,settings,call,design}/` — Matching demo pages
 - `/app/` — Compatibility link to the sample studio
 
-The main hero says **connect agents worldwide** and shows four overlapping SVG
-routes in pink, orange, cyan and yellow over a 60-second cycle. Each route has its
-own flag-filled white circle travelling at the advancing line end. Straight or
-single-turn connections meet exactly at their country handoffs; four shared
-transfer stations link the routes. Completed connections stay drawn while the
-next line travels, retaining the broad subway-map composition. Routes enter and
-leave beyond the frame so repeats have no visible reset. Flags and line drawing
-share the same timing. The scene respects reduced motion, offers pause/play, and
-stops when off screen or the tab is hidden. Reduced motion samples the same
-overlapping routes as a still, including before JavaScript starts. Flags are
-inline SVG symbols from the MIT-licensed flag-icons project.
+The main hero says **connect agents worldwide**. Pairs of bold coloured country
+lines enter from opposite edges and meet at the exact centre. Their flags travel
+with the advancing line heads, then dissolve before the circles overlap. Once
+the country lines have faded, a green telephone with a check mark and **Call
+connected** appears, holds briefly and fades too. Twelve country pairings cover
+all 16 flags over a 60-second cycle, with straight or single-turn approaches.
+Every new pair paints above the older lines, flags and call icons, including at
+the loop seam. The scene respects reduced motion, offers pause/play, and stops
+when off screen or the tab is hidden. Reduced motion samples the same scene as a
+still, including before JavaScript starts. Flags are local SVG symbols from the
+MIT-licensed flag-icons project.
 
 The rail has an expanded/compact state, a simulated active call at the top,
 mute/return/end controls, six workspace items and a dark/light switch. On small

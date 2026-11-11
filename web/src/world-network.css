@@ -41,6 +41,11 @@
 .world-static-scene {
   display: none;
 }
+.world-call-label {
+  fill: var(--fg);
+  font-family: inherit;
+  letter-spacing: -0.035em;
+}
 .world-map-footer {
   position: absolute;
   inset: auto 1% 0 1%;

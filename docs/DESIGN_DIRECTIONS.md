@@ -218,7 +218,7 @@ relay rather than displaying a separate arrangement.
 
 ## 2026-11-11: preserve multiple overlapping routes
 
-The current hero restores the approved broad subway-route composition: four
+That iteration restored the approved broad subway-route composition: four
 distinct pink, orange, cyan and yellow routes cross the canvas from different
 directions. Each route has its own moving flag circle. The routes cover all 16
 countries and share four actual transfer stations (GB, JP, NL and CH). Their
@@ -237,3 +237,25 @@ motion and line growth use matching distances and easing. All flag circles are
 drawn above the routes and stay upright through bends. The reduced-motion still
 samples the same overlapping network; pause/play and visibility suspension stay
 available.
+
+## 2026-11-11: opposite edges meet, then a call connects
+
+The current hero sends two coloured country lines from opposite edges to one
+exact meeting point in the middle. Left/right and top/bottom pairings alternate,
+mixing straight approaches with single rounded turns. Flags ride the line heads
+and dissolve before their white circles could overlap at the centre.
+
+Both lines arrive together. The country lines then fade completely; a green
+telephone with a check mark and “Call connected” appears, holds briefly, and
+fades too. Twelve pairings cover all 16 country flags over a 60-second score.
+Successive pairs overlap gently so the scene continues while a call connects.
+
+Each pair is one paint layer containing its lines, flags and call icon. Layers
+paint in launch order, so the latest lines are above every older element.
+Previous-cycle copies paint behind the current-cycle layers and use visibility
+gates at the loop boundary. This keeps the order correct across the seam without
+moving animated DOM nodes or restarting native SVG clocks.
+
+Movement, stroke growth, line fades and call states share native SVG timing.
+Reduced motion samples the same composition; pause/play, off-screen suspension
+and hidden-tab suspension remain available.

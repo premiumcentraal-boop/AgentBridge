@@ -2,13 +2,13 @@
 
 Open https://agentbridge-worldwide.premiumcentraal.chatgpt.site on your phone.
 Sign in with the Site owner's ChatGPT account if prompted. The homepage shows
-“connect agents worldwide” and four overlapping routes on a 60-second cycle. Choose
+“connect agents worldwide” and country lines connecting into calls. Choose
 **Open studio** to explore the app; page links and interactions are real DOM
-components, not screenshots. Multiple flag-filled circles travel with their own
-coloured lines in different directions. Each connection hands off at an exact
-country endpoint. Completed lines remain drawn through the handoff, creating
-overlapping routes with four shared transfer stations. Repeats happen beyond the
-frame. This graphic is an illustration.
+components, not screenshots. Two coloured lines with moving country flags enter
+from opposite edges and meet in the centre. The country lines fade away, a green
+phone and check mark show **Call connected**, then the call fades too. Twelve
+pairings repeat over a 60-second cycle. New pairs always paint above the older
+lines and icons, including when the loop restarts. This graphic is an illustration.
 
 The Site is an owner-private static review, separate from the production
 Railway service. Drafts, preferences and call controls are sample interactions

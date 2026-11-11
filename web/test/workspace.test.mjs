@@ -121,37 +121,65 @@ test("working preview navigates real pages and keeps call state in the floating 
     document.querySelector(".world-network-svg").dataset.loopSeconds,
     "60",
   );
-  const travellers = document.querySelectorAll(
-    ".world-moving-scene .world-traveller",
+  const svg = document.querySelector(".world-network-svg");
+  assert.equal(svg.dataset.sequence, "edge-to-call");
+  assert.equal(svg.dataset.pairCount, "12");
+  const layers = document.querySelectorAll(
+    ".world-moving-scene > .world-pair-layer",
   );
-  assert.equal(travellers.length, 4);
+  assert.equal(layers.length, 14);
   assert.equal(
-    document.querySelector(".world-network-svg").dataset.routeCount,
-    "4",
+    document.querySelectorAll(
+      '.world-moving-scene > .world-pair-layer[data-copy="current"]',
+    ).length,
+    12,
   );
-  assert.equal(document.querySelectorAll("animateMotion").length, 4);
-  const paths = new Set();
-  for (const traveller of travellers) {
-    const motion = traveller.querySelector("animateMotion");
-    assert.equal(motion.getAttribute("dur"), "60s");
-    const path = document.querySelector(
-      motion.querySelector("mpath").getAttribute("href"),
+  assert.equal(document.querySelectorAll(".world-approach-path").length, 24);
+  let currentLayer = false,
+    previousStart = -1;
+  for (const layer of layers) {
+    const gate = layer.querySelector(".world-layer-gate");
+    assert.equal(gate.getAttribute("calcMode"), "discrete");
+    assert.equal(gate.getAttribute("dur"), "60s");
+    assert.ok(
+      layer.querySelector(".world-country-lines") &&
+        layer.querySelector(".world-call-connection"),
     );
-    assert.ok(path.classList.contains("world-route-path"));
-    paths.add(path.id);
-    assert.ok(traveller.querySelector(".world-country-flag[clip-path]"));
-    for (const flag of traveller.querySelectorAll(".world-traveller-flag"))
-      assert.ok(flag.querySelector("use") && flag.querySelector("animate"));
-    const bands = document.querySelector(
-      `.world-route-bands[data-route="${traveller.dataset.route}"]`,
+    assert.match(
+      layer.querySelector(".world-call-label").textContent,
+      /Call connected/,
     );
-    for (const animation of bands.querySelectorAll("animate"))
+    if (layer.dataset.copy === "current") {
+      currentLayer = true;
+      assert.ok(Number(layer.dataset.startAt) > previousStart);
+      previousStart = Number(layer.dataset.startAt);
+    } else
       assert.equal(
-        animation.getAttribute("begin"),
-        motion.getAttribute("begin"),
+        currentLayer,
+        false,
+        "previous-cycle layers must paint behind current lines",
       );
+    const travellers = layer.querySelectorAll(".world-country-traveller");
+    assert.equal(travellers.length, 2);
+    for (const traveller of travellers) {
+      const motion = traveller.querySelector("animateMotion");
+      const path = document.querySelector(
+        motion.querySelector("mpath").getAttribute("href"),
+      );
+      assert.ok(path.classList.contains("world-approach-path"));
+      const band = layer.querySelector(
+        `.world-band[data-arm="${traveller.dataset.arm}"]`,
+      );
+      assert.equal(path.getAttribute("d"), band.getAttribute("d"));
+      const drawing = band.querySelector("animate");
+      for (const attribute of ["begin", "dur", "keyTimes", "keySplines"])
+        assert.equal(
+          motion.getAttribute(attribute),
+          drawing.getAttribute(attribute),
+        );
+      assert.ok(traveller.querySelector(".world-country-flag[clip-path] use"));
+    }
   }
-  assert.equal(paths.size, 4);
   assert.equal(
     document.querySelectorAll(
       '.world-band animate[attributeName="stroke-dashoffset"]',
@@ -346,7 +374,7 @@ test("public navigation keeps a native top-level studio link across the CSP boun
   );
 });
 
-test("reduced motion preserves the overlapping routes with an explicit play override", async (t) => {
+test("reduced motion shows opposite-edge country lines and a connected call with an explicit play override", async (t) => {
   const { dom, document, errors, requests } = setup(
     "file:///AgentBridge-Working-Website.html",
     true,
@@ -360,11 +388,14 @@ test("reduced motion preserves the overlapping routes with an explicit play over
     document.querySelector(".world-network").dataset.motionConsent,
     "false",
   );
+  const still = document.querySelector(".world-static-scene");
+  assert.equal(still.querySelectorAll(".world-pair-static").length, 2);
   assert.equal(
-    document.querySelectorAll(".world-static-scene .world-traveller-static")
-      .length,
-    4,
+    still.querySelectorAll("animate, animateMotion, animateTransform").length,
+    0,
   );
+  assert.ok(still.querySelector('.world-call-connection[opacity="1"]'));
+  assert.ok(still.querySelector('.world-country-lines[opacity="1"]'));
   named(document, "Play connection animation").click();
   await pause(30);
   assert.equal(
