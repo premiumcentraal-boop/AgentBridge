@@ -153,3 +153,9 @@ Append one dated entry for each substantial incremental development session. Lin
 ## 2026-11-09 — any_caller mode and 15-minute reservations (owner's assistant)
 - Owner: Grok Bot's outbound caller ID rotates per call. New `CALLER_PROOF_MODE=any_caller`, only with `ANY_CALLER_RISK_ACCEPTED=true`; all other guards unchanged; fingerprint records `trusted_caller: "ANY"`.
 - `RESERVATION_TTL_SECONDS` maximum raised from 300 to 900.
+
+## 2026-11-10 — PR #29 review: hardening ported, owner opt-ins kept (owner's assistant)
+- Ported from #29: server-side 60-second DTMF challenge deadline using the persisted `provider_events.swml_inbound.received_at` (invalid, future or >=60 s old challenges hang up before a PIN attempt is consumed), boundary/malformed-timestamp tests, a concurrent-PIN-callback single-connection test and a mode-drift test (an approved `dtmf_pin` reservation can never be claimed after switching to `capped_caller_id`/`any_caller`).
+- Not ported: removal of `any_caller`/`capped_caller_id`. The owner explicitly requires `any_caller` because Grok Bot's voice agent rotates caller ID and cannot send DTMF; both modes remain explicit opt-ins behind their risk-accepted flags, `dtmf_pin` remains the default, and the residual-risk warnings in `docs/US_PRIVATE_PILOT.md` were strengthened.
+- No deploys, secrets, carrier changes, flag changes or calls.
+- Added a pinned, checksum-verified gitleaks secret-scan CI job (history + working tree) and `.gitleaks.toml`, which allowlists only synthetic lowercase test idempotency keys.
