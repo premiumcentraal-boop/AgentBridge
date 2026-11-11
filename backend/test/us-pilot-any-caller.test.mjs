@@ -125,3 +125,21 @@ test('silently ignored carrier-leg INSERT cannot strand the reservation',async t
   assert.equal(connectOf(retry.doc)?.to,DEST);
   assert.equal(status(DB,created.id),'connecting');
 });
+
+test('silently ignored reservation UPDATE removes orphan carrier leg and allows retry',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,...ANY});
+  const created=await (await reserve(env,'any-silent-update-1')).json();
+  assert.equal((await approveReservation(env,created.id)).status,200);
+  DB.raw.exec("CREATE TRIGGER ignore_reservation_claim BEFORE UPDATE OF status ON reservations WHEN NEW.status='connecting' BEGIN SELECT RAISE(IGNORE); END");
+  const failed=await inbound(env,{call_id:CID(96)});
+  assert.ok(isHangup(failed.doc),'suppressed reservation transition cannot emit connect');
+  assert.equal(status(DB,created.id),'ready');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,0,
+    'transaction must clean up the inserted leg after the ignored UPDATE');
+  DB.raw.exec('DROP TRIGGER ignore_reservation_claim');
+  const retry=await inbound(env,{call_id:CID(97)});
+  assert.equal(connectOf(retry.doc)?.to,DEST);
+  assert.equal(status(DB,created.id),'connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,1);
+  assert.ok(isHangup((await inbound(env,{call_id:CID(98)})).doc));
+});
