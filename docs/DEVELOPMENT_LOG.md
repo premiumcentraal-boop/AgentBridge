@@ -302,3 +302,7 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Extended the existing D1 claim batch: carrier-leg INSERT, conditional reservation UPDATE, conditional provider-event connect UPDATE, reservation reset on silently ignored event UPDATE, and orphan-leg cleanup are executed transactionally. A connect response now requires exactly one leg, reservation transition, and event transition, and no compensating reset.
 - Removed the separate post-claim connect outcome writes in initial and PIN callbacks. Added offline SQLite RAISE(ABORT) and RAISE(IGNORE) fault-injection regressions for provider-event connect persistence and retry behavior on the initial callback.
 - Exact-head CI, PIN-path event fault coverage, and distributed D1 semantics require verification. No merges, deployments, paid calls, routing flags or provider resources changed.
+
+## 2026-11-11 — PIN provider-event rollback regressions (draft PR #37; not merged/deployed)
+- Added two offline signed DTMF PIN callback regressions to `backend/test/signalwire-routing.test.mjs`: SQLite `RAISE(ABORT)` and `RAISE(IGNORE)` on the final `provider_events` connect outcome. Both assert hangup, ready reservation, no carrier leg, no false connect event, and successful fresh PIN challenge/retry after removing the trigger.
+- These tests complement the earlier initial-inbound event fault tests. No production routing flags, provider settings, paid calls or deployment changed. Exact-commit CI and independent Cloudflare D1 transaction review remain required before merge.
