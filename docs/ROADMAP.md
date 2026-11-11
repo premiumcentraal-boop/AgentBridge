@@ -69,3 +69,6 @@ Never auto-merge production-risk changes. Do not falsely mark a task complete wi
 - [ ] Confirm Trial Mode calling eligibility, current SignalWire Voice Logs segment/parent fields, and Grok Bot native DTMF support.
 - [ ] Owner-authorized **routing-OFF** staged Worker configuration, secure token scopes, and signed hangup-only tests.
 - [ ] Explicit separate owner authorization for one consenting US-to-US call, then reconcile real provider charges and disable routing again.
+
+## Pending review — SignalWire inventory byte bound (issue #31)
+- [ ] Review and merge the streaming 250,000-byte upstream response cap and offline boundary tests; implemented on isolated branch, **not yet merged or deployed**.

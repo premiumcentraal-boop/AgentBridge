@@ -35,6 +35,42 @@ export function validateConnection({space,projectId,apiToken}={}){
      typeof apiToken!=='string'||apiToken.length<10||apiToken.length>512||
      /[\s:]/.test(apiToken))throw new TypeError('Invalid SignalWire project configuration');
 }
+const MAX_INVENTORY_BYTES=250_000;
+/** Bound upstream bytes before decoding, regardless of Content-Length accuracy. */
+async function readInventoryResponse(response){
+  const oversized=()=>new Error('SignalWire inventory response too large');
+  const declared=response.headers?.get('content-length');
+  if(declared!==null&&declared!==undefined&&/^\d+$/.test(declared.trim())&&
+     Number(declared)>MAX_INVENTORY_BYTES){
+    try{await response.body?.cancel();}catch{/* best effort */}
+    throw oversized();
+  }
+  const reader=response.body?.getReader();
+  if(!reader)throw new Error('Invalid SignalWire inventory response');
+  const chunks=[];
+  let bytes=0;
+  try{
+    while(true){
+      const {done,value}=await reader.read();
+      if(done)break;
+      if(!(value instanceof Uint8Array))throw new Error('Invalid SignalWire inventory response');
+      bytes+=value.byteLength;
+      if(bytes>MAX_INVENTORY_BYTES){
+        try{await reader.cancel();}catch{/* best effort */}
+        throw oversized();
+      }
+      chunks.push(value);
+    }
+  }catch(error){
+    if(error.message==='SignalWire inventory response too large')throw error;
+    throw new Error('Invalid SignalWire inventory response');
+  }finally{reader.releaseLock();}
+  const combined=new Uint8Array(bytes);
+  let offset=0;
+  for(const chunk of chunks){combined.set(chunk,offset);offset+=chunk.byteLength;}
+  try{return new TextDecoder('utf-8',{fatal:true}).decode(combined);}
+  catch{throw new Error('Invalid SignalWire inventory response');}
+}
 /** Read-only BYO credential and owned-voice-DID check; no purchase or assignment. */
 export async function inspectSignalWireNumbers(config, fetchImpl=fetch){
   validateConnection(config);
@@ -45,8 +81,7 @@ export async function inspectSignalWireNumbers(config, fetchImpl=fetch){
     headers:{authorization:'Basic '+btoa(projectId+':'+apiToken),accept:'application/json'}
   });
   if(!response.ok)throw new Error('SignalWire project number inventory unavailable ('+response.status+')');
-  const body=await response.text();
-  if(body.length>250_000)throw new Error('SignalWire inventory response too large');
+  const body=await readInventoryResponse(response);
   let payload;
   try{payload=JSON.parse(body);}catch{throw new Error('Invalid SignalWire inventory response');}
   if(!Array.isArray(payload?.data))throw new Error('Invalid SignalWire inventory response');
