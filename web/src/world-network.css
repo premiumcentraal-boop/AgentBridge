@@ -1,0 +1,426 @@
+/* A transit score: muted infrastructure, bright moving connections, still flags. */
+.hero-section.hero-worldwide {
+  width: min(1440px, calc(100% - 80px));
+  grid-template-columns: 0.9fr 1.3fr;
+  min-height: 730px;
+  gap: 24px;
+  padding-block: 55px 60px;
+}
+.hero-worldwide .hero-copy h1 {
+  font-size: clamp(46px, 5.05vw, 76px);
+  letter-spacing: -0.065em;
+  line-height: 1.08;
+}
+.hero-worldwide .hero-copy h1 > span {
+  background: linear-gradient(115deg, #d6e1d9 5%, #a8c8d3 50%, #c6b7d6 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.foundation-app[data-mode="light"] .hero-worldwide .hero-copy h1 > span {
+  background-image: linear-gradient(115deg, #667d6f, #557e8a 55%, #81718b);
+}
+.world-network {
+  --track-bed: #111514;
+  position: relative;
+  min-width: 0;
+  isolation: isolate;
+  padding: 38px 0 46px;
+  border-radius: 36px;
+  background: radial-gradient(ellipse at 54% 49%, #b5d3cb08, transparent 70%);
+}
+.foundation-app[data-mode="light"] .world-network {
+  --track-bed: #f0f2ed;
+}
+.world-map-plane {
+  position: relative;
+  width: 100%;
+}
+.world-map-grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(#b9cac623 0.6px, transparent 0.7px);
+  background-size: 13px 13px;
+  mask-image: radial-gradient(ellipse at 55% 50%, #000 10%, transparent 72%);
+  z-index: -1;
+}
+.world-network-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+.world-coordinate-marks {
+  color: var(--quiet);
+  opacity: 0.32;
+}
+.world-track-bed {
+  stroke: var(--track-bed);
+  opacity: 0.88;
+}
+.world-track {
+  opacity: 0.2;
+}
+.world-route-tail {
+  opacity: 0;
+}
+.world-flag-capsule {
+  fill: var(--page-soft);
+}
+.world-station-rings {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+  opacity: 0.55;
+}
+.world-stations {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.world-station {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  transform: translate(-50%, -50%);
+  width: 0;
+  height: 0;
+  z-index: 3;
+}
+.world-station-flag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-content: center;
+  width: 42px;
+  height: 34px;
+  border: 1px solid var(--line-strong);
+  border-radius: 11px;
+  background: var(--panel);
+  box-shadow:
+    0 5px 16px #0002,
+    inset 0 1px #ffffff0a;
+}
+.world-station-flag img {
+  display: block;
+  width: 26px;
+  height: 19px;
+  border-radius: 3px;
+  object-fit: cover;
+  opacity: 0.92;
+  user-select: none;
+}
+.world-station-name {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  line-height: 1.4;
+  color: var(--muted);
+  white-space: nowrap;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--page), transparent 8%);
+  letter-spacing: -0.01em;
+}
+.world-interchange {
+  position: absolute;
+  width: 66px;
+  height: 66px;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-content: center;
+  z-index: 4;
+  pointer-events: none;
+}
+.world-interchange-orbit {
+  position: absolute;
+  inset: -7px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--page), transparent 35%);
+  box-shadow: 0 0 35px #b2cdcc10;
+}
+.world-interchange-core {
+  position: absolute;
+  inset: 3px;
+  border: 1px solid #b4d0c736;
+  border-radius: 22px;
+  display: grid;
+  place-content: center;
+  background: radial-gradient(circle at 25% 10%, #718c7a23, var(--panel) 70%);
+  box-shadow:
+    0 8px 25px #0003,
+    inset 0 1px #ffffff13;
+}
+.world-interchange-core .connection-mark {
+  width: 31px;
+  height: 31px;
+  color: var(--accent);
+}
+.world-interchange small {
+  position: absolute;
+  top: calc(100% + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  font:
+    6px/1.5 ui-monospace,
+    monospace;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+  background: var(--page);
+  white-space: nowrap;
+  padding: 2px 7px;
+  border-radius: 3px;
+}
+.world-map-header {
+  position: absolute;
+  inset: 4px 5% auto 5%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  color: var(--quiet);
+  font:
+    6px/1.7 ui-monospace,
+    monospace;
+  letter-spacing: 0.12em;
+}
+.world-map-header > span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.world-map-header i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.7;
+}
+.world-map-footer {
+  position: absolute;
+  inset: auto 4% 0 5%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  color: var(--quiet);
+  font-size: 9px;
+}
+.world-motion-control.ab-icon-button {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+  color: var(--muted);
+}
+.world-motion-control.ab-icon-button svg {
+  width: 13px;
+  height: 13px;
+}
+.world-motion-control:hover {
+  color: var(--fg);
+  background: var(--panel-raised);
+}
+@media (min-width: 1700px) {
+  .hero-section.hero-worldwide {
+    min-height: 800px;
+    width: min(1540px, calc(100% - 120px));
+  }
+  .hero-worldwide .hero-copy h1 {
+    font-size: 82px;
+  }
+}
+@media (max-width: 1250px) {
+  .hero-section.hero-worldwide {
+    width: calc(100% - 64px);
+    gap: 20px;
+    min-height: 640px;
+  }
+  .hero-worldwide .hero-copy h1 {
+    font-size: clamp(43px, 5.25vw, 67px);
+  }
+  .world-station-flag {
+    width: 36px;
+    height: 30px;
+    border-radius: 10px;
+  }
+  .world-station-flag img {
+    width: 23px;
+    height: 17px;
+  }
+  .world-station-name {
+    font-size: 8px;
+    top: 21px;
+  }
+  .world-interchange {
+    width: 54px;
+    height: 54px;
+  }
+  .world-interchange-core {
+    border-radius: 18px;
+  }
+  .world-interchange-core .connection-mark {
+    width: 27px;
+    height: 27px;
+  }
+}
+@media (max-width: 1050px) {
+  .hero-section.hero-worldwide {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 35px;
+    min-height: 0;
+    width: calc(100% - 64px);
+    padding-block: 60px 40px;
+  }
+  .hero-worldwide .hero-copy {
+    max-width: 640px;
+  }
+  .hero-worldwide .hero-copy h1 {
+    font-size: clamp(59px, 8vw, 76px);
+  }
+  .hero-worldwide .hero-copy > p {
+    max-width: 440px;
+    font-size: 14px;
+  }
+  .world-network {
+    width: min(780px, 100%);
+    margin-inline: auto;
+  }
+  .world-station-flag {
+    width: 42px;
+    height: 34px;
+    border-radius: 11px;
+  }
+  .world-station-flag img {
+    width: 26px;
+    height: 19px;
+  }
+  .world-station-name {
+    font-size: 10px;
+    top: 24px;
+  }
+  .world-interchange {
+    width: 64px;
+    height: 64px;
+  }
+  .world-map-header {
+    font-size: 7px;
+  }
+  .world-map-footer {
+    font-size: 11px;
+  }
+}
+@media (max-width: 600px) {
+  .hero-section.hero-worldwide {
+    width: calc(100% - 40px);
+    gap: 26px;
+    padding-block: 38px 34px;
+  }
+  .hero-worldwide .hero-copy h1 {
+    font-size: clamp(40px, 10.7vw, 62px);
+    line-height: 1.08;
+    margin-block: 23px;
+  }
+  .hero-worldwide .hero-copy > p {
+    font-size: 13px;
+    max-width: 355px;
+  }
+  .hero-worldwide .hero-copy > .hero-assurance {
+    margin-top: 20px;
+  }
+  .world-network {
+    padding: 35px 0 45px;
+    border-radius: 20px;
+  }
+  .world-station-flag {
+    width: 29px;
+    height: 25px;
+    border-radius: 8px;
+  }
+  .world-station-flag img {
+    width: 20px;
+    height: 15px;
+    border-radius: 2px;
+  }
+  .world-station-name {
+    font-size: 7px;
+    top: 17px;
+    padding-inline: 3px;
+  }
+  .world-interchange {
+    width: 40px;
+    height: 40px;
+  }
+  .world-interchange-core {
+    inset: 2px;
+    border-radius: 13px;
+  }
+  .world-interchange-core .connection-mark {
+    width: 22px;
+    height: 22px;
+  }
+  .world-interchange-orbit {
+    inset: -5px;
+  }
+  .world-interchange small {
+    top: calc(100% + 8px);
+    font-size: 4px;
+    letter-spacing: 0.1em;
+    padding-inline: 4px;
+  }
+  .world-map-header {
+    font-size: 5px;
+    left: 3%;
+    right: 3%;
+    top: 0;
+  }
+  .world-map-header > span:first-child {
+    gap: 6px;
+  }
+  .world-map-footer {
+    left: 3%;
+    right: 2%;
+    font-size: 9px;
+  }
+  .world-motion-control.ab-icon-button {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+  }
+}
+@media (max-width: 360px) {
+  .hero-section.hero-worldwide {
+    width: calc(100% - 32px);
+  }
+  .hero-worldwide .hero-copy h1 {
+    font-size: 38px;
+  }
+  .world-station-flag {
+    width: 27px;
+    height: 23px;
+  }
+  .world-station-flag img {
+    width: 19px;
+    height: 14px;
+  }
+  .world-station-name {
+    font-size: 6px;
+    top: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .world-network[data-paused="true"] .world-journey {
+    display: none;
+  }
+  .world-network[data-paused="true"] .world-track {
+    opacity: 0.4;
+  }
+}

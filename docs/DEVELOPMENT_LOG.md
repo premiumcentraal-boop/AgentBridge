@@ -246,3 +246,21 @@ Append one dated entry for each substantial incremental development session. Lin
   CI result: [PR quality checks](https://github.com/premiumcentraal-boop/AgentBridge/pull/34/checks).
   The Railway service and `agentbridge.victor.ceo` DNS are prepared in the
   runbook, not deployed or attached by this change. No carrier calls placed.
+
+## 2026-11-11 — worldwide transit animation and mobile preview
+
+- Changed the main tagline to “connect agents worldwide” and replaced the
+  homepage tube artwork with a coded 40-second SVG transit network: eight
+  routes, 16 flag stations, 16 flag travellers, both directions and overpasses.
+- Used smooth cubic joins, arc-length-weighted travel, station pauses, staggered
+  departures and subdued track colours to give simultaneous motion a rhythm.
+- Added native pause/play, reduced-motion handling, off-screen/tab-hidden
+  suspension and local MIT-licensed flag vectors with preserved notices.
+- Validation: 131 backend/security tests, seven structural tests over 21 pages
+  and six geometry/DOM checks pass. Geometry checks cover continuous tangents,
+  map bounds, country coverage and arrival/dwell timing in both directions.
+- Preparing a private static Sites review copy for mobile viewing, separate
+  from the Railway service and real studio API. Browser visual QA remains
+  pending because this session exposes no supported browser-control tool.
+- Review and CI: [PR #34](https://github.com/premiumcentraal-boop/AgentBridge/pull/34)
+  and [quality checks](https://github.com/premiumcentraal-boop/AgentBridge/pull/34/checks).

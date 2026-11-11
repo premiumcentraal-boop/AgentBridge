@@ -17,6 +17,7 @@ await build({
   format: "esm",
   packages: "external",
   jsx: "automatic",
+  loader: { ".svg": "dataurl" },
   outfile: resolve(web, ".cache/render.mjs"),
   logLevel: "warning",
 });
@@ -30,6 +31,7 @@ await build({
   platform: "browser",
   format: "esm",
   jsx: "automatic",
+  loader: { ".svg": "dataurl" },
   minify: true,
   legalComments: "linked",
   outfile: output,
@@ -90,6 +92,10 @@ for (const [name, pkg] of Object.entries(lock.packages)) {
     `${name.replace("node_modules/", "")} ${pkg.version}\n${license}`,
   );
 }
+notices.push(
+  "flag-icons — country flag vectors\n" +
+    (await readFile(resolve(root, "docs/FLAG_ICONS_LICENSE.txt"), "utf8")),
+);
 const thirdPartyNotices = notices.join("\n\n--------------------\n\n");
 await writeFile(
   resolve(dist, "assets/foundation/THIRD_PARTY_NOTICES.txt"),
@@ -103,6 +109,7 @@ const offlineBuild = await build({
   platform: "browser",
   format: "iife",
   jsx: "automatic",
+  loader: { ".svg": "dataurl" },
   minify: true,
   write: false,
   legalComments: "inline",
