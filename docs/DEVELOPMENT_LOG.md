@@ -297,3 +297,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 ## 2026-11-11 — Reservation UPDATE ABORT rollback regression (PR #37 pending)
 - Added a deterministic SQLite BEFORE UPDATE RAISE(ABORT) fault-injection test for the second statement of the D1 batch: verifies hangup, unchanged ready reservation, rollback of the earlier inserted carrier leg, successful authorized retry and single-use after retry.
 - The previous PR head df6070bb passed GitHub Actions quality gate run 43003476766. This new commit needs its own exact-head CI; the test was not executed locally. Distributed D1 transaction semantics and carrier behavior remain unverified. No merge, deployment, calls or routing activation.
+
+## 2026-11-11 — Atomic SignalWire provider-event connect outcome (PR #37 pending)
+- Extended the existing D1 claim batch: carrier-leg INSERT, conditional reservation UPDATE, conditional provider-event connect UPDATE, reservation reset on silently ignored event UPDATE, and orphan-leg cleanup are executed transactionally. A connect response now requires exactly one leg, reservation transition, and event transition, and no compensating reset.
+- Removed the separate post-claim connect outcome writes in initial and PIN callbacks. Added offline SQLite RAISE(ABORT) and RAISE(IGNORE) fault-injection regressions for provider-event connect persistence and retry behavior on the initial callback.
+- Exact-head CI, PIN-path event fault coverage, and distributed D1 semantics require verification. No merges, deployments, paid calls, routing flags or provider resources changed.
