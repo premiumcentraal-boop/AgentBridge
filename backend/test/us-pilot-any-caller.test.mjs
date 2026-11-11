@@ -110,3 +110,18 @@ test('carrier-leg insertion failure rolls back the claim and permits a later aut
   assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,1);
   assert.ok(isHangup((await inbound(env,{call_id:CID(93)})).doc),'a successful claim remains single-use');
 });
+
+test('silently ignored carrier-leg INSERT cannot strand the reservation',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,...ANY});
+  const created=await (await reserve(env,'any-silent-insert-1')).json();
+  assert.equal((await approveReservation(env,created.id)).status,200);
+  DB.raw.exec("CREATE TRIGGER ignore_carrier_leg BEFORE INSERT ON reservation_carrier_legs BEGIN SELECT RAISE(IGNORE); END");
+  const failed=await inbound(env,{call_id:CID(94)});
+  assert.ok(isHangup(failed.doc),'a suppressed carrier-leg write must never emit connect');
+  assert.equal(status(DB,created.id),'ready','no stranded connecting reservation');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,0);
+  DB.raw.exec('DROP TRIGGER ignore_carrier_leg');
+  const retry=await inbound(env,{call_id:CID(95)});
+  assert.equal(connectOf(retry.doc)?.to,DEST);
+  assert.equal(status(DB,created.id),'connecting');
+});
