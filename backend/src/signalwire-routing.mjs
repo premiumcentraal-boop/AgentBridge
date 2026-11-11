@@ -91,15 +91,17 @@ async function policyCheck(env,row,mode,now){
 /** Atomic single claim; the one-active-reservation index also blocks concurrent routes. */
 async function claim(env,row,callId,segmentId,check,now){
   if(!UUID.test(segmentId))return false;
-  const r=await env.DB.prepare("UPDATE reservations SET status='connecting',provider='signalwire',provider_call_id=?,claimed_at=?,max_call_seconds=?,max_cost_cents=? WHERE id=? AND status='ready' AND approved_at IS NOT NULL AND expires_at>?")
-    .bind(callId,now,check.caps.maxSeconds,check.cost,row.id,now).run();
-  if(r.meta?.changes!==1)return false;
-  // Persist the Voice Logs segment identity BEFORE emitting connect. If this
-  // insert fails, no paid SWML is returned and the reservation stays locked.
+  // D1 batch executes statements in a single transaction. If the carrier-leg
+  // insert fails, the reservation update rolls back instead of stranding a
+  // 'connecting' reservation that blocks all subsequent preparations.
   try{
-    await env.DB.prepare('INSERT INTO reservation_carrier_legs (reservation_id,provider_segment_id,claimed_at) VALUES (?,?,?)')
-      .bind(row.id,segmentId,now).run();
-    return true;
+    const [updated,leg]=await env.DB.batch([
+      env.DB.prepare("UPDATE reservations SET status='connecting',provider='signalwire',provider_call_id=?,claimed_at=?,max_call_seconds=?,max_cost_cents=? WHERE id=? AND status='ready' AND approved_at IS NOT NULL AND expires_at>?")
+        .bind(callId,now,check.caps.maxSeconds,check.cost,row.id,now),
+      env.DB.prepare("INSERT INTO reservation_carrier_legs (reservation_id,provider_segment_id,claimed_at) SELECT id,?,? FROM reservations WHERE id=? AND status='connecting' AND provider_call_id=? AND claimed_at=?")
+        .bind(segmentId,now,row.id,callId,now)
+    ]);
+    return updated.meta?.changes===1&&leg.meta?.changes===1;
   }catch{return false;}
 }
 function connectFor(env,row,check){
