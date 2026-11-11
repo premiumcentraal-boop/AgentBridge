@@ -50,8 +50,12 @@ export async function inspectSignalWireNumbers(config, fetchImpl=fetch){
   const limit=250_000;
   const advertised=response.headers?.get('content-length');
   if(advertised!==null&&advertised!==undefined&&
-     /^\d+$/.test(advertised)&&Number(advertised)>limit)
+     /^\d+$/.test(advertised)&&Number(advertised)>limit){
+    // Reject without reading bytes, but also abort the provider stream.
+    // Cancellation is best-effort: a failed cancel must not mask the size error.
+    try{await response.body?.cancel();}catch{}
     throw new Error('SignalWire inventory response too large');
+  }
   if(!response.body?.getReader)throw new Error('Invalid SignalWire inventory response');
   const reader=response.body.getReader();
   const chunks=[];
