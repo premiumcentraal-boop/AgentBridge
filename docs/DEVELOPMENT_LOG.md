@@ -289,3 +289,7 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added a third statement to the same D1 claim batch to delete a newly inserted carrier leg when the reservation transition does not persist (including a nonthrowing SQLite RAISE(IGNORE) trigger). This avoids orphan leg rows blocking retries.
 - Added an offline fault-injection regression for ignored UPDATE, hangup, no orphan leg, successful retry and single-use after retry.
 - This remains a reviewable private-test reliability patch, not authorization to route paid calls. Exact-head CI and independent review pending at commit time; no calls, provider purchases, secrets, flag changes, merges or deployments.
+
+## 2026-11-11 — Concurrent signed-callback regression (PR #37 pending)
+- Added an offline 12-way Promise.all signed inbound callback regression for the transactional SignalWire reservation claim. It asserts exactly one SWML connect, all losing callbacks hang up, one persisted carrier leg, and no subsequent reuse.
+- This tests the existing SQLite-backed mock's concurrent scheduling, not real distributed D1 worker contention or provider delivery ordering. Exact-head GitHub CI and independent review required; no provider calls, paid routing, purchases, merges or deployments.
