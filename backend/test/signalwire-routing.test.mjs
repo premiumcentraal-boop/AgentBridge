@@ -168,3 +168,72 @@ test('daily call cap counts claimed calls across reservations',async t=>{
   const b=await reserve(env,'daily-cap-0002');await approveReservation(env,b.id);
   assert.ok(isHangup((await inbound(env,{call_id:CID(61)})).doc),'daily cap applies before prompt');
 });
+
+test('DTMF challenge freshness is enforced server-side even while reservation is ready',async t=>{
+  const {env,DB,at}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const b=await reserve(env,'challenge-window-boundary');
+  await approveReservation(env,b.id);
+  const id=CID(210);
+  await inbound(env,{call_id:id});
+  const event=DB.raw.prepare("SELECT received_at FROM provider_events WHERE provider_call_id=? AND event_type='swml_inbound'").get(id);
+  assert.equal(event.received_at,T0);
+  at(T0+59);
+  const within=await pin(env,id,b.dtmf_pin);
+  assert.equal(connectOf(within.doc)?.to,DEST,'59-second challenge remains valid');
+
+  // Separate ready reservation: 60-second challenge must fail, despite the
+  // reservation itself still being unexpired and the PIN being correct.
+  DB.raw.prepare("UPDATE reservations SET status='completed' WHERE id=?").run(b.id);
+  at(T0+60);
+  const c=await reserve(env,'challenge-exact-sixty');
+  await approveReservation(env,c.id);
+  const id2=CID(211);
+  await inbound(env,{call_id:id2});
+  at(T0+120);
+  assert.ok(isHangup((await pin(env,id2,c.dtmf_pin)).doc),'exactly 60 seconds expires');
+  assert.deepEqual({...DB.raw.prepare('SELECT status,pin_attempts FROM reservations WHERE id=?').get(c.id)},
+    {status:'ready',pin_attempts:0},'expired challenge cannot consume or mutate reservation');
+});
+
+test('DTMF challenge rejects malformed and future timestamps without burning PIN',async t=>{
+  const {env,DB,at}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const b=await reserve(env,'challenge-invalid-time');
+  await approveReservation(env,b.id);
+  const id=CID(212);
+  await inbound(env,{call_id:id});
+  const update=DB.raw.prepare("UPDATE provider_events SET received_at=? WHERE provider_call_id=? AND event_type='swml_inbound'");
+  for(const value of [T0+1,'invalid',-1]){
+    update.run(value,id);
+    assert.ok(isHangup((await pin(env,id,b.dtmf_pin)).doc),String(value));
+  }
+  assert.equal(DB.raw.prepare('SELECT pin_attempts FROM reservations WHERE id=?').get(b.id).pin_attempts,0);
+  update.run(T0,id);
+  at(T0+1);
+  assert.equal(connectOf((await pin(env,id,b.dtmf_pin)).doc)?.to,DEST,'valid original timestamp works');
+});
+
+
+test('simultaneous valid PIN callbacks cannot produce two carrier connections',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const reservation=await reserve(env,'concurrent-pin-claims-0001');
+  await approveReservation(env,reservation.id);
+  const firstId=CID(220),secondId=CID(221);
+  const [firstPrompt,secondPrompt]=await Promise.all([
+    inbound(env,{call_id:firstId}),inbound(env,{call_id:secondId})
+  ]);
+  assert.ok(firstPrompt.doc?.sections?.main?.some(x=>x.prompt));
+  assert.ok(secondPrompt.doc?.sections?.main?.some(x=>x.prompt));
+  const results=await Promise.all([
+    pin(env,firstId,reservation.dtmf_pin),
+    pin(env,secondId,reservation.dtmf_pin)
+  ]);
+  assert.equal(results.filter(x=>connectOf(x.doc)).length,1,
+    'exactly one competing signed PIN callback can connect');
+  assert.equal(results.filter(x=>isHangup(x.doc)).length,1,
+    'losing callback must hang up');
+  assert.equal(DB.raw.prepare("SELECT COUNT(*) AS n FROM provider_events WHERE event_type='swml_pin' AND outcome='connect'").get().n,1);
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,1);
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'connecting');
+  assert.ok(isHangup((await pin(env,firstId,reservation.dtmf_pin)).doc),'replayed first callback hangs up');
+  assert.ok(isHangup((await pin(env,secondId,reservation.dtmf_pin)).doc),'replayed second callback hangs up');
+});

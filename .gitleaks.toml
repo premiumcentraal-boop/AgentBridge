@@ -1,0 +1,9 @@
+# Secret scan config: default gitleaks rules plus a narrow allowlist for
+# synthetic, lowercase idempotency keys used by backend tests (not credentials).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic idempotency keys in backend tests"
+regexTarget = "line"
+regexes = ['''(idempotency_key|\bkey)\s*[:=]\s*'[a-z0-9-]{6,40}'\s*[,;)}]''']
