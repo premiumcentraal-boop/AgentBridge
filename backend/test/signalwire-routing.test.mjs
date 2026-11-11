@@ -237,3 +237,34 @@ test('simultaneous valid PIN callbacks cannot produce two carrier connections',a
   assert.ok(isHangup((await pin(env,firstId,reservation.dtmf_pin)).doc),'replayed first callback hangs up');
   assert.ok(isHangup((await pin(env,secondId,reservation.dtmf_pin)).doc),'replayed second callback hangs up');
 });
+
+
+for(const [kind,trigger] of [
+  ['ABORT',"SELECT RAISE(ABORT,'injected PIN outcome failure')"],
+  ['IGNORE',"SELECT RAISE(IGNORE)"]
+]){
+  test('PIN callback: provider-event connect UPDATE '+kind+' fails closed without consuming reservation',async t=>{
+    const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+    const b=await reserve(env,'pin-event-'+kind.toLowerCase()+'-1');
+    assert.equal((await approveReservation(env,b.id)).status,200);
+    const firstId=CID(kind==='ABORT'?310:320);
+    const retryId=CID(kind==='ABORT'?311:321);
+    const first=await inbound(env,{call_id:firstId});
+    assert.ok(first.doc.sections.main.some(x=>x.prompt),'original call received a PIN challenge');
+    DB.raw.exec("CREATE TRIGGER inject_pin_outcome BEFORE UPDATE OF outcome ON provider_events WHEN NEW.outcome='connect' AND NEW.event_type='swml_pin' BEGIN "+trigger+"; END");
+    const failed=await pin(env,firstId,b.dtmf_pin);
+    assert.equal(failed.status,200,'a failed DB transaction must return valid hangup SWML');
+    assert.ok(isHangup(failed.doc),'never emit connect on failed event persistence');
+    assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(b.id).status,'ready');
+    assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(b.id).n,0);
+    assert.notEqual(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_pin'").get(firstId)?.outcome,'connect');
+    DB.raw.exec('DROP TRIGGER inject_pin_outcome');
+    const next=await inbound(env,{call_id:retryId});
+    assert.ok(next.doc.sections.main.some(x=>x.prompt));
+    const success=await pin(env,retryId,b.dtmf_pin);
+    assert.equal(connectOf(success.doc)?.to,DEST,'fresh signed PIN attempt succeeds after transient failure');
+    assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(b.id).status,'connecting');
+    assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(b.id).n,1);
+    assert.equal(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_pin'").get(retryId).outcome,'connect');
+  });
+}
