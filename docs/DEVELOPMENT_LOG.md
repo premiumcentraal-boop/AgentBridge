@@ -273,6 +273,7 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Merged main (#35, #32, #30) into the product/studio branch; root `check` now includes `chat-experience.mjs` alongside the studio files; CI keeps the gitleaks job and the working-preview artifact.
 - Mobile hero: the "01 / A single conversation" caption now has a backdrop so it stays legible over the cable art.
 - Known limitation: studio login throttling is keyed on the socket address, so behind Railway's proxy all clients share one 10-attempts/15-minutes bucket (a lockout nuisance, not a bypass; keys are 256-bit).
+- 2026-11-11: Dockerfile no longer uses a BuildKit secret mount (Railway rejects non-cache mounts); first Railway deploy at agentbridge.up.railway.app.
 
 ## 2026-11-11 — Transactional SignalWire claim and carrier-leg write (PR pending)
 - Corrected the two-step reservation claim: the reservation update and Voice Logs segment insertion now execute inside one D1 batch transaction, with a conditional segment insert tied to the claimed reservation and call ID.
@@ -316,3 +317,7 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added a PIN-authenticated callback fault-injection regression with simultaneous SQLite `RAISE(IGNORE)` triggers on provider-event `connect` persistence and reservation reset. The test requires a hangup, complete transaction rollback (ready reservation, zero carrier legs, no false connect event), and successful fresh signed PIN retry after removing both triggers.
 - This complements the existing initial-inbound compound-failure regression and single-fault PIN tests; it does not prove distributed Cloudflare D1 behavior.
 - Commit persisted via GitHub connector; local clone/tests blocked by `Could not resolve host: github.com`. Exact-head GitHub Actions result and independent review remain outstanding. No routing flags, calls, purchases, merges or deployments.
+
+## 2026-11-11 — Isolated PR #37 integration with current main (unverified)
+- Prepared a non-merged integration tree combining main's Railway Dockerfile and append-only deployment record with PR #37's transactional SignalWire source, regressions and all prior append-only entries. Both parents retained for review; this does not merge into main or enable routing.
+- CI, Cloudflare D1 batch semantics and independent security review remain required. No calls, secrets, paid resources or deployment performed.
