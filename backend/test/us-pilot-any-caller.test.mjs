@@ -145,6 +145,24 @@ test('silently ignored reservation UPDATE removes orphan carrier leg and allows 
 });
 
 
+test('reservation UPDATE exception rolls back inserted carrier leg and permits retry',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,...ANY});
+  const created=await (await reserve(env,'any-abort-update-1')).json();
+  assert.equal((await approveReservation(env,created.id)).status,200);
+  DB.raw.exec("CREATE TRIGGER abort_reservation_claim BEFORE UPDATE OF status ON reservations WHEN NEW.status='connecting' BEGIN SELECT RAISE(ABORT,'injected reservation update failure'); END");
+  const failed=await inbound(env,{call_id:CID(140)});
+  assert.ok(isHangup(failed.doc),'a failing reservation transition cannot emit connect');
+  assert.equal(status(DB,created.id),'ready','transaction rolls back the reservation transition');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,0,
+    'the preceding carrier-leg INSERT must roll back with the failed UPDATE');
+  DB.raw.exec('DROP TRIGGER abort_reservation_claim');
+  const retry=await inbound(env,{call_id:CID(141)});
+  assert.equal(connectOf(retry.doc)?.to,DEST);
+  assert.equal(status(DB,created.id),'connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,1);
+  assert.ok(isHangup((await inbound(env,{call_id:CID(142)})).doc));
+});
+
 test('simultaneous signed inbound claims cannot create two carrier legs or two connects',async t=>{
   const {env,DB}=await routingSetup(t,{...FLAGS,...ANY});
   const created=await (await reserve(env,'any-concurrent-claim-1')).json();
