@@ -210,3 +210,22 @@ test('silently ignored provider-event connect UPDATE releases claim and carrier 
   assert.equal(status(DB,created.id),'connecting');
   assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,1);
 });
+
+test('compound silent event and reservation-reset failures abort the entire claim batch',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,...ANY});
+  const created=await (await reserve(env,'compound-silent-reset-1')).json();
+  assert.equal((await approveReservation(env,created.id)).status,200);
+  DB.raw.exec("CREATE TRIGGER ignore_event_connect_compound BEFORE UPDATE OF outcome ON provider_events WHEN NEW.outcome='connect' BEGIN SELECT RAISE(IGNORE); END");
+  DB.raw.exec("CREATE TRIGGER ignore_reservation_reset_compound BEFORE UPDATE OF status ON reservations WHEN OLD.status='connecting' AND NEW.status='ready' BEGIN SELECT RAISE(IGNORE); END");
+  const failed=await inbound(env,{call_id:CID(180)});
+  assert.ok(isHangup(failed.doc),'compound failure must never emit connect');
+  assert.equal(status(DB,created.id),'ready','entire batch must roll back despite ignored compensation');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,0,'no orphaned leg');
+  assert.notEqual(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_inbound'").get(CID(180))?.outcome,'connect');
+  DB.raw.exec('DROP TRIGGER ignore_event_connect_compound');
+  DB.raw.exec('DROP TRIGGER ignore_reservation_reset_compound');
+  const retry=await inbound(env,{call_id:CID(181)});
+  assert.equal(connectOf(retry.doc)?.to,DEST,'fresh authorized callback succeeds');
+  assert.equal(status(DB,created.id),'connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,1);
+});
