@@ -93,3 +93,20 @@ test('any_caller keeps destination allowlist, caps, expiry and approval binding'
    assert.ok(isHangup(res.doc));
    assert.equal(status(DB,r.id),'ready');}
 });
+
+test('carrier-leg insertion failure rolls back the claim and permits a later authorized retry',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,...ANY});
+  const created=await (await reserve(env,'any-atomic-claim-1')).json();
+  assert.equal((await approveReservation(env,created.id)).status,200);
+  DB.raw.exec("CREATE TRIGGER reject_carrier_leg BEFORE INSERT ON reservation_carrier_legs BEGIN SELECT RAISE(ABORT,'injected leg failure'); END");
+  const failed=await inbound(env,{call_id:CID(91)});
+  assert.ok(isHangup(failed.doc),'a failed transactional claim must not emit connect');
+  assert.equal(status(DB,created.id),'ready','the reservation must not be stranded connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,0);
+  DB.raw.exec('DROP TRIGGER reject_carrier_leg');
+  const retry=await inbound(env,{call_id:CID(92)});
+  assert.equal(connectOf(retry.doc)?.to,DEST,'a new signed call can claim after the transient DB failure');
+  assert.equal(status(DB,created.id),'connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,1);
+  assert.ok(isHangup((await inbound(env,{call_id:CID(93)})).doc),'a successful claim remains single-use');
+});
