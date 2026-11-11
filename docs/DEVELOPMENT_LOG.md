@@ -273,3 +273,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Merged main (#35, #32, #30) into the product/studio branch; root `check` now includes `chat-experience.mjs` alongside the studio files; CI keeps the gitleaks job and the working-preview artifact.
 - Mobile hero: the "01 / A single conversation" caption now has a backdrop so it stays legible over the cable art.
 - Known limitation: studio login throttling is keyed on the socket address, so behind Railway's proxy all clients share one 10-attempts/15-minutes bucket (a lockout nuisance, not a bypass; keys are 256-bit).
+
+## 2026-11-11 — Transactional SignalWire claim and carrier-leg write (PR pending)
+- Corrected the two-step reservation claim: the reservation update and Voice Logs segment insertion now execute inside one D1 batch transaction, with a conditional segment insert tied to the claimed reservation and call ID.
+- A failed carrier-leg insert rolls back the reservation state instead of leaving an unconnected call in `connecting` and blocking the account.
+- Added an offline SQLite trigger fault-injection regression proving rollback, successful retry after removing the fault, and single-use behavior after a successful claim.
+- No carrier calls, routing activation, paid resources or deployment. Local Node tests and GitHub Actions remain to be verified on the exact PR head. This change does not address caller authentication, pricing verification or callback reconciliation.
