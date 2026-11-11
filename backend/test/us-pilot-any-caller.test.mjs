@@ -143,3 +143,21 @@ test('silently ignored reservation UPDATE removes orphan carrier leg and allows 
   assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,1);
   assert.ok(isHangup((await inbound(env,{call_id:CID(98)})).doc));
 });
+
+
+test('simultaneous signed inbound claims cannot create two carrier legs or two connects',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,...ANY});
+  const created=await (await reserve(env,'any-concurrent-claim-1')).json();
+  assert.equal((await approveReservation(env,created.id)).status,200);
+  const ids=Array.from({length:12},(_,i)=>CID(110+i));
+  const results=await Promise.all(ids.map(call_id=>inbound(env,{call_id})));
+  const connected=results.filter(r=>connectOf(r.doc));
+  assert.equal(connected.length,1,'only one simultaneous callback may receive a connect');
+  assert.ok(results.every(r=>r.status===200),'all valid signed callbacks receive SWML');
+  assert.ok(results.filter(r=>!connectOf(r.doc)).every(r=>isHangup(r.doc)),
+    'every losing callback must hang up');
+  assert.equal(status(DB,created.id),'connecting');
+  const legs=DB.raw.prepare('SELECT provider_segment_id FROM reservation_carrier_legs WHERE reservation_id=?').all(created.id);
+  assert.equal(legs.length,1,'exactly one carrier leg persisted');
+  assert.ok(isHangup((await inbound(env,{call_id:CID(130)})).doc),'replay window remains closed');
+});
