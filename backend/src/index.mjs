@@ -327,7 +327,7 @@ async function handleMcp(request,account,env){
   if(validation.notification)return new Response(null,{status:202});
   const response=(result)=>json({jsonrpc:'2.0',id:rpc.id??null,result});
   const fault=(code,message)=>json({jsonrpc:'2.0',id:rpc.id??null,error:{code,message}});
-  if(rpc.method==='initialize')return response({protocolVersion:'2025-03-26',capabilities:{tools:{},resources:{}},serverInfo:{name:'AgentBridge',version:'0.1.0'}});
+  if(rpc.method==='initialize')return response({protocolVersion:'2025-03-26',capabilities:{tools:{},resources:{}},serverInfo:{name:'AgentBridge',version:'1.0.0'}});
   if(rpc.method==='ping')return response({});
   if(rpc.method==='tools/list')return response({tools:reservationApiReady(env)?TOOLS:NUMBER_CARD_TOOLS});
   if(rpc.method==='resources/list')return response({resources:[numberCardResource()]});
