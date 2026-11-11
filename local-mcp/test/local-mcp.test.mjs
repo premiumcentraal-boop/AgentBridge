@@ -59,7 +59,8 @@ test('stdio: lists exactly the read-only allowlist; no write/paid tools', async(
       assert.equal(t.annotations?.readOnlyHint,true,t.name);
       assert.equal(t.annotations?.destructiveHint,false,t.name);
       assert.ok(!FORBIDDEN_TOOLS.includes(t.name));
-      assert.doesNotMatch(t.name,/purchase|buy|reserve|call|dial|send|forward|update|assign|delete|cancel/i);
+      assert.doesNotMatch(t.name,/purchase|buy|reserve|dial|send|forward|update|assign|delete|cancel/i);
+      if(/call/i.test(t.name))assert.equal(t.name,'preview_chat_call_flow','Only the exact preview tool may mention calls');
     }
     for(const n of ['get_bridge_setup','list_my_numbers','search_available_numbers'])
       assert.equal(tools.find(t=>t.name===n)._meta?.ui?.resourceUri,NUMBER_CARD_URI);
@@ -88,6 +89,35 @@ test('stdio: setup status with no credentials reports not configured, no crash',
     assert.equal(s.structuredContent.state,'operator_connection_required');
     assert.match(s.content[0].text,/Not configured/);
     assert.doesNotMatch(textOf(s),/undefined/);
+  }finally{await c.close();}
+});
+
+test('stdio: guidance difficulty changes only display; no carrier or write action',async()=>{
+  const c=await connect(cleanEnv({...CREDS,US_BRIDGE_DID:DID}),{mock:{}});
+  try{
+    const simple=await c.client.callTool({name:'preview_chat_call_flow',arguments:{difficulty:'simple'}});
+    const advanced=await c.client.callTool({name:'preview_chat_call_flow',arguments:{difficulty:'advanced'}});
+    for(const result of [simple,advanced]){
+      assert.equal(result.isError,false);
+      assert.equal(result.structuredContent.state,'preview_only');
+      assert.equal(result.structuredContent.ready_to_call,false);
+      assert.equal(result.structuredContent.routing_enabled,false);
+      assert.equal(result.structuredContent.preference_saved,false);
+      assert.equal(result.structuredContent.owner_approval_out_of_band_required,true);
+      assertNoSecret(result);
+    }
+    assert.notEqual(simple.structuredContent.sample_message,advanced.structuredContent.sample_message);
+    assert.deepEqual(simple.structuredContent.required_gates,advanced.structuredContent.required_gates);
+    assert.match(simple.content[0].text,/no calling capability/);
+    assert.equal(c.fetches().length,0,'preview must never contact carrier');
+    const bad=await c.client.callTool({name:'preview_chat_call_flow',arguments:{difficulty:'simple',skip_approval:true}}).catch(e=>e);
+    // MCP SDK may strip unknown Zod fields rather than reject them. Either result must remain harmless.
+    if(!(bad instanceof Error)&&bad.isError!==true){
+      assert.equal(bad.structuredContent.ready_to_call,false);
+      assert.equal(bad.structuredContent.owner_approval_out_of_band_required,true);
+      assert.equal(bad.structuredContent.routing_enabled,false);
+      assert.equal(c.fetches().length,0);
+    }
   }finally{await c.close();}
 });
 
@@ -250,7 +280,7 @@ test('stdio: invalid area codes and unknown tools never reach the provider', asy
 test('stdio: malformed and oversized frames are bounded; the server survives junk below the cap', async()=>{
   const {msgs}=await rawSession([init,'x'.repeat(20_000)+'\n','{not json}\n',
     JSON.stringify({jsonrpc:'2.0',id:3,method:'tools/list'})+'\n']);
-  assert.ok(msgs.find(m=>m.id===3)?.result?.tools?.length===4,'recovers after junk lines');
+  assert.ok(msgs.find(m=>m.id===3)?.result?.tools?.length===READ_ONLY_TOOLS.length,'recovers after junk lines');
   const big=await rawSession([init,'y'.repeat(300*1024)+'\n',JSON.stringify({jsonrpc:'2.0',id:4,method:'tools/list'})+'\n']);
   assert.equal(big.msgs.find(m=>m.id===4),undefined,'over-cap frame closes the session instead of buffering');
   assert.equal(big.code,0);

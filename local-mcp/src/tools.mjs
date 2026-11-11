@@ -14,6 +14,7 @@ import {z} from 'zod';
 import {getBridgeSetup,listMyNumbers,searchNumberCandidates} from '../../backend/src/chat-number-tools.mjs';
 import {inspectSignalWireNumbers,validateConnection} from '../../backend/src/signalwire.mjs';
 import {NUMBER_CARD_URI,NUMBER_CARD_MIME,numberCardResource,readNumberCardResource} from '../../backend/src/chat-card.mjs';
+import {previewChatCallFlow} from '../../backend/src/chat-experience.mjs';
 
 export const SERVER_NAME='agentbridge-local';
 export const SERVER_VERSION='0.1.0';
@@ -24,7 +25,7 @@ export const ENV_NAMES=Object.freeze({
 });
 /** The complete allowlist. Anything else must never be registered. */
 export const READ_ONLY_TOOLS=Object.freeze([
-  'get_bridge_setup','list_my_numbers','list_project_numbers','search_available_numbers'
+  'get_bridge_setup','list_my_numbers','list_project_numbers','search_available_numbers','preview_chat_call_flow'
 ]);
 /** Known write/paid/routing capabilities in this repo; asserted absent. */
 export const FORBIDDEN_TOOLS=Object.freeze([
@@ -98,6 +99,13 @@ function summarize(body){
       break;
     case 'number_error':
       lines.push('Error '+body.code+': '+body.message);
+      break;
+    case 'call_experience_preview':
+      lines.push(body.title+' (no calling capability)');
+      lines.push('Suggested chat request: '+body.sample_message);
+      for(const step of body.steps||[])lines.push('- '+step);
+      lines.push('Mandatory safety checks and separate approvals apply in every difficulty mode.');
+      lines.push('Preference is not stored; platform permission and native Grok Bot compatibility are not verified.');
       break;
     default:
       lines.push('AgentBridge result');
@@ -194,6 +202,12 @@ export function createServer({env=process.env,fetchImpl=(...a)=>globalThis.fetch
     description:'Show which SignalWire settings are configured (set/missing only, never values), the assigned US bridge number and the next setup step. Makes no provider request.',
     inputSchema:{},annotations:RO,_meta:CARD_META},
     async()=>setupStatus(env));
+
+  tool('preview_chat_call_flow',{title:'Choose AgentBridge chat guidance',
+    description:'Preview Simple, Guided or Advanced calling instructions within chat. Never saves a preference, prepares a call, checks eligibility or overrides owner approval, PIN or carrier caps.',
+    inputSchema:{difficulty:z.enum(['simple','guided','advanced']).optional()},
+    annotations:RO},
+    async(args)=>previewChatCallFlow(args));
 
   tool('list_my_numbers',{title:'Check my US bridge number',
     description:'Check whether the configured US_BRIDGE_DID appears as a voice-capable number in the SignalWire Project. One read-only GET.',
