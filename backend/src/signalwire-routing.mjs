@@ -89,26 +89,34 @@ async function policyCheck(env,row,mode,now){
   return {ok:true,caps,cost};
 }
 /** Atomic single claim; the one-active-reservation index also blocks concurrent routes. */
-async function claim(env,row,callId,segmentId,check,now){
+async function claim(env,row,callId,segmentId,check,now,eventType){
   if(!UUID.test(segmentId))return false;
   // D1 batch executes statements in a single transaction. If the carrier-leg
   // insert fails, the reservation update rolls back instead of stranding a
   // 'connecting' reservation that blocks all subsequent preparations.
   try{
-    const [leg,updated]=await env.DB.batch([
+    const [leg,updated,event,reset]=await env.DB.batch([
       // Insert first: if a trigger silently suppresses the INSERT, the UPDATE
       // below cannot transition the reservation without a matching leg.
       env.DB.prepare("INSERT INTO reservation_carrier_legs (reservation_id,provider_segment_id,claimed_at) SELECT id,?,? FROM reservations WHERE id=? AND status='ready' AND approved_at IS NOT NULL AND expires_at>?")
         .bind(segmentId,now,row.id,now),
       env.DB.prepare("UPDATE reservations SET status='connecting',provider='signalwire',provider_call_id=?,claimed_at=?,max_call_seconds=?,max_cost_cents=? WHERE id=? AND status='ready' AND approved_at IS NOT NULL AND expires_at>? AND EXISTS (SELECT 1 FROM reservation_carrier_legs WHERE reservation_id=? AND provider_segment_id=? AND claimed_at=?)")
         .bind(callId,now,check.caps.maxSeconds,check.cost,row.id,now,row.id,segmentId,now),
+      // Persist the connection outcome in the SAME transaction as the claim.
+      // Never emit connect for an unrecorded event, including ignored UPDATEs.
+      env.DB.prepare("UPDATE provider_events SET outcome='connect',reservation_id=? WHERE provider='signalwire' AND provider_call_id=? AND event_type=? AND outcome='received' AND EXISTS (SELECT 1 FROM reservations WHERE id=? AND status='connecting' AND provider_call_id=?)")
+        .bind(row.id,callId,eventType,row.id,callId),
+      // If event persistence was silently ignored, release the claim before
+      // deleting its carrier leg. This is conditional on THIS call identity.
+      env.DB.prepare("UPDATE reservations SET status='ready',provider=NULL,provider_call_id=NULL,claimed_at=NULL,max_call_seconds=NULL,max_cost_cents=NULL WHERE id=? AND status='connecting' AND provider_call_id=? AND NOT EXISTS (SELECT 1 FROM provider_events WHERE provider='signalwire' AND provider_call_id=? AND event_type=? AND outcome='connect' AND reservation_id=?)")
+        .bind(row.id,callId,callId,eventType,row.id),
       // A nonthrowing, zero-row UPDATE (for example RAISE(IGNORE)) must
       // not leave an orphan carrier leg behind. Keep cleanup in the same
       // transaction; a throwing cleanup rolls back both preceding writes.
       env.DB.prepare("DELETE FROM reservation_carrier_legs WHERE reservation_id=? AND provider_segment_id=? AND claimed_at=? AND NOT EXISTS (SELECT 1 FROM reservations WHERE id=? AND status='connecting' AND provider='signalwire' AND provider_call_id=? AND claimed_at=?)")
         .bind(row.id,segmentId,now,row.id,callId,now)
     ]);
-    return updated.meta?.changes===1&&leg.meta?.changes===1;
+    return updated.meta?.changes===1&&leg.meta?.changes===1&&event.meta?.changes===1&&reset.meta?.changes===0;
   }catch{return false;}
 }
 function connectFor(env,row,check){
@@ -134,8 +142,7 @@ export async function handleSignalWireRouting(request,env={}){
   if(mode==='capped_caller_id'||mode==='any_caller'){
     // any_caller: the first signed inbound call during the approved window claims it.
     if(mode==='capped_caller_id'&&call.from_number!==env.TEST_CALLER_E164){await setOutcome(env,call.call_id,'swml_inbound','CALLER_MISMATCH',row.id);return hangup();}
-    if(!await claim(env,row,call.call_id,call.segment_id,check,now)){await setOutcome(env,call.call_id,'swml_inbound','CLAIM_LOST',row.id);return hangup();}
-    await setOutcome(env,call.call_id,'swml_inbound','connect',row.id);
+    if(!await claim(env,row,call.call_id,call.segment_id,check,now,'swml_inbound')){await setOutcome(env,call.call_id,'swml_inbound','CLAIM_LOST',row.id);return hangup();}
     return connectFor(env,row,check);
   }
   // dtmf_pin: answer silently, collect digits, post them to the signed PIN URL.
@@ -185,7 +192,6 @@ export async function handleSignalWirePin(request,env={}){
   }
   const check=await policyCheck(env,row,'dtmf_pin',now);
   if(!check.ok){await setOutcome(env,call.call_id,'swml_pin',check.code,row.id);return hangup();}
-  if(!await claim(env,row,call.call_id,call.segment_id,check,now)){await setOutcome(env,call.call_id,'swml_pin','CLAIM_LOST',row.id);return hangup();}
-  await setOutcome(env,call.call_id,'swml_pin','connect',row.id);
+  if(!await claim(env,row,call.call_id,call.segment_id,check,now,'swml_pin')){await setOutcome(env,call.call_id,'swml_pin','CLAIM_LOST',row.id);return hangup();}
   return connectFor(env,row,check);
 }
