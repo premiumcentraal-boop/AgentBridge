@@ -30,6 +30,12 @@ Last revised: 2026-11-09. Read [NORTH_STAR.md](NORTH_STAR.md) first.
 - [ ] Structured errors, trace IDs and webhook idempotent event ledger (ledger + SignalWire replay guard done on branch routing-fixes; trace IDs pending)
 - [ ] Carrier-verified caller authentication or per-call challenge before any public routing (caller ID alone is spoofable) — DTMF PIN challenge implemented offline on routing-fixes; Grok Bot DTMF support unverified
 
+## Chat-first user experience (2026-11-10)
+- [x] Implement a non-routing `preview_chat_call_flow` tool in both authenticated HTTP MCP and private read-only local MCP, with Simple/Guided/Advanced text/structured previews and shared immutable safety requirements (feature branch, review and CI pending)
+- [ ] Add authenticated, account-scoped durable guidance preferences controllable from chat; **never** use presentation choice to relax safety rules
+- [ ] Verify Grok Bot host MCP interoperability, native call-card and DTMF capabilities; international bridge use must comply with platform and carrier terms
+- [ ] Build a truly chat-centered, independently authenticated owner approval and verified quote experience without exposing owner tokens to the agent
+
 ## P1 — Real authorized call, still private
 - [ ] Create and verify a personal test telecom account
 - [ ] Provision one US DID and one preapproved consenting international test destination
@@ -69,3 +75,6 @@ Never auto-merge production-risk changes. Do not falsely mark a task complete wi
 - [ ] Confirm Trial Mode calling eligibility, current SignalWire Voice Logs segment/parent fields, and Grok Bot native DTMF support.
 - [ ] Owner-authorized **routing-OFF** staged Worker configuration, secure token scopes, and signed hangup-only tests.
 - [ ] Explicit separate owner authorization for one consenting US-to-US call, then reconcile real provider charges and disable routing again.
+
+## Pending review — SignalWire inventory byte bound (issue #31)
+- [ ] Review and merge the streaming 250,000-byte upstream response cap and offline boundary tests; implemented on isolated branch, **not yet merged or deployed**.

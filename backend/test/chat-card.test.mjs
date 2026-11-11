@@ -58,7 +58,7 @@ test('authenticated MCP lists and serves UI resource and links every number tool
   const tools=await worker.fetch(mcp('tools/list'),e);
   const names=(await tools.json()).result.tools;
   assert.deepEqual(names.map(t=>t.name),[
-    'get_bridge_setup','list_my_numbers','search_available_numbers'
+    'preview_chat_call_flow','get_bridge_setup','list_my_numbers','search_available_numbers'
   ],'incomplete private calling setup must advertise read-only chat tools only');
   for(const tool of names){
     assert.equal(tool.annotations.readOnlyHint,true);

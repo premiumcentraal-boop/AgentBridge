@@ -56,7 +56,7 @@ The original schema is in backend/schema.sql. The additive but non-repeatable **
 
 - Carrier-side enforceable spend exposure is **unverified**; billing estimates can be wrong, and the project may have only a balance alert.
 - SignalWire log settlement/parent linkage and strict terminal check are **offline-tested, not carrier-tested**. Unknown or outstanding carrier segments intentionally leave a call locked.
-- Grok Bot actual US dial and DTMF support remain **unverified**; caller-ID mode exists only for historical tests/library compatibility; the US-pilot policy refuses it even with an opt-in.
+- Grok Bot's voice agent placed a real bridged US call on 2026-11-10 in `any_caller` mode; its DTMF support remains **unverified** and its outbound caller ID rotates per call. `dtmf_pin` stays the default; `capped_caller_id` and `any_caller` are owner opt-ins with accepted residual risk (below).
 - Cloudflare authentication/D1 migration state and real provider token scoping have not been independently confirmed.
 - Multi-tenant accounts, payments, number purchases, status callback reconciliation, international routes and resale operations remain out of scope.
 
@@ -72,7 +72,15 @@ The owner's own AI voice agent may place a normal phone call that cannot send DT
 
 Some AI calling agents (including the owner's Grok Bot voice agent) present a **different caller ID on every call**, so neither DTMF nor caller-ID matching works. `CALLER_PROOF_MODE=any_caller` with `ANY_CALLER_RISK_ACCEPTED=true` accepts **any** calling number. Still enforced: signed SignalWire webhook, both routing flags, an owner-reviewed and fingerprinted reservation (the fingerprint records `trusted_caller: "ANY"`), one allowlisted US destination, single-use atomic claim, the reservation TTL (max 900 s), the 600 s leg cap and the daily call/spend caps. The actual From number is logged in `inbound_call_log`.
 
-**Residual risk:** whoever calls the bridge number first while an approved reservation is ready gets that one leg to the allowlisted destination. Approve a reservation only right before the call, keep the TTL short, and turn the flags off afterwards.
+> **Warning — no caller authentication.** A valid SignalWire signature proves the request came from the carrier, **not** who is calling. In `any_caller` mode an approved reservation is effectively a bearer ticket for the bridge number.
+
+**Residual risk accepted by the owner:** whoever calls the bridge number first while an approved reservation is ready gets that one capped leg to the single allowlisted destination (and the call is billed to the owner). Mitigations the owner must follow:
+
+- Prefer `dtmf_pin` whenever the caller can send digits; use `any_caller` only for a caller that cannot (e.g. the Grok Bot voice agent).
+- Approve a reservation only immediately before the call, keep `RESERVATION_TTL_SECONDS` short, and place the call right away.
+- Turn both routing flags off (or cancel/release the reservation) right after the call.
+- Review `inbound_call_log` afterwards; an unexpected From number on a `connect` outcome means the leg was taken by someone else.
+- Exposure stays bounded by the single-use claim, the 600 s leg cap, the daily call/spend caps and the 60-second DTMF challenge window in `dtmf_pin` mode.
 
 ## Learning the caller ID
 
