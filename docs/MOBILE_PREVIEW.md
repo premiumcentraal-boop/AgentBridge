@@ -4,7 +4,8 @@ Open https://agentbridge-worldwide.premiumcentraal.chatgpt.site on your phone.
 Sign in with the Site owner's ChatGPT account if prompted. The homepage shows
 “connect agents worldwide” and the 40-second transit animation. Choose
 **Open studio** to explore the app; page links and interactions are real DOM
-components, not screenshots. The globe/route graphic is an illustration.
+components, not screenshots. Broad coloured lines arrive at circles containing
+country flags; this graphic is an illustration.
 
 The Site is an owner-private static review, separate from the production
 Railway service. Drafts, preferences and call controls are sample interactions
@@ -13,8 +14,8 @@ functionality are deployed to the review Site.
 
 The preview serves the working React/Astryx HTML bundle, with ordinary hash
 links to its pages. Historical boards load separately when requested so the
-mobile entry remains about 1.7 MB before transfer compression. Flags and their
-license notices are bundled locally.
+mobile entry stays small. Flags render as local SVG symbols inside white circles,
+and their license notices are bundled locally.
 
 ## Updating the review
 

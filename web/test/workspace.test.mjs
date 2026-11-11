@@ -22,6 +22,7 @@ async function waitFor(check) {
 function setup(
   url = "file:///AgentBridge-Working-Website.html",
   offline = true,
+  reducedMotion = false,
 ) {
   const errors = [],
     requests = [];
@@ -43,7 +44,8 @@ function setup(
       virtualConsole,
       beforeParse(window) {
         window.matchMedia = (query) => ({
-          matches: false,
+          matches:
+            reducedMotion && query === "(prefers-reduced-motion: reduce)",
           media: query,
           addEventListener() {},
           removeEventListener() {},
@@ -119,8 +121,22 @@ test("working preview navigates real pages and keeps call state in the floating 
     document.querySelector(".world-network-svg").dataset.loopSeconds,
     "40",
   );
-  assert.equal(document.querySelectorAll(".world-station").length, 16);
-  assert.equal(document.querySelectorAll("animateMotion").length, 16);
+  assert.equal(
+    document.querySelectorAll(".world-moving-scene .world-country-circle")
+      .length,
+    16,
+  );
+  assert.equal(document.querySelectorAll("animateMotion").length, 0);
+  for (const band of document.querySelectorAll(".world-band")) {
+    assert.ok(Number(band.getAttribute("stroke-width")) >= 100);
+    assert.ok(Number(band.dataset.turns) <= 1);
+  }
+  assert.equal(
+    document.querySelectorAll(
+      ".world-country-arrivals .world-country-flag[clip-path]",
+    ).length,
+    16,
+  );
   named(document, "Pause connection animation").click();
   await pause(20);
   assert.equal(document.querySelector(".world-network").dataset.paused, "true");
@@ -298,6 +314,45 @@ test("public navigation keeps a native top-level studio link across the CSP boun
   assert.equal(window.location.pathname, "/how-it-works/");
   await waitFor(() => document.querySelector(".interactive-flow"));
   document.removeEventListener("click", cancelDefault);
+  assert.deepEqual(requests, []);
+  assert.deepEqual(
+    errors.map((e) => e.message),
+    [],
+  );
+});
+
+test("reduced motion has a composed flag-circle still and an explicit play override", async (t) => {
+  const { dom, document, errors, requests } = setup(
+    "file:///AgentBridge-Working-Website.html",
+    true,
+    true,
+  );
+  t.after(() => dom.window.close());
+  await waitFor(
+    () => document.querySelector(".world-network")?.dataset.paused === "true",
+  );
+  assert.equal(
+    document.querySelector(".world-network").dataset.motionConsent,
+    "false",
+  );
+  assert.equal(
+    document.querySelectorAll(".world-static-scene .world-country-circle")
+      .length,
+    3,
+  );
+  named(document, "Play connection animation").click();
+  await pause(30);
+  assert.equal(
+    document.querySelector(".world-network").dataset.paused,
+    "false",
+  );
+  assert.equal(
+    document.querySelector(".world-network").dataset.motionConsent,
+    "true",
+  );
+  named(document, "Pause connection animation").click();
+  await pause(30);
+  assert.equal(document.querySelector(".world-network").dataset.paused, "true");
   assert.deepEqual(requests, []);
   assert.deepEqual(
     errors.map((e) => e.message),

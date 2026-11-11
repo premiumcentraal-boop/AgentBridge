@@ -293,3 +293,23 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - This follows the merged product/studio PR #34; the worldwide hero is a new
   focused change based on the current main branch, preserving the later Railway
   Docker fix and backend work. CI result: [worldwide hero quality checks](https://github.com/premiumcentraal-boop/AgentBridge/actions?query=branch%3Afeat%2Fworldwide-transit-hero).
+
+## 2026-11-11 — approved bold paths with flags inside endpoint circles
+
+- Applied the user's approved Humu/Travel Lines reference: four broad flat-colour
+  bands, straight runs or one rounded 90-degree turn per leg, and country flags
+  inside large white circles. Flags reveal on arrival; each outgoing leg begins
+  at the prior circle before the incoming band clears. The loop stays 40 seconds.
+- Replaced nested SVG images with locally scoped inline flag symbols. Preserved
+  the flag-icons MIT notice. Added an immediate reduced-motion still, explicit
+  play override and the existing off-screen/hidden-tab suspension.
+- Validation: `npm run ci` passes: 147 backend/security tests, seven structural
+  checks over 21 pages and seven geometry/DOM tests. Checks cover one-turn limits,
+  all-country coverage, arrival timing and connected handoffs, large circle/flag
+  structure, pause/play, reduced-motion behavior and existing studio workflows.
+- Inspected standalone SVG artwork stills at several timeline positions. This
+  verifies artwork composition, not browser layout or touch behavior; browser
+  QA remains pending because the supported browser-control tool is unavailable.
+- Updating the same owner-private mobile Site, separate from Railway and its
+  operator API. [PR #39](https://github.com/premiumcentraal-boop/AgentBridge/pull/39)
+  and [CI result](https://github.com/premiumcentraal-boop/AgentBridge/pull/39/checks).

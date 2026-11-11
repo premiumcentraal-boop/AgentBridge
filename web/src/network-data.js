@@ -1,203 +1,190 @@
-// One 40-second score. All journey and ambience periods divide this duration,
-// so the network returns to the same state without random resets or drift.
+// Four broad colour bands share one seamless forty-second score. A leg is
+// always a straight run or exactly one tangent, circular 90-degree elbow.
 export const NETWORK_LOOP_SECONDS = 40;
-export const JOURNEY_SECONDS = 40;
 export const MAP_SIZE = { width: 1000, height: 720 };
+export const BAND_WIDTH = 104;
+export const COUNTRY_RADIUS = 62;
 export const STATIONS = [
-  { code: "CA", name: "Canada", city: "Toronto", x: 120, y: 120 },
-  { code: "US", name: "United States", city: "New York", x: 100, y: 340 },
-  { code: "MX", name: "Mexico", city: "Mexico City", x: 205, y: 550 },
-  { code: "BR", name: "Brazil", city: "São Paulo", x: 350, y: 635 },
-  { code: "GB", name: "United Kingdom", city: "London", x: 360, y: 100 },
-  { code: "NL", name: "Netherlands", city: "Amsterdam", x: 465, y: 228 },
-  { code: "DE", name: "Germany", city: "Berlin", x: 570, y: 95 },
-  { code: "SE", name: "Sweden", city: "Stockholm", x: 700, y: 215 },
-  { code: "FR", name: "France", city: "Paris", x: 360, y: 365 },
-  { code: "ZA", name: "South Africa", city: "Cape Town", x: 555, y: 605 },
-  { code: "AE", name: "United Arab Emirates", city: "Dubai", x: 685, y: 427 },
-  { code: "IN", name: "India", city: "Mumbai", x: 815, y: 540 },
-  { code: "SG", name: "Singapore", city: "Singapore", x: 875, y: 348 },
-  { code: "JP", name: "Japan", city: "Tokyo", x: 856, y: 100 },
-  { code: "CH", name: "Switzerland", city: "Zürich", x: 932, y: 225 },
-  { code: "AU", name: "Australia", city: "Sydney", x: 875, y: 640 },
+  { code: "CA", name: "Canada", x: 130, y: 110 },
+  { code: "GB", name: "United Kingdom", x: 375, y: 110 },
+  { code: "DE", name: "Germany", x: 625, y: 110 },
+  { code: "JP", name: "Japan", x: 870, y: 110 },
+  { code: "FR", name: "France", x: 130, y: 275 },
+  { code: "SG", name: "Singapore", x: 375, y: 275 },
+  { code: "NL", name: "Netherlands", x: 625, y: 275 },
+  { code: "CH", name: "Switzerland", x: 870, y: 275 },
+  { code: "US", name: "United States", x: 130, y: 450 },
+  { code: "SE", name: "Sweden", x: 375, y: 450 },
+  { code: "AE", name: "United Arab Emirates", x: 625, y: 450 },
+  { code: "IN", name: "India", x: 870, y: 450 },
+  { code: "MX", name: "Mexico", x: 130, y: 620 },
+  { code: "BR", name: "Brazil", x: 375, y: 620 },
+  { code: "ZA", name: "South Africa", x: 625, y: 620 },
+  { code: "AU", name: "Australia", x: 870, y: 620 },
 ];
-export const INTERCHANGE = { x: 538, y: 353 };
-const positions = Object.fromEntries([
-  ...STATIONS.map((s) => [s.code, [s.x, s.y]]),
-  ["AB", [INTERCHANGE.x, INTERCHANGE.y]],
-]);
-const lines = [
-  {
-    id: "atlantic",
-    name: "Atlantic",
-    colour: "#afd4e0",
-    points: ["US", [128, 210], "GB", "NL", "DE", [724, 160], "JP"],
-  },
-  {
-    id: "meridian",
-    name: "Meridian",
-    colour: "#b5cdb8",
-    points: ["CA", [230, 210], "FR", "AB", "AE", "IN", "AU"],
-  },
-  {
-    id: "southern",
-    name: "Southern",
-    colour: "#d9bd8a",
-    points: ["MX", "BR", [445, 670], "ZA", "IN", "SG"],
-  },
-  {
-    id: "northern",
-    name: "Northern",
-    colour: "#b8acd5",
-    points: ["CA", [222, 55], "GB", [527, 150], "SE", [827, 255], "CH", "JP"],
-  },
-  {
-    id: "orbit",
-    name: "Orbit",
-    colour: "#d1aa98",
-    points: [
-      "BR",
-      [271, 486],
-      "FR",
-      [412, 274],
-      "NL",
-      [575, 256],
-      "AB",
-      [703, 308],
-      "SG",
-      [870, 226],
-      "JP",
-    ],
-  },
-  {
-    id: "eastern",
-    name: "Eastern",
-    colour: "#91c8c4",
-    points: [
-      "DE",
-      [670, 95],
-      "SE",
-      [750, 312],
-      "AE",
-      "SG",
-      "CH",
-      [960, 426],
-      [950, 572],
-      "AU",
-    ],
-  },
-  {
-    id: "return",
-    name: "Return",
-    colour: "#d9dfd0",
-    points: ["US", [55, 476], "MX", [381, 517], "ZA", [710, 672], "AU"],
-  },
-  {
-    id: "interchange",
-    name: "Interchange",
-    colour: "#cfaec4",
-    points: [
-      "GB",
-      [294, 221],
-      "FR",
-      [459, 474],
-      "ZA",
-      [641, 530],
-      "AE",
-      [604, 191],
-      "NL",
-      [300, 162],
-      "CA",
-    ],
-  },
-];
-const pointOnCubic = (segment, t) => {
-  const u = 1 - t,
-    [a, b, c, d] = segment;
-  return [0, 1].map(
-    (axis) =>
-      u * u * u * a[axis] +
-      3 * u * u * t * b[axis] +
-      3 * u * t * t * c[axis] +
-      t * t * t * d[axis],
-  );
-};
+const countries = Object.fromEntries(STATIONS.map((s) => [s.code, s]));
 const distance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
-const round = (n) => Number(n.toFixed(4));
-export function makeGeometry(line) {
-  const points = line.points.map((p) =>
-    typeof p === "string" ? positions[p] : p,
+const round = (value) => Number(value.toFixed(5));
+export function connectionGeometry(start, end, firstAxis = "x") {
+  if (start[0] === end[0] || start[1] === end[1])
+    return {
+      path: `M${start.join(" ")}L${end.join(" ")}`,
+      start,
+      end,
+      turns: 0,
+      length: distance(start, end),
+      radius: 0,
+    };
+  const corner = firstAxis === "x" ? [end[0], start[1]] : [start[0], end[1]];
+  const incoming = corner.map((n, i) => Math.sign(n - start[i]));
+  const outgoing = end.map((n, i) => Math.sign(n - corner[i]));
+  const radius = Math.min(
+    105,
+    Math.abs(end[0] - start[0]) * 0.45,
+    Math.abs(end[1] - start[1]) * 0.45,
   );
-  const segments = [],
-    lengths = [];
-  const tension = 0.92;
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i],
-      d = points[i + 1],
-      previous = points[Math.max(0, i - 1)],
-      next = points[Math.min(points.length - 1, i + 2)];
-    const b = a.map((v, j) => v + ((d[j] - previous[j]) * tension) / 6);
-    const c = d.map((v, j) => v - ((next[j] - a[j]) * tension) / 6);
-    const segment = [a, b, c, d];
-    segments.push(segment);
-    let length = 0,
-      last = a;
-    for (let sample = 1; sample <= 64; sample++) {
-      const p = pointOnCubic(segment, sample / 64);
-      length += distance(last, p);
-      last = p;
-    }
-    lengths.push(length);
-  }
-  const total = lengths.reduce((a, b) => a + b, 0),
-    stops = [{ code: line.points[0], progress: 0 }];
-  let travelled = 0;
-  for (let i = 1; i < points.length; i++) {
-    travelled += lengths[i - 1];
-    if (typeof line.points[i] === "string" && line.points[i] !== "AB")
-      stops.push({ code: line.points[i], progress: round(travelled / total) });
-  }
-  const path =
-    "M" +
-    points[0].join(" ") +
-    segments
-      .map(([, b, c, d]) => "C" + [...b, ...c, ...d].map(round).join(" "))
-      .join("");
-  return { ...line, path, segments, lengths, length: total, stops };
-}
-export const NETWORK_ROUTES = lines.map(makeGeometry);
-
-// Arc-length weighting gives long and short bends the same cruising speed.
-// Every actual flag station receives a 0.34-second dwell. Easing applies to
-// departures/arrivals, not individual rendering frames; curves remain C1 smooth.
-export function journeyTiming(route, reverse = false) {
-  const stops = reverse ? [...route.stops].reverse() : route.stops;
-  const dwell = 0.34,
-    edge = 0.7,
-    travel = JOURNEY_SECONDS - 2 * edge - dwell * (stops.length - 2);
-  const times = [0, edge / JOURNEY_SECONDS],
-    progress = [stops[0].progress, stops[0].progress];
-  let elapsed = edge;
-  for (let i = 1; i < stops.length; i++) {
-    elapsed += Math.abs(stops[i].progress - stops[i - 1].progress) * travel;
-    times.push(round(elapsed / JOURNEY_SECONDS));
-    progress.push(stops[i].progress);
-    if (i < stops.length - 1) {
-      elapsed += dwell;
-      times.push(round(elapsed / JOURNEY_SECONDS));
-      progress.push(stops[i].progress);
-    }
-  }
-  times.push(1);
-  progress.push(stops.at(-1).progress);
+  const a = corner.map((n, i) => round(n - incoming[i] * radius));
+  const b = corner.map((n, i) => round(n + outgoing[i] * radius));
+  const sweep =
+    incoming[0] * outgoing[1] - incoming[1] * outgoing[0] > 0 ? 1 : 0;
   return {
-    times,
-    progress,
-    keyTimes: times.join(";"),
-    keyPoints: progress.join(";"),
-    keySplines: times
-      .slice(1)
-      .map(() => ".34 0 .24 1")
-      .join(";"),
+    path: `M${start.join(" ")}L${a.join(" ")}A${radius} ${radius} 0 0 ${sweep} ${b.join(" ")}L${end.join(" ")}`,
+    start,
+    end,
+    corner,
+    arcStart: a,
+    arcEnd: b,
+    incoming,
+    outgoing,
+    sweep,
+    radius,
+    turns: 1,
+    length: distance(start, a) + (Math.PI * radius) / 2 + distance(b, end),
   };
 }
+const streams = [
+  {
+    id: "rose",
+    colour: "#f52b87",
+    entry: [-180, 450],
+    countries: ["US", "GB", "JP", "AU"],
+  },
+  {
+    id: "tangerine",
+    colour: "#ff8a24",
+    entry: [625, 900],
+    countries: ["ZA", "NL", "IN", "SG"],
+  },
+  {
+    id: "aqua",
+    colour: "#25b9d6",
+    entry: [1140, 620],
+    countries: ["BR", "FR", "DE", "SE"],
+  },
+  {
+    id: "gold",
+    colour: "#ffca2c",
+    entry: [130, -180],
+    countries: ["CA", "MX", "CH", "AE"],
+  },
+];
+export const CONNECTION_STREAMS = streams.map((stream, streamIndex) => {
+  let previous = stream.entry;
+  const legs = stream.countries.map((code, index) => {
+    const country = countries[code],
+      end = [country.x, country.y];
+    const geometry = connectionGeometry(previous, end);
+    previous = end;
+    return {
+      ...geometry,
+      id: stream.id + "-" + index,
+      country,
+      colour: stream.colour,
+    };
+  });
+  const total = legs.reduce((sum, leg) => sum + leg.length, 0);
+  let cursor = 0.15;
+  for (let index = 0; index < legs.length; index++) {
+    const leg = legs[index];
+    leg.startAt = cursor;
+    leg.travelSeconds = (27 * leg.length) / total;
+    leg.arriveAt = cursor + leg.travelSeconds;
+    cursor = leg.arriveAt + 1.15;
+  }
+  for (let index = 0; index < legs.length; index++) {
+    const leg = legs[index],
+      next = legs[index + 1];
+    leg.wipeAt = next ? next.startAt + 0.4 : 33.4;
+    leg.clearAt = next
+      ? leg.wipeAt + Math.min(4.4, leg.travelSeconds * 0.8)
+      : 37.6;
+    leg.revealAt = leg.arriveAt;
+    leg.revealedAt = leg.arriveAt + 0.4;
+    leg.holdUntil = next ? leg.clearAt - 0.8 : 35;
+    leg.hideAt = next ? leg.clearAt + 0.2 : 37.8;
+  }
+  // The first painted frame already contains large flag circles. Subsequent
+  // arrivals naturally stagger because travel time is weighted by distance.
+  return { ...stream, legs, phase: round(legs[streamIndex].arriveAt + 0.65) };
+});
+export const CONNECTION_LEGS = CONNECTION_STREAMS.flatMap(
+  (stream) => stream.legs,
+);
+const times = (values) =>
+  values.map((value) => round(value / NETWORK_LOOP_SECONDS)).join(";");
+export function bandAnimation(leg) {
+  return {
+    keyTimes: times([
+      0,
+      leg.startAt,
+      leg.arriveAt,
+      leg.wipeAt,
+      leg.clearAt,
+      NETWORK_LOOP_SECONDS,
+    ]),
+    widths: "0 2000;0 2000;1000 2000;1000 2000;0 2000;0 2000",
+    offsets: "0;0;0;0;-1000;-1000",
+    keySplines: ".3 0 .3 1;.3 0 .26 1;.3 0 .3 1;.3 0 .26 1;.3 0 .3 1",
+    visibilityTimes: times([
+      0,
+      leg.startAt,
+      leg.startAt + 0.12,
+      leg.clearAt - 0.12,
+      leg.clearAt,
+      NETWORK_LOOP_SECONDS,
+    ]),
+  };
+}
+export function countryAnimation(leg) {
+  return {
+    keyTimes: times([
+      0,
+      leg.revealAt,
+      leg.revealedAt,
+      leg.holdUntil,
+      leg.hideAt,
+      NETWORK_LOOP_SECONDS,
+    ]),
+    opacity: "0;0;1;1;0;0",
+    scale: ".88;.88;1;1;1;1",
+    keySplines: ".22 1 .36 1;.22 1 .36 1;.22 1 .36 1;.4 0 .6 1;.4 0 .6 1",
+  };
+}
+// A composed still for reduced motion, available before JavaScript runs.
+export const STILL_CONNECTIONS = [
+  {
+    ...connectionGeometry([-180, 550], [815, 550]),
+    colour: "#f52b87",
+    country: countries.JP,
+  },
+  {
+    ...connectionGeometry([230, 900], [650, 265], "y"),
+    colour: "#ff8a24",
+    country: countries.GB,
+  },
+  {
+    ...connectionGeometry([1140, 105], [460, 415]),
+    colour: "#25b9d6",
+    country: countries.NL,
+  },
+];

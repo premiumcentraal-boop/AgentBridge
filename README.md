@@ -52,11 +52,13 @@ work before JavaScript starts. The original `/design/` gallery remains available
 - `/app/` — Compatibility link to the sample studio
 
 The main hero says **connect agents worldwide** and plays a seamless 40-second
-SVG transit animation: eight smooth routes, 16 country flags, and flag capsules
-travelling in both directions. Curves have continuous tangents; travel timing
-uses arc length and brief station pauses. It respects reduced motion, has an
-explicit pause/play control, and stops when off screen or the tab is hidden.
-Country flags are bundled locally from the MIT-licensed flag-icons project.
+SVG animation with four broad colour bands and 16 country destinations. Each
+leg is straight or makes one rounded quarter turn. Its destination flag reveals
+inside a large white circle on arrival, and the next leg grows from that circle
+before the incoming band clears. The scene respects reduced motion, offers
+pause/play, and stops when off screen or the tab is hidden. Reduced motion has a
+composed still with flag circles, including before JavaScript starts. Flags are
+inline SVG symbols from the MIT-licensed flag-icons project.
 
 The rail has an expanded/compact state, a simulated active call at the top,
 mute/return/end controls, six workspace items and a dark/light switch. On small

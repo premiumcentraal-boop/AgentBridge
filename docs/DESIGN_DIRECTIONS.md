@@ -176,3 +176,24 @@ has an explicit pause/play button. Country vectors come from
 [flag-icons](https://github.com/lipis/flag-icons), with its MIT notice included
 in the build. Public pages and the sample studio can be reviewed on the private
 Sites preview; the production Railway setup remains separate.
+
+## 2026-11-11: approved bold bands and flag circles
+
+The selected visual reference is the broad, flat path graphic in
+[Humu, illustrated by Kenzi Quigg](https://www.kenziquigg.com/work/humu), with
+[Uned's Travel Lines](https://uned.studio/projects/transport-for-wales/) as a
+motion reference. The user approved this direction and requested country flags
+inside the circles. The composition and animation are original AgentBridge code;
+no artwork from those projects is embedded in the product.
+
+The final hero uses four thick colour bands in pink, orange, cyan and yellow.
+Every leg is a straight run or a single circular 90-degree elbow. Flags reveal
+inside large white endpoint circles only after arrival. Outgoing legs start at
+those circles while the incoming bands trim away, creating an unbroken handoff.
+Four offset streams cover 16 countries over a seamless 40-second score.
+
+SVG symbols keep flags crisp and avoid nested image decoding. Arrival, flag
+reveal, continuation and tail trimming share one timeline. The scene pauses off
+screen and in hidden tabs; reduced-motion users receive a composed still with
+three flag circles and can explicitly choose to play. This still is available
+through CSS before JavaScript loads.

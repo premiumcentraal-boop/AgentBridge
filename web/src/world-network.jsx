@@ -1,94 +1,128 @@
 import React, { memo, useEffect, useId, useRef, useState } from "react";
-import { IconBtn, Mark } from "./ui.jsx";
-import { FLAGS } from "./flags.js";
+import { IconBtn } from "./ui.jsx";
+import { flagDefinitions } from "./flags.js";
 import {
-  STATIONS,
-  NETWORK_ROUTES,
+  CONNECTION_STREAMS,
+  STILL_CONNECTIONS,
   MAP_SIZE,
-  INTERCHANGE,
+  BAND_WIDTH,
+  COUNTRY_RADIUS,
   NETWORK_LOOP_SECONDS,
-  JOURNEY_SECONDS,
-  journeyTiming,
+  bandAnimation,
+  countryAnimation,
 } from "./network-data.js";
 import "./world-network.css";
-
-function Journey({ route, id, prefix, reverse, index }) {
-  const timing = journeyTiming(route, reverse);
-  const begin = `-${(index * 5 + (reverse ? 20 : 0)) % JOURNEY_SECONDS}s`;
-  const duration = JOURNEY_SECONDS + "s";
+const duration = NETWORK_LOOP_SECONDS + "s";
+function CountryCircle({ leg, prefix, begin, animated = false }) {
+  const timeline = animated ? countryAnimation(leg) : null;
+  const point = leg.end;
+  return (
+    <g
+      transform={`translate(${point[0]} ${point[1]})`}
+      className="world-country-circle"
+      data-country={leg.country.code}
+      opacity={animated ? "0" : "1"}
+      data-arrive-at={animated ? leg.arriveAt.toFixed(4) : undefined}
+    >
+      {animated && (
+        <animate
+          attributeName="opacity"
+          values={timeline.opacity}
+          keyTimes={timeline.keyTimes}
+          dur={duration}
+          begin={begin}
+          repeatCount="indefinite"
+          calcMode="spline"
+          keySplines={timeline.keySplines}
+        />
+      )}
+      <g>
+        {animated && (
+          <animateTransform
+            attributeName="transform"
+            type="scale"
+            values={timeline.scale}
+            keyTimes={timeline.keyTimes}
+            dur={duration}
+            begin={begin}
+            repeatCount="indefinite"
+            calcMode="spline"
+            keySplines={timeline.keySplines}
+          />
+        )}
+        <circle
+          r={COUNTRY_RADIUS}
+          fill="#fbfaf7"
+          stroke={leg.colour}
+          strokeWidth="2"
+        />
+        <g
+          className="world-country-flag"
+          clipPath={`url(#${prefix}-country-disc)`}
+        >
+          <use
+            href={"#" + prefix + "-flag-" + leg.country.code}
+            x="-50"
+            y="-50"
+            width="100"
+            height="100"
+          />
+        </g>
+        <circle
+          r="50"
+          fill="none"
+          stroke="#14241b"
+          strokeOpacity=".08"
+          strokeWidth="1"
+        />
+      </g>
+    </g>
+  );
+}
+function MovingBand({ leg, begin }) {
+  const timeline = bandAnimation(leg);
   const common = {
+    keyTimes: timeline.keyTimes,
     dur: duration,
     begin,
     repeatCount: "indefinite",
     calcMode: "spline",
-    keyTimes: timing.keyTimes,
-    keySplines: timing.keySplines,
+    keySplines: timeline.keySplines,
   };
-  const origin = reverse ? route.stops.at(-1).code : route.stops[0].code;
   return (
-    <g
-      className="world-journey"
-      data-direction={reverse ? "reverse" : "forward"}
+    <path
+      d={leg.path}
+      pathLength="1000"
+      fill="none"
+      stroke={leg.colour}
+      strokeWidth={BAND_WIDTH}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeDasharray="0 2000"
+      strokeDashoffset="0"
+      opacity="0"
+      className="world-band"
+      data-turns={leg.turns}
     >
-      <path
-        d={route.path}
-        pathLength="1000"
-        fill="none"
-        stroke={route.colour}
-        strokeWidth="4.5"
-        strokeLinecap="round"
-        strokeDasharray="64 936"
-        className="world-route-tail"
-      >
-        <animate
-          attributeName="stroke-dashoffset"
-          values={timing.progress
-            .map((p) => (64 - p * 1000).toFixed(3))
-            .join(";")}
-          {...common}
-        />
-        <animate
-          attributeName="opacity"
-          values="0;0;.85;.85;0;0"
-          keyTimes="0;.006;.03;.97;.994;1"
-          dur={duration}
-          begin={begin}
-          repeatCount="indefinite"
-        />
-      </path>
-      <g className="world-traveller" opacity="0">
-        <animateMotion {...common} keyPoints={timing.keyPoints} rotate="0">
-          <mpath href={"#" + id} />
-        </animateMotion>
-        <animate
-          attributeName="opacity"
-          values="0;0;1;1;0;0"
-          keyTimes="0;.006;.03;.97;.994;1"
-          dur={duration}
-          begin={begin}
-          repeatCount="indefinite"
-        />
-        <circle r="19" fill={route.colour} opacity=".06" />
-        <rect
-          x="-15"
-          y="-12"
-          width="30"
-          height="24"
-          rx="8"
-          className="world-flag-capsule"
-          stroke={route.colour}
-          strokeWidth="1"
-        />
-        <image
-          href={FLAGS[origin]}
-          x="-10"
-          y="-7.5"
-          width="20"
-          height="15"
-          clipPath={`url(#${prefix}-flag-window)`}
-        />
-      </g>
-    </g>
+      <animate
+        attributeName="stroke-dasharray"
+        values={timeline.widths}
+        {...common}
+      />
+      <animate
+        attributeName="stroke-dashoffset"
+        values={timeline.offsets}
+        {...common}
+      />
+      <animate
+        attributeName="opacity"
+        values="0;0;1;1;0;0"
+        keyTimes={timeline.visibilityTimes}
+        dur={duration}
+        begin={begin}
+        repeatCount="indefinite"
+      />
+    </path>
   );
 }
 const Scene = memo(function Scene({ prefix, svgRef }) {
@@ -103,92 +137,69 @@ const Scene = memo(function Scene({ prefix, svgRef }) {
     >
       <title id={prefix + "-title"}>Connect agents worldwide</title>
       <desc id={prefix + "-description"}>
-        A forty-second animated subway map. Eight smoothly curved routes connect
-        sixteen country flags. Flag capsules travel in both directions, slow
-        into stations and pass over and under other routes. An illustration of
-        connection, not live calling activity.
+        A forty-second illustration of connection. Broad pink, orange, blue and
+        yellow bands travel in different directions. Each journey is straight or
+        takes one rounded turn. On arrival, the country flag appears inside a
+        large circle, and the next connection grows smoothly from that circle.
+        Sixteen countries appear through the loop. This is an illustration, not
+        live calling activity.
       </desc>
       <defs>
-        <clipPath id={prefix + "-flag-window"}>
-          <rect x="-10" y="-7.5" width="20" height="15" rx="2" />
-        </clipPath>
-        <radialGradient id={prefix + "-glow"}>
-          <stop stopColor="#98bec3" stopOpacity=".07" />
-          <stop offset="1" stopColor="#98bec3" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-      <ellipse
-        cx="538"
-        cy="353"
-        rx="400"
-        ry="330"
-        fill={`url(#${prefix}-glow)`}
-      />
-      <g
-        className="world-coordinate-marks"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1"
-      >
-        {[
-          [70, 62],
-          [926, 62],
-          [70, 665],
-          [926, 665],
-        ].map(([x, y], i) => (
-          <path key={i} d={`M${x - 7} ${y}h14M${x} ${y - 7}v14`} />
-        ))}
-      </g>
-      {NETWORK_ROUTES.map((route, index) => {
-        const id = prefix + "-" + route.id;
-        return (
-          <g
-            key={route.id}
-            className="world-transit-route"
-            data-route={route.id}
+        {flagDefinitions(prefix).map((flag) => (
+          <symbol
+            key={flag.code}
+            id={flag.id}
+            viewBox={flag.viewBox}
+            preserveAspectRatio="xMidYMid slice"
           >
-            <path
-              id={id}
-              d={route.path}
-              fill="none"
-              strokeWidth="12"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="world-track-bed"
-            />
-            <path
-              d={route.path}
-              fill="none"
-              stroke={route.colour}
-              strokeWidth="3.5"
-              strokeLinecap="round"
-              className="world-track"
-            >
-              <animate
-                attributeName="opacity"
-                values=".18;.2;.52;.26;.18"
-                keyTimes="0;.15;.4;.7;1"
-                dur={NETWORK_LOOP_SECONDS + "s"}
-                begin={`-${index * 5}s`}
-                repeatCount="indefinite"
-                calcMode="spline"
-                keySplines=".4 0 .6 1;.4 0 .6 1;.4 0 .6 1;.4 0 .6 1"
+            <g dangerouslySetInnerHTML={{ __html: flag.body }} />
+          </symbol>
+        ))}
+        <clipPath id={prefix + "-country-disc"}>
+          <circle r="50" />
+        </clipPath>
+      </defs>
+      <g className="world-moving-scene">
+        <g className="world-bands">
+          {CONNECTION_STREAMS.map((stream) => (
+            <g key={stream.id} data-stream={stream.id}>
+              {stream.legs.map((leg) => (
+                <MovingBand
+                  key={leg.id}
+                  leg={leg}
+                  begin={`-${stream.phase}s`}
+                />
+              ))}
+            </g>
+          ))}
+        </g>
+        <g className="world-country-arrivals">
+          {CONNECTION_STREAMS.flatMap((stream) =>
+            stream.legs.map((leg) => (
+              <CountryCircle
+                key={leg.id}
+                leg={leg}
+                prefix={prefix}
+                begin={`-${stream.phase}s`}
+                animated
               />
-            </path>
-            <Journey route={route} id={id} prefix={prefix} index={index} />
-            <Journey
-              route={route}
-              id={id}
-              prefix={prefix}
-              index={index}
-              reverse
-            />
-          </g>
-        );
-      })}
-      <g className="world-station-rings" fill="none">
-        {STATIONS.map((station) => (
-          <circle key={station.code} cx={station.x} cy={station.y} r="25" />
+            )),
+          )}
+        </g>
+      </g>
+      <g className="world-static-scene" aria-hidden="true">
+        {STILL_CONNECTIONS.map((leg, index) => (
+          <path
+            key={"band-" + index}
+            d={leg.path}
+            fill="none"
+            stroke={leg.colour}
+            strokeWidth={BAND_WIDTH}
+            strokeLinecap="round"
+          />
+        ))}
+        {STILL_CONNECTIONS.map((leg, index) => (
+          <CountryCircle key={"country-" + index} leg={leg} prefix={prefix} />
         ))}
       </g>
     </svg>
@@ -199,11 +210,15 @@ export function WorldNetwork() {
   const svgRef = useRef(null),
     containerRef = useRef(null);
   const [paused, setPaused] = useState(false),
+    [motionConsent, setMotionConsent] = useState(false),
     [inView, setInView] = useState(true),
     [pageVisible, setPageVisible] = useState(true);
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const change = () => setPaused(media.matches);
+    const change = () => {
+      setPaused(media.matches);
+      setMotionConsent(false);
+    };
     change();
     media.addEventListener("change", change);
     return () => media.removeEventListener("change", change);
@@ -230,62 +245,26 @@ export function WorldNetwork() {
     else svg?.unpauseAnimations?.();
   }, [paused, inView, pageVisible]);
   return (
-    <div className="world-network" ref={containerRef} data-paused={paused}>
-      <div className="world-map-grid" aria-hidden="true" />
+    <div
+      className="world-network"
+      ref={containerRef}
+      data-paused={paused}
+      data-motion-consent={motionConsent}
+    >
       <div className="world-map-plane">
         <Scene prefix={prefix} svgRef={svgRef} />
-        <div className="world-stations" aria-hidden="true">
-          {STATIONS.map((station) => (
-            <div
-              key={station.code}
-              className={"world-station station-" + station.code.toLowerCase()}
-              style={{
-                left: (station.x / MAP_SIZE.width) * 100 + "%",
-                top: (station.y / MAP_SIZE.height) * 100 + "%",
-              }}
-            >
-              <span className="world-station-flag">
-                <img
-                  src={FLAGS[station.code]}
-                  width="28"
-                  height="21"
-                  alt=""
-                  draggable="false"
-                />
-              </span>
-              <span className="world-station-name">{station.city}</span>
-            </div>
-          ))}
-        </div>
-        <div
-          className="world-interchange"
-          aria-hidden="true"
-          style={{
-            left: (INTERCHANGE.x / MAP_SIZE.width) * 100 + "%",
-            top: (INTERCHANGE.y / MAP_SIZE.height) * 100 + "%",
-          }}
-        >
-          <span className="world-interchange-orbit" />
-          <span className="world-interchange-core">
-            <Mark />
-          </span>
-          <small>AGENTBRIDGE</small>
-        </div>
-      </div>
-      <div className="world-map-header" aria-hidden="true">
-        <span>
-          <i />A WORLD OF CONNECTIONS
-        </span>
-        <span>01 — 08</span>
       </div>
       <div className="world-map-footer">
-        <span>One agent. Every direction.</span>
+        <span>One connection leads to another.</span>
         <IconBtn
           label={
             paused ? "Play connection animation" : "Pause connection animation"
           }
           name={paused ? "play" : "pause"}
-          onClick={() => setPaused((value) => !value)}
+          onClick={() => {
+            setMotionConsent(true);
+            setPaused((value) => !value);
+          }}
           aria-pressed={paused}
           className="world-motion-control"
         />
