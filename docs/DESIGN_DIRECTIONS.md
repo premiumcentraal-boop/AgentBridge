@@ -200,7 +200,7 @@ through CSS before JavaScript loads.
 
 ## 2026-11-11: one connected minute-long relay
 
-The current hero replaces separate streams and stationary endpoint circles with
+This iteration replaced separate streams and stationary endpoint circles with
 one closed circuit and one moving flag circle. Sixteen straight or single-turn
 legs share exact endpoints and continuous tangents, including the last-to-first
 join. A coloured trail follows the circle; its trailing edge retraces the same
@@ -215,3 +215,25 @@ invisible jumps are used. The flag stays upright through each rounded corner.
 Pause/play, off-screen and hidden-tab suspension, theme switching and the
 reduced-motion still remain available. The still samples this same connected
 relay rather than displaying a separate arrangement.
+
+## 2026-11-11: preserve multiple overlapping routes
+
+The current hero restores the approved broad subway-route composition: four
+distinct pink, orange, cyan and yellow routes cross the canvas from different
+directions. Each route has its own moving flag circle. The routes cover all 16
+countries and share four actual transfer stations (GB, JP, NL and CH). Their
+incoming and outgoing connections use the same station coordinates.
+
+Each straight or single-turn leg draws to its destination with its flag at the
+leading end. The flag holds at the shared endpoint, changes country and departs
+along the next connection. The completed incoming band remains drawn until the
+outgoing connection has arrived, then fades as a whole. This retains long,
+overlapping coloured lines throughout the composition.
+
+Four staggered journeys share a 60-second score, with at least two flag circles
+inside the canvas throughout the minute. Each route enters and leaves beyond
+the frame; its repeat therefore happens outside the visible composition. Native
+motion and line growth use matching distances and easing. All flag circles are
+drawn above the routes and stay upright through bends. The reduced-motion still
+samples the same overlapping network; pause/play and visibility suspension stay
+available.

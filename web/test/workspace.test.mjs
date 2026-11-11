@@ -121,24 +121,47 @@ test("working preview navigates real pages and keeps call state in the floating 
     document.querySelector(".world-network-svg").dataset.loopSeconds,
     "60",
   );
-  const baton = document.querySelector(".world-moving-scene .world-baton");
-  assert.ok(baton);
-  const motion = baton.querySelector("animateMotion");
-  assert.equal(motion.getAttribute("dur"), "60s");
-  const path = document.querySelector(
-    motion.querySelector("mpath").getAttribute("href"),
+  const travellers = document.querySelectorAll(
+    ".world-moving-scene .world-traveller",
   );
-  assert.ok(path.classList.contains("world-relay-path"));
-  assert.equal(document.querySelectorAll("animateMotion").length, 1);
-  assert.equal(baton.querySelectorAll(".world-baton-flag").length, 16);
-  assert.equal(document.querySelectorAll(".world-country-circle").length, 0);
+  assert.equal(travellers.length, 4);
+  assert.equal(
+    document.querySelector(".world-network-svg").dataset.routeCount,
+    "4",
+  );
+  assert.equal(document.querySelectorAll("animateMotion").length, 4);
+  const paths = new Set();
+  for (const traveller of travellers) {
+    const motion = traveller.querySelector("animateMotion");
+    assert.equal(motion.getAttribute("dur"), "60s");
+    const path = document.querySelector(
+      motion.querySelector("mpath").getAttribute("href"),
+    );
+    assert.ok(path.classList.contains("world-route-path"));
+    paths.add(path.id);
+    assert.ok(traveller.querySelector(".world-country-flag[clip-path]"));
+    for (const flag of traveller.querySelectorAll(".world-traveller-flag"))
+      assert.ok(flag.querySelector("use") && flag.querySelector("animate"));
+    const bands = document.querySelector(
+      `.world-route-bands[data-route="${traveller.dataset.route}"]`,
+    );
+    for (const animation of bands.querySelectorAll("animate"))
+      assert.equal(
+        animation.getAttribute("begin"),
+        motion.getAttribute("begin"),
+      );
+  }
+  assert.equal(paths.size, 4);
+  assert.equal(
+    document.querySelectorAll(
+      '.world-band animate[attributeName="stroke-dashoffset"]',
+    ).length,
+    0,
+  );
   for (const band of document.querySelectorAll(".world-band")) {
     assert.ok(Number(band.getAttribute("stroke-width")) >= 100);
     assert.ok(Number(band.dataset.turns) <= 1);
   }
-  assert.ok(baton.querySelector(".world-country-flag[clip-path]"));
-  for (const flag of baton.querySelectorAll(".world-baton-flag"))
-    assert.ok(flag.querySelector("use") && flag.querySelector("animate"));
   named(document, "Pause connection animation").click();
   await pause(20);
   assert.equal(document.querySelector(".world-network").dataset.paused, "true");
@@ -323,7 +346,7 @@ test("public navigation keeps a native top-level studio link across the CSP boun
   );
 });
 
-test("reduced motion has a connected relay still and an explicit play override", async (t) => {
+test("reduced motion preserves the overlapping routes with an explicit play override", async (t) => {
   const { dom, document, errors, requests } = setup(
     "file:///AgentBridge-Working-Website.html",
     true,
@@ -338,8 +361,9 @@ test("reduced motion has a connected relay still and an explicit play override",
     "false",
   );
   assert.equal(
-    document.querySelectorAll(".world-static-scene .world-baton-static").length,
-    1,
+    document.querySelectorAll(".world-static-scene .world-traveller-static")
+      .length,
+    4,
   );
   named(document, "Play connection animation").click();
   await pause(30);

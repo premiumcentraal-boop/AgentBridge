@@ -335,3 +335,24 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - The same owner-private [mobile Site](https://agentbridge-worldwide.premiumcentraal.chatgpt.site)
   is the review target. Changes remain in [PR #39](https://github.com/premiumcentraal-boop/AgentBridge/pull/39),
   with [checks](https://github.com/premiumcentraal-boop/AgentBridge/pull/39/checks).
+
+## 2026-11-11 — restore overlapping route composition
+
+- Restored four distinct bold routes with separate moving flag circles, covering
+  all 16 countries. GB, JP, NL and CH are shared transfer stations with matching
+  coordinates across routes. Each leg remains straight or has one rounded turn.
+- Each flag travels at its own line's advancing end and holds at the exact next
+  departure point. Completed incoming connections stay drawn until the outgoing
+  leg reaches its next destination, then fade as whole connections.
+- Staggered the four journeys over a 60-second cycle. At least two flag circles
+  remain inside the canvas throughout the minute. Entries, exits and repeat
+  transitions occur beyond the frame. Reduced motion samples these same routes.
+- Geometry/DOM checks cover route count, country coverage, the connected transfer
+  graph, exact handoffs, no immediate doubling back, simultaneous travellers,
+  native timing alignment, off-frame repeats and existing studio interactions.
+- Validation uses the root CI suite (147 backend/security tests, seven structural
+  checks over 21 pages and eight geometry/DOM tests) and standalone coded SVG
+  artwork samples. Browser layout, native playback and touch QA remain pending
+  because the supported browser-control tool is unavailable in this session.
+- Reuses the same owner-private [mobile Site](https://agentbridge-worldwide.premiumcentraal.chatgpt.site)
+  and [PR #39](https://github.com/premiumcentraal-boop/AgentBridge/pull/39).

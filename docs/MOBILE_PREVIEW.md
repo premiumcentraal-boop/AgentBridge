@@ -2,12 +2,13 @@
 
 Open https://agentbridge-worldwide.premiumcentraal.chatgpt.site on your phone.
 Sign in with the Site owner's ChatGPT account if prompted. The homepage shows
-“connect agents worldwide” and the 60-second connected relay. Choose
+“connect agents worldwide” and four overlapping routes on a 60-second cycle. Choose
 **Open studio** to explore the app; page links and interactions are real DOM
-components, not screenshots. A circle containing a country flag travels with
-the advancing coloured line. At each shared endpoint it changes country and
-continues along the next colour, returning to the start without a reset jump.
-This graphic is an illustration.
+components, not screenshots. Multiple flag-filled circles travel with their own
+coloured lines in different directions. Each connection hands off at an exact
+country endpoint. Completed lines remain drawn through the handoff, creating
+overlapping routes with four shared transfer stations. Repeats happen beyond the
+frame. This graphic is an illustration.
 
 The Site is an owner-private static review, separate from the production
 Railway service. Drafts, preferences and call controls are sample interactions

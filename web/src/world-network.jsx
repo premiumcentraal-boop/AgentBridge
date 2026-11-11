@@ -2,34 +2,21 @@ import React, { memo, useEffect, useId, useRef, useState } from "react";
 import { IconBtn } from "./ui.jsx";
 import { flagDefinitions } from "./flags.js";
 import {
-  RELAY_LEGS,
-  RELAY_PATH,
-  RELAY_PHASE_SECONDS,
-  STILL_RELAY,
+  CONNECTION_STREAMS,
+  STILL_CONNECTIONS,
   MAP_SIZE,
   BAND_WIDTH,
   COUNTRY_RADIUS,
   NETWORK_LOOP_SECONDS,
   bandAnimation,
   flagAnimation,
-  relayMotion,
-  batonColourAnimation,
-  localBegin,
+  routeMotion,
+  routeBegin,
 } from "./network-data.js";
 import "./world-network.css";
-const duration = NETWORK_LOOP_SECONDS + "s",
-  masterBegin = "-" + RELAY_PHASE_SECONDS + "s";
-function Band({ leg, still }) {
-  const timeline = bandAnimation(leg),
-    common = {
-      keyTimes: timeline.keyTimes,
-      dur: duration,
-      begin: localBegin(leg),
-      repeatCount: "indefinite",
-      calcMode: "spline",
-      keySplines: timeline.keySplines,
-    };
-  const visible = still ? still.to - still.from > 1e-8 : false;
+const duration = NETWORK_LOOP_SECONDS + "s";
+function Band({ leg, route, still }) {
+  const timeline = bandAnimation(leg);
   return (
     <path
       d={leg.path}
@@ -39,11 +26,8 @@ function Band({ leg, still }) {
       strokeWidth={BAND_WIDTH}
       strokeLinecap="round"
       strokeLinejoin="round"
-      strokeDasharray={
-        still ? `${(still.to - still.from) * 1000} 2000` : "0 2000"
-      }
-      strokeDashoffset={still ? -still.from * 1000 : 0}
-      opacity={visible ? "1" : "0"}
+      strokeDasharray={still ? `${still.to * 1000} 2000` : "0 2000"}
+      opacity={still ? still.opacity : 0}
       className={still ? "world-band-static" : "world-band"}
       data-leg={leg.id}
       data-turns={leg.turns}
@@ -53,60 +37,49 @@ function Band({ leg, still }) {
           <animate
             attributeName="stroke-dasharray"
             values={timeline.widths}
-            {...common}
-          />
-          <animate
-            attributeName="stroke-dashoffset"
-            values={timeline.offsets}
-            {...common}
+            keyTimes={timeline.keyTimes}
+            keySplines={timeline.keySplines}
+            dur={duration}
+            begin={routeBegin(route)}
+            repeatCount="indefinite"
+            calcMode="spline"
           />
           <animate
             attributeName="opacity"
-            values="1;0;0"
+            values={timeline.opacity}
             keyTimes={timeline.visibilityTimes}
             dur={duration}
-            begin={localBegin(leg)}
+            begin={routeBegin(route)}
             repeatCount="indefinite"
-            calcMode="discrete"
           />
         </>
       )}
     </path>
   );
 }
-function BatonFace({ prefix, still = false }) {
-  const colour = batonColourAnimation();
+function FlagCircle({ prefix, route, still }) {
+  const initial =
+    still || STILL_CONNECTIONS.find((state) => state.route.id === route.id);
   return (
     <>
       <circle
         r={COUNTRY_RADIUS}
         fill="#fbfaf7"
-        stroke={still ? STILL_RELAY.leg.colour : RELAY_LEGS[0].colour}
+        stroke={route.colour}
         strokeWidth="2"
-      >
-        {!still && (
-          <animate
-            attributeName="stroke"
-            values={colour.values}
-            keyTimes={colour.keyTimes}
-            dur={duration}
-            begin={masterBegin}
-            repeatCount="indefinite"
-          />
-        )}
-      </circle>
+      />
       <g
         className="world-country-flag"
         clipPath={`url(#${prefix}-country-disc)`}
       >
-        {RELAY_LEGS.map((leg, index) => {
-          const timeline = flagAnimation(leg);
+        {route.countries.map((code, index) => {
+          const timeline = flagAnimation(route, code);
           return (
             <g
-              key={leg.id}
-              className="world-baton-flag"
-              data-country={leg.country.code}
-              opacity={STILL_RELAY.flags[index].opacity}
+              key={code}
+              className="world-traveller-flag"
+              data-country={code}
+              opacity={initial.flags[index].opacity}
             >
               {!still && (
                 <animate
@@ -114,12 +87,12 @@ function BatonFace({ prefix, still = false }) {
                   values={timeline.values}
                   keyTimes={timeline.keyTimes}
                   dur={duration}
-                  begin={localBegin(leg)}
+                  begin={routeBegin(route)}
                   repeatCount="indefinite"
                 />
               )}
               <use
-                href={"#" + prefix + "-flag-" + leg.country.code}
+                href={"#" + prefix + "-flag-" + code}
                 x="-50"
                 y="-50"
                 width="100"
@@ -140,7 +113,6 @@ function BatonFace({ prefix, still = false }) {
   );
 }
 const Scene = memo(function Scene({ prefix, svgRef }) {
-  const motion = relayMotion();
   return (
     <svg
       ref={svgRef}
@@ -149,14 +121,16 @@ const Scene = memo(function Scene({ prefix, svgRef }) {
       role="img"
       aria-labelledby={prefix + "-title " + prefix + "-description"}
       data-loop-seconds={NETWORK_LOOP_SECONDS}
+      data-route-count={CONNECTION_STREAMS.length}
     >
       <title id={prefix + "-title"}>Connect agents worldwide</title>
       <desc id={prefix + "-description"}>
-        A sixty-second connected relay. A flag-filled circle moves at the head
-        of thick coloured lines. Each line meets the next at the same point, and
-        the circle changes country during the handoff before continuing. Sixteen
-        countries share one closed circuit with no reset jump. This is an
-        illustration, not live calling activity.
+        Four broad pink, orange, blue and yellow routes overlap and cross in
+        different directions. A flag-filled circle travels with each advancing
+        line, stops at its destination and continues from that same shared
+        point. Sixteen countries and four transfer stations connect the routes
+        over a sixty-second cycle. This is an illustration, not live calling
+        activity.
       </desc>
       <defs>
         {flagDefinitions(prefix).map((flag) => (
@@ -172,51 +146,85 @@ const Scene = memo(function Scene({ prefix, svgRef }) {
         <clipPath id={prefix + "-country-disc"}>
           <circle r="50" />
         </clipPath>
-        <path
-          id={prefix + "-relay-path"}
-          d={RELAY_PATH}
-          className="world-relay-path"
-        />
+        {CONNECTION_STREAMS.map((route) => (
+          <path
+            key={route.id}
+            id={prefix + "-route-" + route.id}
+            d={route.path}
+            className="world-route-path"
+          />
+        ))}
       </defs>
       <g className="world-moving-scene">
         <g className="world-bands">
-          {RELAY_LEGS.map((leg) => (
-            <Band key={leg.id} leg={leg} />
+          {CONNECTION_STREAMS.map((route) => (
+            <g
+              key={route.id}
+              className="world-route-bands"
+              data-route={route.id}
+            >
+              {route.legs.map((leg) => (
+                <Band key={leg.id} leg={leg} route={route} />
+              ))}
+            </g>
           ))}
         </g>
-        <g className="world-baton" data-master-begin={masterBegin} opacity="0">
-          <animate
-            attributeName="opacity"
-            values="1;1"
-            dur={duration}
-            begin={masterBegin}
-            repeatCount="indefinite"
-          />
-          <animateMotion
-            dur={duration}
-            begin={masterBegin}
-            repeatCount="indefinite"
-            keyTimes={motion.keyTimes}
-            keyPoints={motion.keyPoints}
-            keySplines={motion.keySplines}
-            calcMode="spline"
-            rotate="0"
-          >
-            <mpath href={"#" + prefix + "-relay-path"} />
-          </animateMotion>
-          <BatonFace prefix={prefix} />
+        <g className="world-travellers">
+          {CONNECTION_STREAMS.map((route) => {
+            const motion = routeMotion(route);
+            return (
+              <g
+                key={route.id}
+                className="world-traveller"
+                data-route={route.id}
+                opacity="0"
+              >
+                <animate
+                  attributeName="opacity"
+                  values="1;1"
+                  dur={duration}
+                  begin={routeBegin(route)}
+                  repeatCount="indefinite"
+                />
+                <animateMotion
+                  dur={duration}
+                  begin={routeBegin(route)}
+                  repeatCount="indefinite"
+                  keyTimes={motion.keyTimes}
+                  keyPoints={motion.keyPoints}
+                  keySplines={motion.keySplines}
+                  calcMode="spline"
+                  rotate="0"
+                >
+                  <mpath href={"#" + prefix + "-route-" + route.id} />
+                </animateMotion>
+                <FlagCircle prefix={prefix} route={route} />
+              </g>
+            );
+          })}
         </g>
       </g>
       <g className="world-static-scene" aria-hidden="true">
-        {STILL_RELAY.bands.map((band) => (
-          <Band key={band.leg.id} leg={band.leg} still={band} />
+        {STILL_CONNECTIONS.flatMap((state) =>
+          state.bands.map((band) => (
+            <Band
+              key={band.leg.id}
+              leg={band.leg}
+              route={state.route}
+              still={band}
+            />
+          )),
+        )}
+        {STILL_CONNECTIONS.map((state) => (
+          <g
+            key={state.route.id}
+            className="world-traveller-static"
+            data-route={state.route.id}
+            transform={`translate(${state.point.join(" ")})`}
+          >
+            <FlagCircle prefix={prefix} route={state.route} still={state} />
+          </g>
         ))}
-        <g
-          className="world-baton-static"
-          transform={`translate(${STILL_RELAY.point.join(" ")})`}
-        >
-          <BatonFace prefix={prefix} still />
-        </g>
       </g>
     </svg>
   );

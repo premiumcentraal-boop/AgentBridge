@@ -1,148 +1,192 @@
-// One closed relay, one master clock and one moving flag baton. The coloured
-// trail and baton use the same distances, easing and handoff times.
+// Four overlapping routes share a minute-long score. Each flag travels with
+// its own advancing line; completed connections stay drawn through the handoff.
 export const NETWORK_LOOP_SECONDS = 60;
 export const MAP_SIZE = { width: 1000, height: 720 };
 export const BAND_WIDTH = 104;
 export const COUNTRY_RADIUS = 62;
-export const HANDOFF_SECONDS = 0.35;
+export const HANDOFF_SECONDS = 0.65;
 export const FLAG_FADE_SECONDS = 0.3;
-export const TRAIL_SECONDS = 18;
-export const RELAY_PHASE_SECONDS = 13;
-export const RELAY_EASING = [0.32, 0, 0.3, 1];
-const colours = ["#f52b87", "#ff8a24", "#25b9d6", "#ffca2c"];
-const countryNames = [
-  ["US", "United States"],
-  ["CA", "Canada"],
-  ["GB", "United Kingdom"],
-  ["NL", "Netherlands"],
-  ["FR", "France"],
-  ["DE", "Germany"],
-  ["SE", "Sweden"],
-  ["CH", "Switzerland"],
-  ["AE", "United Arab Emirates"],
-  ["IN", "India"],
-  ["SG", "Singapore"],
-  ["JP", "Japan"],
-  ["AU", "Australia"],
-  ["ZA", "South Africa"],
-  ["BR", "Brazil"],
-  ["MX", "Mexico"],
+export const ROUTE_EASING = [0.32, 0, 0.3, 1];
+export const STATIONS = [
+  { code: "CA", name: "Canada", x: 130, y: 110 },
+  { code: "GB", name: "United Kingdom", x: 375, y: 110 },
+  { code: "DE", name: "Germany", x: 625, y: 110 },
+  { code: "JP", name: "Japan", x: 870, y: 110 },
+  { code: "FR", name: "France", x: 130, y: 275 },
+  { code: "SG", name: "Singapore", x: 375, y: 275 },
+  { code: "NL", name: "Netherlands", x: 625, y: 275 },
+  { code: "CH", name: "Switzerland", x: 870, y: 275 },
+  { code: "US", name: "United States", x: 130, y: 450 },
+  { code: "SE", name: "Sweden", x: 375, y: 450 },
+  { code: "AE", name: "United Arab Emirates", x: 625, y: 450 },
+  { code: "IN", name: "India", x: 870, y: 450 },
+  { code: "MX", name: "Mexico", x: 130, y: 620 },
+  { code: "BR", name: "Brazil", x: 375, y: 620 },
+  { code: "ZA", name: "South Africa", x: 625, y: 620 },
+  { code: "AU", name: "Australia", x: 870, y: 620 },
 ];
-const corners = [
-  [130, 130],
-  [590, 130],
-  [590, 590],
-  [860, 590],
-  [860, 360],
-  [400, 360],
-  [400, 590],
-  [130, 590],
-];
-const radius = 85;
+const countries = Object.fromEntries(STATIONS.map((s) => [s.code, s]));
 const round = (value) => Number(value.toFixed(9));
+const distance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 export const modulo = (value, period) => ((value % period) + period) % period;
-const unit = (a, b) => {
-  const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
-  return [(b[0] - a[0]) / length, (b[1] - a[1]) / length];
-};
-const elbows = corners.map((corner, index) => {
-  const previous = corners[modulo(index - 1, corners.length)],
-    next = corners[(index + 1) % corners.length];
-  const incoming = unit(previous, corner),
-    outgoing = unit(corner, next);
-  const start = corner.map((n, axis) => n - incoming[axis] * radius),
-    end = corner.map((n, axis) => n + outgoing[axis] * radius);
-  const center = start.map((n, axis) => n + outgoing[axis] * radius);
+export function connectionGeometry(start, end, firstAxis = "x") {
+  if (start[0] === end[0] || start[1] === end[1])
+    return {
+      path: `M${start.join(" ")}L${end.join(" ")}`,
+      start,
+      end,
+      turns: 0,
+      length: distance(start, end),
+      radius: 0,
+    };
+  const corner = firstAxis === "x" ? [end[0], start[1]] : [start[0], end[1]];
+  const incoming = corner.map((n, i) => Math.sign(n - start[i]));
+  const outgoing = end.map((n, i) => Math.sign(n - corner[i]));
+  const radius = Math.min(
+    105,
+    Math.abs(end[0] - start[0]) * 0.45,
+    Math.abs(end[1] - start[1]) * 0.45,
+  );
+  const arcStart = corner.map((n, i) => round(n - incoming[i] * radius));
+  const arcEnd = corner.map((n, i) => round(n + outgoing[i] * radius));
+  const center = arcStart.map((n, i) => n + outgoing[i] * radius);
   const sweep =
     incoming[0] * outgoing[1] - incoming[1] * outgoing[0] > 0 ? 1 : 0;
+  const leadLength = distance(start, arcStart),
+    arcLength = (Math.PI * radius) / 2;
   return {
-    kind: "arc",
+    path: `M${start.join(" ")}L${arcStart.join(" ")}A${radius} ${radius} 0 0 ${sweep} ${arcEnd.join(" ")}L${end.join(" ")}`,
     start,
     end,
+    arcStart,
+    arcEnd,
     center,
     incoming,
     outgoing,
-    radius,
     sweep,
+    radius,
     turns: 1,
-    length: (Math.PI * radius) / 2,
-    path: `M${start.join(" ")}A${radius} ${radius} 0 0 ${sweep} ${end.join(" ")}`,
+    leadLength,
+    arcLength,
+    length: leadLength + arcLength + distance(arcEnd, end),
   };
-});
-const geometries = [];
-let start = elbows[0].end;
-for (let index = 1; index <= elbows.length; index++) {
-  const elbow = elbows[index % elbows.length],
-    end = elbow.start,
-    direction = unit(start, end);
-  geometries.push({
-    kind: "line",
-    start,
-    end,
-    incoming: direction,
-    outgoing: direction,
-    turns: 0,
-    radius: 0,
-    length: Math.hypot(end[0] - start[0], end[1] - start[1]),
-    path: `M${start.join(" ")}L${end.join(" ")}`,
-  });
-  geometries.push(elbow);
-  start = elbow.end;
 }
-export const RELAY_LENGTH = geometries.reduce(
-  (sum, leg) => sum + leg.length,
-  0,
-);
-const travelSeconds =
-  NETWORK_LOOP_SECONDS - geometries.length * HANDOFF_SECONDS;
-let elapsed = 0,
-  travelled = 0;
-export const RELAY_LEGS = geometries.map((geometry, index) => {
-  const duration = (geometry.length / RELAY_LENGTH) * travelSeconds;
-  const leg = {
-    ...geometry,
-    id: "relay-" + index,
-    index,
-    colour: colours[index % colours.length],
-    country: { code: countryNames[index][0], name: countryNames[index][1] },
-    startAt: elapsed,
-    arriveAt: elapsed + duration,
-    endAt: elapsed + duration + HANDOFF_SECONDS,
-    travelSeconds: duration,
-    startProgress: travelled / RELAY_LENGTH,
-    endProgress: (travelled + geometry.length) / RELAY_LENGTH,
+// Shared transfer stations have identical coordinates on every visiting route.
+const routes = [
+  {
+    id: "rose",
+    colour: "#f52b87",
+    entry: [-180, 450],
+    exit: [1180, 620],
+    countries: ["US", "GB", "DE", "JP", "AU"],
+    phase: 58,
+  },
+  {
+    id: "tangerine",
+    colour: "#ff8a24",
+    entry: [625, 900],
+    exit: [-180, 275],
+    countries: ["ZA", "NL", "JP", "CH", "IN", "SG"],
+    axes: { 2: "y" },
+    phase: 13,
+  },
+  {
+    id: "aqua",
+    colour: "#25b9d6",
+    entry: [1180, 620],
+    exit: [375, 900],
+    countries: ["BR", "FR", "GB", "SE"],
+    axes: { 2: "y" },
+    phase: 28,
+  },
+  {
+    id: "gold",
+    colour: "#ffca2c",
+    entry: [130, -180],
+    exit: [-180, 450],
+    countries: ["CA", "MX", "NL", "CH", "AE"],
+    axes: { 4: "y" },
+    phase: 43,
+  },
+];
+export const CONNECTION_STREAMS = routes.map((route) => {
+  let previous = route.entry;
+  const destinations = route.countries.map((code) => countries[code]);
+  const legs = [...destinations, null].map((country, index) => {
+    const end = country ? [country.x, country.y] : route.exit;
+    const geometry = connectionGeometry(previous, end, route.axes?.[index]);
+    previous = end;
+    return {
+      ...geometry,
+      id: route.id + "-" + index,
+      index,
+      country: country || destinations.at(-1),
+      isExit: !country,
+      colour: route.colour,
+    };
+  });
+  const length = legs.reduce((sum, leg) => sum + leg.length, 0);
+  let elapsed = 0,
+    travelled = 0;
+  for (const leg of legs) {
+    leg.startAt = elapsed;
+    leg.travelSeconds = (48 * leg.length) / length;
+    leg.arriveAt = elapsed + leg.travelSeconds;
+    leg.endAt = leg.arriveAt + (leg.isExit ? 0 : HANDOFF_SECONDS);
+    leg.startProgress = travelled / length;
+    leg.endProgress = (travelled + leg.length) / length;
+    elapsed = leg.endAt;
+    travelled += leg.length;
+  }
+  for (const leg of legs) {
+    const next = legs[leg.index + 1];
+    // Keep the incoming connection drawn while the next line departs. Retire
+    // the entire old connection, rather than a short tail chasing one head.
+    leg.fadeAt = next ? next.arriveAt + 0.15 : leg.arriveAt + 0.15;
+    leg.clearAt = leg.fadeAt + 1.1;
+  }
+  legs.at(-1).endProgress = 1;
+  return {
+    ...route,
+    legs,
+    length,
+    finishesAt: elapsed,
+    path:
+      legs[0].path +
+      legs
+        .slice(1)
+        .map((leg) => leg.path.replace(/^M[-\d.]+ [-\d.]+/, ""))
+        .join(""),
   };
-  elapsed = leg.endAt;
-  travelled += geometry.length;
-  return leg;
 });
-RELAY_LEGS.at(-1).endAt = NETWORK_LOOP_SECONDS;
-RELAY_LEGS.at(-1).endProgress = 1;
-export const STATIONS = RELAY_LEGS.map((leg) => ({
-  ...leg.country,
-  x: leg.start[0],
-  y: leg.start[1],
-}));
-// Every subpath starts where the preceding one ended; no invisible jumps.
-export const RELAY_PATH =
-  RELAY_LEGS[0].path +
-  RELAY_LEGS.slice(1)
-    .map((leg) => leg.path.replace(/^M[-\d.]+ [-\d.]+/, ""))
-    .join("") +
-  "Z";
+export const CONNECTION_LEGS = CONNECTION_STREAMS.flatMap(
+  (route) => route.legs,
+);
+export const TRANSFER_STATIONS = STATIONS.filter(
+  (country) =>
+    CONNECTION_STREAMS.filter((route) => route.countries.includes(country.code))
+      .length > 1,
+);
 const normalized = (values) =>
   values.map((value) => round(value / NETWORK_LOOP_SECONDS)).join(";");
-export const localBegin = (leg) =>
-  `-${round(modulo(RELAY_PHASE_SECONDS - leg.startAt, NETWORK_LOOP_SECONDS))}s`;
-export function relayMotion() {
+export const routeBegin = (route) => `-${route.phase}s`;
+export function routeMotion(route) {
   const times = [0],
     points = [0],
     splines = [];
-  for (const leg of RELAY_LEGS) {
-    times.push(leg.arriveAt, leg.endAt);
-    points.push(leg.endProgress, leg.endProgress);
-    splines.push(RELAY_EASING.join(" "), "0 0 1 1");
+  for (const leg of route.legs) {
+    times.push(leg.arriveAt);
+    points.push(leg.endProgress);
+    splines.push(ROUTE_EASING.join(" "));
+    if (leg.endAt > leg.arriveAt) {
+      times.push(leg.endAt);
+      points.push(leg.endProgress);
+      splines.push("0 0 1 1");
+    }
   }
+  times.push(NETWORK_LOOP_SECONDS);
+  points.push(1);
+  splines.push("0 0 1 1");
   return {
     keyTimes: normalized(times),
     keyPoints: points.map(round).join(";"),
@@ -150,54 +194,46 @@ export function relayMotion() {
   };
 }
 export function bandAnimation(leg) {
+  const waits = leg.startAt > 0;
   return {
-    keyTimes: normalized([
-      0,
-      leg.travelSeconds,
-      TRAIL_SECONDS,
-      TRAIL_SECONDS + leg.travelSeconds,
-      NETWORK_LOOP_SECONDS,
-    ]),
-    widths: "0 2000;1000 2000;1000 2000;0 2000;0 2000",
-    offsets: "0;0;0;-1000;-1000",
+    keyTimes: normalized(
+      waits ? [0, leg.startAt, leg.arriveAt, 60] : [0, leg.arriveAt, 60],
+    ),
+    widths: waits
+      ? "0 2000;0 2000;1000 2000;1000 2000"
+      : "0 2000;1000 2000;1000 2000",
     keySplines: [
-      RELAY_EASING.join(" "),
-      "0 0 1 1",
-      RELAY_EASING.join(" "),
+      ...(waits ? ["0 0 1 1"] : []),
+      ROUTE_EASING.join(" "),
       "0 0 1 1",
     ].join(";"),
-    visibilityTimes: normalized([
-      0,
-      TRAIL_SECONDS + leg.travelSeconds,
-      NETWORK_LOOP_SECONDS,
-    ]),
+    visibilityTimes: normalized(
+      waits
+        ? [0, leg.startAt, leg.startAt + 0.04, leg.fadeAt, leg.clearAt, 60]
+        : [0, leg.fadeAt, leg.clearAt, 60],
+    ),
+    opacity: waits ? "0;0;1;1;0;0" : "1;1;0;0",
   };
 }
-export function flagAnimation(leg) {
-  return {
-    keyTimes: normalized([
-      0,
-      leg.travelSeconds,
-      leg.travelSeconds + FLAG_FADE_SECONDS,
-      NETWORK_LOOP_SECONDS - HANDOFF_SECONDS,
-      NETWORK_LOOP_SECONDS - HANDOFF_SECONDS + FLAG_FADE_SECONDS,
-      NETWORK_LOOP_SECONDS,
-    ]),
-    values: "1;1;0;0;1;1",
-  };
-}
-export function batonColourAnimation() {
+export function flagAnimation(route, code) {
   const times = [0],
-    values = [RELAY_LEGS[0].colour];
-  for (const leg of RELAY_LEGS) {
-    const next = RELAY_LEGS[(leg.index + 1) % RELAY_LEGS.length];
+    values = [route.legs[0].country.code === code ? 1 : 0];
+  for (const leg of route.legs) {
+    const next = route.legs[leg.index + 1];
+    if (!next || next.country.code === leg.country.code) continue;
     times.push(leg.arriveAt, leg.arriveAt + FLAG_FADE_SECONDS, leg.endAt);
-    values.push(leg.colour, next.colour, next.colour);
+    values.push(
+      leg.country.code === code ? 1 : 0,
+      next.country.code === code ? 1 : 0,
+      next.country.code === code ? 1 : 0,
+    );
   }
+  times.push(NETWORK_LOOP_SECONDS);
+  values.push(route.legs.at(-1).country.code === code ? 1 : 0);
   return { keyTimes: normalized(times), values: values.join(";") };
 }
 const cubic = (p1, p2, t) =>
-  3 * (1 - t) * (1 - t) * t * p1 + 3 * (1 - t) * t * t * p2 + t * t * t;
+  3 * (1 - t) ** 2 * t * p1 + 3 * (1 - t) * t * t * p2 + t ** 3;
 export function ease(progress) {
   const x = Math.min(1, Math.max(0, progress));
   if (x === 0 || x === 1) return x;
@@ -205,56 +241,72 @@ export function ease(progress) {
     hi = 1;
   for (let i = 0; i < 32; i++) {
     const t = (lo + hi) / 2;
-    if (cubic(RELAY_EASING[0], RELAY_EASING[2], t) < x) lo = t;
+    if (cubic(ROUTE_EASING[0], ROUTE_EASING[2], t) < x) lo = t;
     else hi = t;
   }
-  return cubic(RELAY_EASING[1], RELAY_EASING[3], (lo + hi) / 2);
+  return cubic(ROUTE_EASING[1], ROUTE_EASING[3], (lo + hi) / 2);
 }
+const mixPoint = (a, b, t) => a.map((n, axis) => n + (b[axis] - n) * t);
 export function pointOnLeg(leg, progress) {
   if (progress <= 0) return [...leg.start];
   if (progress >= 1) return [...leg.end];
-  if (leg.kind === "line")
-    return leg.start.map((n, axis) => n + (leg.end[axis] - n) * progress);
+  if (!leg.turns) return mixPoint(leg.start, leg.end, progress);
+  const position = progress * leg.length;
+  if (position <= leg.leadLength)
+    return mixPoint(leg.start, leg.arcStart, position / leg.leadLength);
+  if (position >= leg.leadLength + leg.arcLength)
+    return mixPoint(
+      leg.arcEnd,
+      leg.end,
+      (position - leg.leadLength - leg.arcLength) /
+        (leg.length - leg.leadLength - leg.arcLength),
+    );
   const angle =
-    Math.atan2(leg.start[1] - leg.center[1], leg.start[0] - leg.center[0]) +
-    (((leg.sweep ? 1 : -1) * Math.PI) / 2) * progress;
+    Math.atan2(
+      leg.arcStart[1] - leg.center[1],
+      leg.arcStart[0] - leg.center[0],
+    ) +
+    (leg.sweep ? 1 : -1) * ((position - leg.leadLength) / leg.radius);
   return [
     leg.center[0] + Math.cos(angle) * leg.radius,
     leg.center[1] + Math.sin(angle) * leg.radius,
   ];
 }
-export function flagOpacity(leg, seconds) {
-  const local = modulo(seconds - leg.startAt, NETWORK_LOOP_SECONDS);
-  if (local <= leg.travelSeconds) return 1;
-  if (local < leg.travelSeconds + FLAG_FADE_SECONDS)
-    return 1 - (local - leg.travelSeconds) / FLAG_FADE_SECONDS;
-  const revealAt = NETWORK_LOOP_SECONDS - HANDOFF_SECONDS;
-  if (local < revealAt) return 0;
-  return Math.min(1, (local - revealAt) / FLAG_FADE_SECONDS);
-}
-// This same score supplies the reduced-motion still and geometry verification;
-// the live scene remains native SVG animation, without a JS rendering loop.
-export function relayStateAt(seconds) {
+export function routeStateAt(route, seconds) {
   const time = modulo(seconds, NETWORK_LOOP_SECONDS);
-  const leg =
-    RELAY_LEGS.find((item) => time >= item.startAt && time < item.endAt) ||
-    RELAY_LEGS[0];
+  const leg = route.legs.find((item) => time < item.endAt) || route.legs.at(-1);
   const progress = ease((time - leg.startAt) / leg.travelSeconds);
+  const next = route.legs[leg.index + 1];
+  const exchange = next
+    ? Math.min(1, Math.max(0, (time - leg.arriveAt) / FLAG_FADE_SECONDS))
+    : 0;
   return {
+    route,
     time,
     leg,
     progress,
     point: pointOnLeg(leg, progress),
-    bands: RELAY_LEGS.map((item) => {
-      const local = modulo(time - item.startAt, NETWORK_LOOP_SECONDS);
-      const head = ease(local / item.travelSeconds),
-        tail = ease((local - TRAIL_SECONDS) / item.travelSeconds);
-      return { leg: item, from: tail, to: head };
-    }),
-    flags: RELAY_LEGS.map((item) => ({
-      country: item.country,
-      opacity: flagOpacity(item, time),
+    bands: route.legs.map((item) => ({
+      leg: item,
+      to: ease((time - item.startAt) / item.travelSeconds),
+      opacity:
+        time < item.startAt
+          ? 0
+          : Math.min(
+              1,
+              item.startAt === 0 ? 1 : (time - item.startAt) / 0.04,
+              Math.max(0, (item.clearAt - time) / (item.clearAt - item.fadeAt)),
+            ),
+    })),
+    flags: route.countries.map((code) => ({
+      code,
+      opacity:
+        (leg.country.code === code ? 1 - exchange : 0) +
+        (next?.country.code === code ? exchange : 0),
     })),
   };
 }
-export const STILL_RELAY = relayStateAt(RELAY_PHASE_SECONDS);
+export const networkStateAt = (seconds) =>
+  CONNECTION_STREAMS.map((route) => routeStateAt(route, seconds + route.phase));
+// The reduced-motion scene samples the same overlapping routes, not a poster.
+export const STILL_CONNECTIONS = networkStateAt(0);
