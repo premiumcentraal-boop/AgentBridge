@@ -161,3 +161,11 @@ Append one dated entry for each substantial incremental development session. Lin
 
 ## 2026-11-10 — PR #32 CI follow-up: numeric Content-Length guard
 GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) at `backend/test/signalwire.test.mjs:221`: the oversized declared-length response reached JSON parsing instead of the early size guard. Inspection found the regex was accidentally written `/^\\d+$/` (matching a literal backslash and `d`) rather than `/^\d+$/` (decimal digits). Corrected the regex on the existing PR branch; streaming byte enforcement remains unchanged and still bounds dishonest or absent headers. Verification of the corrected head is pending GitHub Actions. No routing, carrier resources, credentials or deployments changed.
+## 2026-11-10 — PR #29 review: hardening ported, owner opt-ins kept (owner's assistant)
+- Ported from #29: server-side 60-second DTMF challenge deadline using the persisted `provider_events.swml_inbound.received_at` (invalid, future or >=60 s old challenges hang up before a PIN attempt is consumed), boundary/malformed-timestamp tests, a concurrent-PIN-callback single-connection test and a mode-drift test (an approved `dtmf_pin` reservation can never be claimed after switching to `capped_caller_id`/`any_caller`).
+- Not ported: removal of `any_caller`/`capped_caller_id`. The owner explicitly requires `any_caller` because Grok Bot's voice agent rotates caller ID and cannot send DTMF; both modes remain explicit opt-ins behind their risk-accepted flags, `dtmf_pin` remains the default, and the residual-risk warnings in `docs/US_PRIVATE_PILOT.md` were strengthened.
+- No deploys, secrets, carrier changes, flag changes or calls.
+- Added a pinned, checksum-verified gitleaks secret-scan CI job (history + working tree) and `.gitleaks.toml`, which allowlists only synthetic lowercase test idempotency keys.
+
+## 2026-11-10 — Inventory byte cap: #32 and #33 combined (owner's assistant)
+- #32's `readInventoryResponse` helper kept (chunk type check, trimmed Content-Length); #33's declared-length tests folded in (oversize rejected with zero reads and upstream cancelled; a throwing cancel stays fail-closed). #33 closed as superseded.

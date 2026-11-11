@@ -152,9 +152,13 @@ export async function handleSignalWirePin(request,env={}){
   // A PIN must authenticate the reservation chosen by THIS call's first webhook.
   // Selecting the newest ready reservation here would allow a delayed call from A
   // to consume B after A is cancelled/expired and B becomes ready.
-  const started=await env.DB.prepare("SELECT reservation_id FROM provider_events WHERE provider='signalwire' AND provider_call_id=? AND event_type='swml_inbound' AND outcome='pin_requested'")
+  const started=await env.DB.prepare("SELECT reservation_id,received_at FROM provider_events WHERE provider='signalwire' AND provider_call_id=? AND event_type='swml_inbound' AND outcome='pin_requested'")
     .bind(call.call_id).first();
   if(!started?.reservation_id||!UUID.test(started.reservation_id))return hangup();
+  // Carrier prompt timeouts are not an authorization boundary. Validate the
+  // persisted challenge start against server time, including clock anomalies.
+  if(!Number.isSafeInteger(started.received_at)||started.received_at>now||
+     now-started.received_at>=PIN_WINDOW_SECONDS)return hangup();
   if(!await recordEvent(env,call.call_id,'swml_pin',now))return hangup();
   const row=await env.DB.prepare("SELECT r.id,r.account_id,r.destination,r.expires_at,r.status,r.pin_sha256,r.pin_attempts FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE r.id=? AND a.did=? AND a.status='active' AND r.status='ready' AND r.approved_at IS NOT NULL AND r.expires_at>?")
     .bind(started.reservation_id,env.US_BRIDGE_DID,now).first();
