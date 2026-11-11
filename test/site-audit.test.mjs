@@ -22,7 +22,7 @@ test('internal URLs resolve in both root and project-site builds',()=>{
  assert.deepEqual(internalPaths(html.replaceAll('="/','="/AgentBridge/'),'/AgentBridge'),['pricing/index.html','assets/app.js']);
  assert.throws(()=>internalPaths(html,'/AgentBridge'),/missing BASE_PATH/);
 });
-test('repository website has expected six pages',()=>{assert.equal(PAGES.length,6);});
+test('website audit covers public pages, direct studio routes and the original gallery',()=>{assert.equal(PAGES.length,21);for(const p of ['studio/index.html','studio/demo/index.html','studio/routes/index.html','studio/demo/call/index.html','design/index.html'])assert.ok(PAGES.includes(p),p);});
 test('build artifact audit passes for actual built website',async()=>{
  const errors=await audit('dist',process.env.BASE_PATH||'');
  assert.deepEqual(errors,[]);

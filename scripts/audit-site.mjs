@@ -1,9 +1,10 @@
 import {readFile,stat} from 'node:fs/promises';
 import {join,resolve,sep} from 'node:path';
 import {pathToFileURL} from 'node:url';
+import {WEB_PAGES} from '../web/src/data.js';
 
 // Dependency-free structural audit. Not a replacement for browser-based WCAG testing.
-export const PAGES=['index.html','how-it-works/index.html','pricing/index.html','connect/index.html','docs/index.html','app/index.html'];
+export const PAGES=[...WEB_PAGES.map(path=>path==='/'?'index.html':path.slice(1)+'index.html'),'design/index.html'];
 export function attrs(tag){const out={};for(const m of tag.matchAll(/([a-zA-Z_:][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g))out[m[1].toLowerCase()]=m[2]??m[3];return out;}
 export function scan(html,page){
  const issues=[],add=m=>issues.push(page+': '+m),ids=new Set();

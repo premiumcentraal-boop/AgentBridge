@@ -19,12 +19,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: npm --prefix web ci --ignore-scripts --no-audit --no-fund
       - name: Validate
         run: npm run check && npm test
       - name: Build project-site URLs
         run: BASE_PATH=/AgentBridge npm run build:site
       - name: Audit project-site navigation and accessibility
-        run: BASE_PATH=/AgentBridge npm run test:site
+        run: BASE_PATH=/AgentBridge npm run test:site && npm run test:web
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

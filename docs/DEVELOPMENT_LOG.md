@@ -154,6 +154,98 @@ Append one dated entry for each substantial incremental development session. Lin
 - Owner: Grok Bot's outbound caller ID rotates per call. New `CALLER_PROOF_MODE=any_caller`, only with `ANY_CALLER_RISK_ACCEPTED=true`; all other guards unchanged; fingerprint records `trusted_caller: "ANY"`.
 - `RESERVATION_TTL_SECONDS` maximum raised from 300 to 900.
 
+## 2026-11-10 — Victor product page and private control studio (review branch)
+
+- Added a distinct dark product page for `agentbridge.victor.ceo`, original local
+  globe and social artwork, mobile navigation, product walkthrough, studio preview,
+  FAQ and explicit development status. Existing public guides remain available.
+- Added `/studio/` with a clearly labeled sample mode and an authenticated,
+  single-operator backend: SQLite route drafts, search/archive UI, activity,
+  Simple/Guided/Advanced studio preferences and private JSON export.
+- Added constant-time access-key verification, secure HttpOnly session cookies,
+  same-origin write checks, bounded JSON, login throttling, SQL parameter binding,
+  server-only optional MCP account credentials and bounded read-only setup checks.
+- Added Railway Docker configuration, `/health`, volume privilege setup, an access
+  key generator and `docs/RAILWAY_STUDIO.md`. Companion Victor change adds the tab,
+  product frame and top-level direct studio link.
+- The standalone Node service never loads the telephony Worker. No live route,
+  access number, approval, payment, provisioning, carrier mutation or call is
+  available through the new studio. Pending security PRs were not merged.
+- Validation: root `npm run ci` passed (131 backend/security tests and seven
+  static-site tests); `/AgentBridge` BASE_PATH build and static audit passed.
+  Companion Victor: 71 tests and production build passed. Browser QA is unverified:
+  supported managed browser tooling is not available in this environment.
+- Railway account connection and authoritative DNS changes are still needed for
+  public deployment; source implementation does not establish deployment.
+
+- Final Docker packaging uses an explicit context allowlist and fewer build layers;
+  private Worker config, runtime data and credentials cannot enter the image.
+
+## 2026-11-11 — three visual directions for product and studio
+
+- Created original Signal, Material and Atlas design boards from the supplied
+  Swiss Futura, Sanity, Dinamo and RETINAA references. Every board contains a
+  public product page, studio interior, mobile layouts, type and colour system.
+- Added a studio Design boards view and a standalone `/design/` review page,
+  with full-size PNG links, downloads, readable rationale and source notes.
+- Preserved current product styling and backend behavior while the directions
+  are compared. The boards are explicitly concepts with illustrative UI data.
+- Added source/attribution and implementation notes in `DESIGN_DIRECTIONS.md`.
+- Validation: `npm run ci` passed (131 backend/security tests, seven structural
+  tests auditing eight pages); root and `/AgentBridge` path builds passed. All
+  three original PNGs are 1536×1024. The three-page PDF and PNG archive were
+  checked for page count and archive integrity. The review UI was not exercised
+  in a browser in this session.
+
+## 2026-11-11 — floating navigation and call context
+
+- Updated Signal, Material and Atlas concepts with the supplied floating-glass
+  navigation reference: persistent simulated active-call card, six AgentBridge
+  destinations, compact rail, expanded rail and mobile call pill.
+- Added an isolated interactive navigation preview to both design-gallery views:
+  direction/appearance switching, collapse/expand, selected menu state and local
+  mute/end/restart/return-to-call states. No real microphone or carrier access.
+- Reused one navigation item list for the prototype and actual studio menu.
+- Public advertising navigation and operational backend behavior are unchanged.
+- Validation: 131 backend/security tests and seven structural tests passed;
+  root and project-path builds passed. Rendered-gallery semantics passed. A
+  lightweight event harness exercised compact mode, mute, menu/theme changes,
+  light mode and end/restart states with zero network requests. Browser layout
+  and interaction QA was not performed in this session.
+
+## 2026-11-11 — rendered Astryx product pages and studio foundation
+
+- Replaced the built product/studio screens with React 19 and actual Meta Astryx
+  components, pinned in a separate web lockfile. The HTTP runtime remains free
+  of third-party server dependencies.
+- Rendered 20 direct HTML pages: five public pages, private operator entry,
+  sample workspace, compatibility app entry and six matching studio/demo
+  sections. The original standalone design gallery remains as a 21st page.
+- Built original SVG silver connection art, quiet material cards, responsive
+  layouts, dark/light appearance and the floating rail in the actual studio
+  shell. Its simulated call stays above six navigation items, supports compact
+  mode and mute/return/end, and becomes a call strip plus modal drawer on mobile.
+- Connected real Astryx forms/dialogs to the existing authenticated draft,
+  archive, settings, activity, export and read-only backend-inspection API.
+  Sample drafts and call state remain in memory and make no API requests.
+- Added a self-contained working HTML artifact, including page components,
+  styles and archived boards, that can open directly without a server. CI
+  uploads it separately from the normal static build.
+- Preserved full-document navigation between public and private pages for their
+  different CSP/framing policies. Studio entry exits Victor's product iframe.
+- Validation: 131 backend/security tests, seven structural tests covering 21
+  pages and three bundled-React DOM interaction checks pass. Root and project
+  path builds/audits pass. The Node 24 Docker build and fresh-volume smoke pass:
+  rendered public/demo pages, local assets, secure login, draft/preference
+  persistence after restart, HTTP process UID 1000, no dependency tree/carrier
+  source in the runtime and routing still disabled.
+- Browser layout, animation, touch and screen-reader QA remain pending: the
+  managed session exposes no browser-control tool. These are actual component
+  pages, not screenshots presented as implemented UI.
+- Review: [PR #34](https://github.com/premiumcentraal-boop/AgentBridge/pull/34).
+  CI result: [PR quality checks](https://github.com/premiumcentraal-boop/AgentBridge/pull/34/checks).
+  The Railway service and `agentbridge.victor.ceo` DNS are prepared in the
+  runbook, not deployed or attached by this change. No carrier calls placed.
 
 ## 2026-11-10 — Read-only chat-first difficulty selector (feature PR, NOT calling-ready)
 - Added a shared stateless `previewChatCallFlow` presenter with `simple` (default), `guided`, and `advanced` output. Difficulty only affects explanations; identical security/permission checks, independent owner approval, one-use caller proof, native call confirmation and provider spend gates remain mandatory for every level.
@@ -176,3 +268,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 ## 2026-11-10 — Inventory byte cap: #32 and #33 combined (owner's assistant)
 - #32's `readInventoryResponse` helper kept (chunk type check, trimmed Content-Length); #33's declared-length tests folded in (oversize rejected with zero reads and upstream cancelled; a throwing cancel stays fail-closed). #33 closed as superseded.
 - #30 merged after #35/#32; preview gate text now describes the configured caller proof (DTMF PIN default; owner opt-in caller-ID/any-caller modes with documented risk).
+
+## 2026-11-10 — PR #34 merged for v1.0.0 (owner's assistant)
+- Merged main (#35, #32, #30) into the product/studio branch; root `check` now includes `chat-experience.mjs` alongside the studio files; CI keeps the gitleaks job and the working-preview artifact.
+- Mobile hero: the "01 / A single conversation" caption now has a backdrop so it stays legible over the cable art.
+- Known limitation: studio login throttling is keyed on the socket address, so behind Railway's proxy all clients share one 10-attempts/15-minutes bucket (a lockout nuisance, not a bypass; keys are 256-bit).

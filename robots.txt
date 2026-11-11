@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /studio/
+Disallow: /api/
+Disallow: /app/
+Disallow: /design/
+Sitemap: https://agentbridge.victor.ceo/sitemap.xml

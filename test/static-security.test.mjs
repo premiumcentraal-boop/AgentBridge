@@ -4,8 +4,8 @@ import {readFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 const root=process.cwd();
-const pages=['index.html','how-it-works/index.html','pricing/index.html','connect/index.html','docs/index.html','app/index.html'];
-test('all six built pages enforce local-only scripts and strict privacy policy',async()=>{
+const pages=['index.html','how-it-works/index.html','pricing/index.html','connect/index.html','docs/index.html'];
+test('all public pages enforce local-only scripts and strict privacy policy',async()=>{
  execFileSync(process.execPath,['scripts/build-site.mjs'],{cwd:root,env:{...process.env,BASE_PATH:''}});
  for(const page of pages){
   const html=await readFile(join(root,'dist',page),'utf8');
@@ -17,20 +17,29 @@ test('all six built pages enforce local-only scripts and strict privacy policy',
  }
 });
 test('typography does not contact external font providers',async()=>{
- const css=await readFile(join(root,'assets/styles.css'),'utf8');
+ const css=await readFile(join(root,'web/src/styles.css'),'utf8');
  assert.doesNotMatch(css,/@import\s+url\(/i);
  assert.doesNotMatch(css,/fonts\.(googleapis|gstatic)\.com/i);
  assert.match(css,/system-ui/);
 });
-test('hosting header policy blocks framing, MIME sniffing, device APIs',async()=>{
+test('hosting header policy permits Victor product framing and protects the studio',async()=>{
  const h=await readFile(join(root,'_headers'),'utf8');
- for(const item of ["frame-ancestors 'none'","X-Content-Type-Options: nosniff","X-Frame-Options: DENY","Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()"])assert.ok(h.includes(item),item);
+ for(const item of ["frame-ancestors 'self' https://victor.ceo https://www.victor.ceo","/studio/*","frame-ancestors 'none'","X-Content-Type-Options: nosniff","X-Frame-Options: DENY","Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()"])assert.ok(h.includes(item),item);
+});
+
+test('studio permits only same-origin API connections and is excluded from indexing',async()=>{
+ for(const page of ['studio/index.html','studio/demo/index.html','studio/routes/index.html','app/index.html']){
+  const html=await readFile(join(root,'dist',page),'utf8');
+  assert.match(html,/connect-src 'self'/);
+  assert.match(html,/name="robots" content="noindex,nofollow"/);
+  assert.doesNotMatch(html,/localStorage|sessionStorage/);
+ }
 });
 test('project-path build keeps CSP and correct local asset URLs',async()=>{
  execFileSync(process.execPath,['scripts/build-site.mjs'],{cwd:root,env:{...process.env,BASE_PATH:'/AgentBridge'}});
  const html=await readFile(join(root,'dist/index.html'),'utf8');
- assert.match(html,/href="\/AgentBridge\/assets\/styles\.css"/);
- assert.match(html,/src="\/AgentBridge\/assets\/app\.js"/);
+ assert.match(html,/href="\/AgentBridge\/assets\/foundation\/main\.css\?v=/);
+ assert.match(html,/src="\/AgentBridge\/assets\/foundation\/main\.js\?v=/);
  assert.match(html,/script-src 'self'/);
 });
 

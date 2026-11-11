@@ -1,30 +1,87 @@
 # AgentBridge
-**Your agent. Every number. One conversation.**
+**Your agent. A wider world.**
+
+## Victor product page & control studio
+
+The new product experience is prepared for **agentbridge.victor.ceo**, with a dedicated
+AgentBridge tab in the `victor-ceo` repository, following Meridian’s integration.
+
+- `/` — real React/Astryx product page, original silver connection loop, product walkthrough and rendered studio preview.
+- `/studio/demo/` — interactive sample workspace; changes reset when the tab reloads. The old `/studio/?demo=1` link still works.
+- `/design/` — three original design boards (Signal, Material, Atlas) with floating call navigation and an interactive component preview; also under **Design boards** in the studio. See [design rationale and references](docs/DESIGN_DIRECTIONS.md).
+- `/studio/` — private operator sign-in; server-backed route drafts, search, archive, activity,
+  guidance preferences, export and optional read-only private backend discovery.
+- `npm start` — standalone Node service; persistent SQLite storage, no runtime dependencies.
+
+**Railway deployment:** [new service, volume, access key and custom domain setup](docs/RAILWAY_STUDIO.md).
+The Docker service does not load or expose the telephony Worker. New studio drafts
+are separate from carrier reservations and cannot activate calls. Existing private
+backend credentials are optional and stay on the server.
+
+Local setup: Node 22.13+ (Node 24 recommended), `npm run setup:web`, `npm run ci`, then `npm run dev`.
+Open `/studio/` with the local development key `local-development`, or explore the demo.
+The known development key is ignored in production. A missing production access-key
+hash keeps the private workspace locked.
+
 
 A premium website and developer-first international telecom bridge for AI agents with their own US outbound calling capability. The intended experience is a natural extension of Grok Bot: prepare a route, call a US access number, and let the carrier connect it to an approved international recipient while **Grok Bot stays the only speaking AI**.
 
 > **Current status: development preview, NOT a live calling service.** No consumer account creation, payments, number provisioning, or verified Grok Bot end-to-end dialing are provided. AgentBridge is independent of Grok/xAI, Cursor and Apple. A US calling feature must already be enabled and its use must be allowed under the relevant terms.
 
 ## Website
-Responsive, dependency-free public pages, designed for Cloudflare Pages or static hosting:
-- \`/\` — Home, visual value proposition
-- \`/how-it-works/\` — Three-step explanation
-- \`/pricing/\` — Proposed plans and interactive illustrative calculator
-- \`/connect/\` — Grok Bot connection and copyable future MCP instructions
-- \`/docs/\` — Developer reference
-- \`/app/\` — Honest, **non-calling** interactive console preview
+
+The public site and control studio share an Astryx/React 19 foundation. The
+interface uses actual Astryx navigation, buttons, cards, segmented controls,
+dialogs and inputs, with custom glass surfaces and original SVG connection art.
+Build output contains 20 rendered HTML pages, so direct links and public content
+work before JavaScript starts. The original `/design/` gallery remains available.
+
+- `/` — Product overview
+- `/how-it-works/` — Interactive three-step walkthrough
+- `/pricing/` — Preview and self-hosting options
+- `/connect/` — Studio access and private backend setup
+- `/docs/` — Developer and deployment notes
+- `/studio/` — Protected operator workspace
+- `/studio/demo/` — Sample workspace with persistent in-tab floating call preview
+- `/studio/{routes,connection,activity,settings,call,design}/` — Direct studio pages
+- `/studio/demo/{routes,connection,activity,settings,call,design}/` — Matching demo pages
+- `/app/` — Compatibility link to the sample studio
+
+The rail has an expanded/compact state, a simulated active call at the top,
+mute/return/end controls, six workspace items and a dark/light switch. On small
+screens it becomes a modal drawer with a persistent call strip.
 
 ### Run locally
-Requires Node.js 22+.
-\`\`\`bash
-npm run ci
-npm run build:site
-npm run test:site
-npx serve dist  # optional; or use any static HTTP server
-\`\`\`
-The static audit checks links, semantic landmarks, form labels and assets; it does not replace real browser accessibility testing. For GitHub Pages, use \`BASE_PATH=/AgentBridge npm run build:site\` and \`BASE_PATH=/AgentBridge npm run test:site\`.
 
-No \`npm install\` is required to run checks or build the public site. \`dist/\` is the deployable static website; do **not** host the repository root as a public document directory.
+Requires Node.js 22.13+ (Node 24 recommended).
+
+```sh
+npm run setup:web
+npm run ci
+npm run dev
+```
+
+Open `http://127.0.0.1:3000/`. The local private studio accepts the development
+key described above. `dist/` is the deployable static site; the authenticated
+API needs the Node service. Public and studio navigation crosses a full document
+boundary so the public CSP and Victor iframe permissions cannot carry into the
+private workspace. Native links and direct page loads remain supported.
+
+A build also writes `web/.cache/AgentBridge-Working-Website.html`: one portable
+HTML file containing all page components, styles, original boards and in-memory
+demo interactions. Open it directly in a modern browser. It never requests the
+private API, and route drafts reset when reloaded. This is an actual working UI,
+not a screenshot or replacement for a production deployment.
+
+`npm run test:web` exercises real bundled React interactions in a DOM harness;
+`npm run test:site` checks all 21 pages for landmarks, labels, links and assets.
+These checks do not replace browser layout and accessibility testing. For a
+project site, build and audit with `BASE_PATH=/AgentBridge`.
+
+Dependencies are pinned in `web/package-lock.json`. Client assets and system
+fonts are served locally. React and Astryx are bundled at build time; the Node
+HTTP service has no third-party runtime packages. License notices ship with the
+build. Do **not** host the repository root as a public document directory.
 
 ## Backend: Cloudflare Worker + D1 + SignalWire US private-test preview
 The \`backend/\` directory is a deliberately bounded **test-only reference**:
@@ -68,7 +125,7 @@ Use the authenticated HTTP MCP tool `preview_chat_call_flow` or the private loca
 AgentBridge is a **telephone routing layer**, not a new voice agent, and not a method to evade a service's calling restrictions.
 
 ### Website privacy and security posture
-The site uses local system fonts instead of third-party font downloads. Built HTML includes CSP and a no-referrer meta policy. On Cloudflare Pages, `_headers` additionally denies framing, sniffing and device permission APIs. GitHub Pages ignores `_headers`, so `frame-ancestors` and other header-only controls cannot be assumed on GitHub Pages. Current inline styles still require `style-src 'unsafe-inline'`. These policies secure the public static preview, **not** the telecom backend, which remains private-test-only.
+The site uses local system fonts instead of third-party font downloads. Built HTML includes CSP and a no-referrer meta policy. On Railway, the Node server permits public product framing only by Victor and blocks all studio framing. On Cloudflare Pages, `_headers` supplies corresponding framing, sniffing and device-permission rules. GitHub Pages ignores `_headers`, so `frame-ancestors` and other header-only controls cannot be assumed on GitHub Pages. Current inline styles still require `style-src 'unsafe-inline'`. These policies secure the public static preview, **not** the telecom backend, which remains private-test-only.
 
 ## Combined integration status (review branch)
 The code now combines SignalWire's read-only BYO Project/DID preflight, hangup-only signed SWML endpoint, bounded Twilio and authenticated JSON body readers, strict one-use reservation expiration, and a private-test outbound default-deny switch. No number purchasing, public self-service key linking, live international call, or payment pathway has been enabled. For the SignalWire operator's setup, see [docs/SIGNALWIRE.md](docs/SIGNALWIRE.md); `npm run signalwire:check` only performs read-only inventory with credentials supplied privately in the environment.
