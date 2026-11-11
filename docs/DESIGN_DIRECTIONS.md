@@ -126,3 +126,33 @@ for page composition, tokens, type roles, artwork and the responsive relationshi
 between tables, inspectors and mobile actions. Keep all essential text/actions
 as semantic DOM; board images are references, not a replacement for a coded UI.
 Motion, if useful, is progressive enhancement with a reduced-motion fallback.
+
+## 2026-11-11: implemented website foundation
+
+The latest direction is implemented in `web/src/` as actual React 19 pages using
+Meta's [Astryx components](https://astryx.atmeta.com/components), pinned to
+`@astryxdesign/core` and `@astryxdesign/theme-neutral` 0.7.13. It is one coherent
+interface, using the supplied silver connection loops, quiet widget surfaces
+and floating glass navigation as references. The three earlier generated boards
+remain an archive; they are not screenshots of the implemented pages.
+
+Original inline SVG connection art, silver pill buttons, subtle charcoal/sage
+surfaces and generous spacing connect the marketing site with the studio.
+Astryx supplies actual SideNav, Card, Button, SegmentedControl, Dialog and
+TextInput behavior. Responsive layouts, dark/light appearance, active-call
+preview, route-draft forms and page navigation are built in DOM components.
+
+`npm run build:site` renders 20 direct HTML routes plus the retained gallery.
+The portable `web/.cache/AgentBridge-Working-Website.html` contains the real
+interface, styles and historical boards in one file. It runs the sample studio
+with in-tab data and no API requests. The normal hosted studio retains the
+existing protected SQLite API. Neither version enables a real call.
+
+Astryx and StyleX licenses are preserved in this directory. The build collects
+runtime dependency notices into `dist/assets/foundation/THIRD_PARTY_NOTICES.txt`
+and the portable artifact. No Meta assets, trademarks or reference screenshots
+are used as AgentBridge page images.
+
+Validation separates DOM interaction tests and structural HTML audits from
+browser visual testing. This environment offers no browser-control tool, so
+actual browser layout, animation, touch and screen-reader QA remain pending.

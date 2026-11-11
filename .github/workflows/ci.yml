@@ -15,8 +15,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: npm --prefix web ci --ignore-scripts --no-audit --no-fund
       - run: npm run ci
-      # Private read-only stdio MCP server (separate lockfile; root CI stays dependency-free)
+      # Private read-only stdio MCP server (separate lockfile)
       - run: npm --prefix local-mcp ci --no-audit --no-fund
       - run: npm --prefix local-mcp test
       - name: Upload static website
@@ -24,4 +25,10 @@ jobs:
         with:
           name: agentbridge-static
           path: dist/
+          retention-days: 7
+      - name: Upload working HTML preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentbridge-working-preview
+          path: web/.cache/AgentBridge-Working-Website.html
           retention-days: 7

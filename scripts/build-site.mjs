@@ -1,5 +1,6 @@
 import {rm,mkdir,cp,readFile,writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
+import {execFileSync} from 'node:child_process';
 const root=process.cwd(),out=join(root,'dist');
 const pages=['index.html','how-it-works/index.html','pricing/index.html','connect/index.html','docs/index.html','app/index.html','studio/index.html','design/index.html'];
 // All assets must be served locally. Existing inline style attributes require
@@ -20,4 +21,6 @@ for(const path of pages){
  if(base)html=html.replaceAll('href="/','href="'+base+'/').replaceAll('src="/','src="'+base+'/');
  await writeFile(file,html);
 }
-console.log('Built offline-first dist/ for '+(base||'/')+' with restrictive CSP and no third-party font calls');
+// Build and render the React/Astryx product and studio over the legacy gallery.
+execFileSync(process.execPath,['web/scripts/build.mjs'],{cwd:root,env:process.env,stdio:'inherit'});
+console.log('Built dist/ for '+(base||'/')+' with restrictive CSP and local assets');

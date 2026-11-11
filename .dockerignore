@@ -1,4 +1,4 @@
-# Start closed. Include only the dependency-free web product and studio runtime.
+# Start closed. Include the web build sources and the Node studio runtime.
 **
 !package.json
 !index.html
@@ -9,6 +9,15 @@
 !scripts/
 scripts/**
 !scripts/build-site.mjs
+!web/
+web/**
+!web/package.json
+!web/package-lock.json
+!web/src/
+!web/src/**
+!web/scripts/
+web/scripts/**
+!web/scripts/build.mjs
 !assets/
 !assets/**
 !how-it-works/

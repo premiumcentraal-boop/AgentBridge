@@ -212,3 +212,37 @@ Append one dated entry for each substantial incremental development session. Lin
   lightweight event harness exercised compact mode, mute, menu/theme changes,
   light mode and end/restart states with zero network requests. Browser layout
   and interaction QA was not performed in this session.
+
+## 2026-11-11 — rendered Astryx product pages and studio foundation
+
+- Replaced the built product/studio screens with React 19 and actual Meta Astryx
+  components, pinned in a separate web lockfile. The HTTP runtime remains free
+  of third-party server dependencies.
+- Rendered 20 direct HTML pages: five public pages, private operator entry,
+  sample workspace, compatibility app entry and six matching studio/demo
+  sections. The original standalone design gallery remains as a 21st page.
+- Built original SVG silver connection art, quiet material cards, responsive
+  layouts, dark/light appearance and the floating rail in the actual studio
+  shell. Its simulated call stays above six navigation items, supports compact
+  mode and mute/return/end, and becomes a call strip plus modal drawer on mobile.
+- Connected real Astryx forms/dialogs to the existing authenticated draft,
+  archive, settings, activity, export and read-only backend-inspection API.
+  Sample drafts and call state remain in memory and make no API requests.
+- Added a self-contained working HTML artifact, including page components,
+  styles and archived boards, that can open directly without a server. CI
+  uploads it separately from the normal static build.
+- Preserved full-document navigation between public and private pages for their
+  different CSP/framing policies. Studio entry exits Victor's product iframe.
+- Validation: 131 backend/security tests, seven structural tests covering 21
+  pages and three bundled-React DOM interaction checks pass. Root and project
+  path builds/audits pass. The Node 24 Docker build and fresh-volume smoke pass:
+  rendered public/demo pages, local assets, secure login, draft/preference
+  persistence after restart, HTTP process UID 1000, no dependency tree/carrier
+  source in the runtime and routing still disabled.
+- Browser layout, animation, touch and screen-reader QA remain pending: the
+  managed session exposes no browser-control tool. These are actual component
+  pages, not screenshots presented as implemented UI.
+- Review: [PR #34](https://github.com/premiumcentraal-boop/AgentBridge/pull/34).
+  CI result: [PR quality checks](https://github.com/premiumcentraal-boop/AgentBridge/pull/34/checks).
+  The Railway service and `agentbridge.victor.ceo` DNS are prepared in the
+  runbook, not deployed or attached by this change. No carrier calls placed.

@@ -16,7 +16,9 @@ The existing `backend/` Worker and its pending security PRs remain separate.
    and select `premiumcentraal-boop/AgentBridge`.
 2. For a review deployment, select `feat/victor-product-studio`. For an accepted
    release, select the reviewed/merged commit. The root `railway.json` uses the
-   small allowlisted Docker image, Node 24, no third-party runtime packages, and `/health`.
+   allowlisted Docker build, Node 24, bundled React/Astryx assets, a dependency-free
+   HTTP runtime, and `/health`. Build dependencies are installed from the pinned
+   web lockfile and removed after rendering the pages.
 3. Add **one persistent volume mounted at `/data`**. Use one replica. SQLite
    data must not live on the ephemeral application filesystem. The entrypoint
    prepares the dedicated mounted directory and drops to UID/GID 1000 before
@@ -46,7 +48,7 @@ Save the **original access key** in your password manager. Add only its SHA-256
 hash as `STUDIO_ACCESS_KEY_SHA256` in Railway, then redeploy. Open `/studio/`
 and sign in with the original key. Do not paste access keys into chat, source,
 URLs or the browser console. Without a configured hash, the private studio
-stays locked; the public page and `/studio/?demo=1` still work.
+stays locked; the public page and `/studio/demo/` still work.
 
 This is a single-operator workspace, not customer registration or multi-tenant
 SaaS. Login attempts are limited; sessions last eight hours, use secure HttpOnly
@@ -62,7 +64,7 @@ replacing its hash and redeploying; there is no password recovery endpoint.
    target Railway returns** for `agentbridge`. Add any verification records
    Railway requests. Do not invent or reuse Meridian's Railway target.
 3. Wait for domain verification and TLS issuance. Confirm the product page,
-   `/studio/?demo=1`, `/studio/`, and `/health` on the custom domain.
+   `/studio/demo/`, `/studio/`, and `/health` on the custom domain.
 4. If using a generated Railway domain temporarily, set `STUDIO_PUBLIC_ORIGIN`
    to that exact HTTPS origin and redeploy before testing sign-in there. Restore
    the custom origin for release; only one origin is accepted for writes.
@@ -127,6 +129,7 @@ can stay attached to the service during rollback.
 ## Local development
 
 ```sh
+npm run setup:web
 npm run ci
 npm run dev
 ```
@@ -134,4 +137,4 @@ npm run dev
 The development server binds only to `127.0.0.1:3000`; an explicit development
 mode enables the key `local-development`. Persistent local records live in the
 git-ignored `data/` directory. This development key is never accepted in
-production. Open `/studio/?demo=1` for a browser-only sample workspace.
+production. Open `/studio/demo/` for a browser-only sample workspace.
