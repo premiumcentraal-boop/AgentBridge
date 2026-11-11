@@ -279,3 +279,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - A failed carrier-leg insert rolls back the reservation state instead of leaving an unconnected call in `connecting` and blocking the account.
 - Added an offline SQLite trigger fault-injection regression proving rollback, successful retry after removing the fault, and single-use behavior after a successful claim.
 - No carrier calls, routing activation, paid resources or deployment. Local Node tests and GitHub Actions remain to be verified on the exact PR head. This change does not address caller authentication, pricing verification or callback reconciliation.
+
+## 2026-11-11 — Guard silent carrier-leg INSERT suppression (PR #37 pending)
+- Extended transactional claim to insert the carrier leg first, then condition the reservation transition on a matching persisted leg. This prevents a zero-row INSERT (e.g. SQLite RAISE(IGNORE)) from leaving a reservation in connecting.
+- Added deterministic offline trigger regression for silent INSERT suppression, fail-closed hangup and subsequent retry. Existing ABORT-trigger rollback regression retained.
+- Pending exact-head CI and independent review; no routing flags, calls, paid resources or deployment changed.
