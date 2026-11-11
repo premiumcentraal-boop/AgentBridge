@@ -268,3 +268,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 ## 2026-11-10 — Inventory byte cap: #32 and #33 combined (owner's assistant)
 - #32's `readInventoryResponse` helper kept (chunk type check, trimmed Content-Length); #33's declared-length tests folded in (oversize rejected with zero reads and upstream cancelled; a throwing cancel stays fail-closed). #33 closed as superseded.
 - #30 merged after #35/#32; preview gate text now describes the configured caller proof (DTMF PIN default; owner opt-in caller-ID/any-caller modes with documented risk).
+
+## 2026-11-10 — PR #34 merged for v1.0.0 (owner's assistant)
+- Merged main (#35, #32, #30) into the product/studio branch; root `check` now includes `chat-experience.mjs` alongside the studio files; CI keeps the gitleaks job and the working-preview artifact.
+- Mobile hero: the "01 / A single conversation" caption now has a backdrop so it stays legible over the cable art.
+- Known limitation: studio login throttling is keyed on the socket address, so behind Railway's proxy all clients share one 10-attempts/15-minutes bucket (a lockout nuisance, not a bypass; keys are 256-bit).
