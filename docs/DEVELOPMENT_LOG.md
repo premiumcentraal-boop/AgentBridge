@@ -274,3 +274,22 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Mobile hero: the "01 / A single conversation" caption now has a backdrop so it stays legible over the cable art.
 - Known limitation: studio login throttling is keyed on the socket address, so behind Railway's proxy all clients share one 10-attempts/15-minutes bucket (a lockout nuisance, not a bypass; keys are 256-bit).
 - 2026-11-11: Dockerfile no longer uses a BuildKit secret mount (Railway rejects non-cache mounts); first Railway deploy at agentbridge.up.railway.app.
+
+## 2026-11-11 — worldwide transit animation and mobile preview
+
+- Changed the main tagline to “connect agents worldwide” and replaced the
+  homepage tube artwork with a coded 40-second SVG transit network: eight
+  routes, 16 flag stations, 16 flag travellers, both directions and overpasses.
+- Used smooth cubic joins, arc-length-weighted travel, station pauses, staggered
+  departures and subdued track colours to give simultaneous motion a rhythm.
+- Added native pause/play, reduced-motion handling, off-screen/tab-hidden
+  suspension and local MIT-licensed flag vectors with preserved notices.
+- Validation: 147 backend/security tests, seven structural tests over 21 pages
+  and six geometry/DOM checks pass. Geometry checks cover continuous tangents,
+  map bounds, country coverage and arrival/dwell timing in both directions.
+- Published a private static [Sites review](https://agentbridge-worldwide.premiumcentraal.chatgpt.site) for mobile viewing, separate
+  from the Railway service and real studio API. Browser visual QA remains
+  pending because this session exposes no supported browser-control tool.
+- This follows the merged product/studio PR #34; the worldwide hero is a new
+  focused change based on the current main branch, preserving the later Railway
+  Docker fix and backend work. CI result: [worldwide hero quality checks](https://github.com/premiumcentraal-boop/AgentBridge/actions?query=branch%3Afeat%2Fworldwide-transit-hero).

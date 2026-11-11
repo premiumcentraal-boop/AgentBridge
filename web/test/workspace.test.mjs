@@ -111,7 +111,25 @@ test("working preview navigates real pages and keeps call state in the floating 
   t.after(() => dom.window.close());
   await pause(150);
   await waitFor(() => document.querySelector('a[href="#/studio/demo/"]'));
-  assert.match(document.querySelector("h1").textContent, /A little closer/);
+  assert.match(
+    document.querySelector("h1").textContent,
+    /connect agents\s+worldwide/,
+  );
+  assert.equal(
+    document.querySelector(".world-network-svg").dataset.loopSeconds,
+    "40",
+  );
+  assert.equal(document.querySelectorAll(".world-station").length, 16);
+  assert.equal(document.querySelectorAll("animateMotion").length, 16);
+  named(document, "Pause connection animation").click();
+  await pause(20);
+  assert.equal(document.querySelector(".world-network").dataset.paused, "true");
+  named(document, "Play connection animation").click();
+  await pause(20);
+  assert.equal(
+    document.querySelector(".world-network").dataset.paused,
+    "false",
+  );
   await navigate(document, "/how-it-works/");
   named(document, "02 Review").click();
   await pause(20);

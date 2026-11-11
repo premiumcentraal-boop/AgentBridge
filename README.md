@@ -1,17 +1,21 @@
 # AgentBridge
-**Your agent. A wider world.**
+**connect agents worldwide**
 
 ## Victor product page & control studio
 
 The new product experience is prepared for **agentbridge.victor.ceo**, with a dedicated
 AgentBridge tab in the `victor-ceo` repository, following Meridian’s integration.
 
-- `/` — real React/Astryx product page, original silver connection loop, product walkthrough and rendered studio preview.
+- `/` — real React/Astryx product page, animated country-flag transit map, product walkthrough and rendered studio preview.
 - `/studio/demo/` — interactive sample workspace; changes reset when the tab reloads. The old `/studio/?demo=1` link still works.
 - `/design/` — three original design boards (Signal, Material, Atlas) with floating call navigation and an interactive component preview; also under **Design boards** in the studio. See [design rationale and references](docs/DESIGN_DIRECTIONS.md).
 - `/studio/` — private operator sign-in; server-backed route drafts, search, archive, activity,
   guidance preferences, export and optional read-only private backend discovery.
 - `npm start` — standalone Node service; persistent SQLite storage, no runtime dependencies.
+
+**Mobile preview:** [Open the working pages](https://agentbridge-worldwide.premiumcentraal.chatgpt.site).
+The preview is private to your ChatGPT account. Tap **Open studio** for the sample
+workspace. [Preview setup and limitations](docs/MOBILE_PREVIEW.md).
 
 **Railway deployment:** [new service, volume, access key and custom domain setup](docs/RAILWAY_STUDIO.md).
 The Docker service does not load or expose the telephony Worker. New studio drafts
@@ -46,6 +50,13 @@ work before JavaScript starts. The original `/design/` gallery remains available
 - `/studio/{routes,connection,activity,settings,call,design}/` — Direct studio pages
 - `/studio/demo/{routes,connection,activity,settings,call,design}/` — Matching demo pages
 - `/app/` — Compatibility link to the sample studio
+
+The main hero says **connect agents worldwide** and plays a seamless 40-second
+SVG transit animation: eight smooth routes, 16 country flags, and flag capsules
+travelling in both directions. Curves have continuous tangents; travel timing
+uses arc length and brief station pauses. It respects reduced motion, has an
+explicit pause/play control, and stops when off screen or the tab is hidden.
+Country flags are bundled locally from the MIT-licensed flag-icons project.
 
 The rail has an expanded/compact state, a simulated active call at the top,
 mute/return/end controls, six workspace items and a dark/light switch. On small

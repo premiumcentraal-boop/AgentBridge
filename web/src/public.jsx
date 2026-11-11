@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { A, useRoute } from "./context.jsx";
+import { WorldNetwork } from "./world-network.jsx";
 import {
   Button,
   Card,
@@ -213,13 +214,12 @@ export function Home() {
   const { href, link } = useRoute();
   return (
     <main id="main" tabIndex={-1}>
-      <section className="hero-section frame">
+      <section className="hero-section hero-worldwide frame">
         <div className="hero-copy">
           <Pill dot>CONNECTION, WITHOUT THE COMPLEXITY</Pill>
-          <h1>
-            A little closer.
-            <br />
-            <span>A wider world.</span>
+          <h1 aria-label="connect agents worldwide">
+            connect agents
+            <br /> <span>worldwide</span>
           </h1>
           <p>
             The quiet connection between your AI agent and the people you need
@@ -236,26 +236,7 @@ export function Home() {
             <span>Independent project · Development preview</span>
           </div>
         </div>
-        <div className="hero-object">
-          <div className="object-grid" />
-          <Loop />
-          <div className="floating-identity identity-agent">
-            <span className="agent-glyph">✳</span>
-            <div>
-              <small>THE VOICE</small>
-              <strong>Your agent</strong>
-            </div>
-            <i className="tiny-dot" />
-          </div>
-          <div className="floating-identity identity-bridge">
-            <Mark />
-            <span>Beautifully connected.</span>
-          </div>
-          <div className="object-caption">
-            <span>01 / A SINGLE CONVERSATION</span>
-            <span>MORE POSSIBILITY ↗</span>
-          </div>
-        </div>
+        <WorldNetwork />
       </section>
       <div className="connection-band frame">
         <span>YOUR AGENT</span>

@@ -72,7 +72,7 @@ export const SAMPLE_EVENTS = [
   },
 ];
 export const TITLES = {
-  "/": "AgentBridge — A little closer.",
+  "/": "AgentBridge — connect agents worldwide",
   "/how-it-works/": "How it works | AgentBridge",
   "/pricing/": "Preview & plans | AgentBridge",
   "/connect/": "Get connected | AgentBridge",

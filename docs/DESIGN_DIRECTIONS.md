@@ -156,3 +156,23 @@ are used as AgentBridge page images.
 Validation separates DOM interaction tests and structural HTML audits from
 browser visual testing. This environment offers no browser-control tool, so
 actual browser layout, animation, touch and screen-reader QA remain pending.
+
+## 2026-11-11: connect agents worldwide
+
+The main tagline is now exactly “connect agents worldwide”. The homepage hero
+replaces its silver tube with a transit network: eight smooth paths, 16 country
+flag stations, and two oppositely travelling flag capsules per route. The loop
+is 40 seconds; every motion and illumination period divides that score.
+
+The geometry uses continuous cubic tangents. Arc-length measurements distribute
+travel time by distance, with a short dwell at each actual flag station. Long
+curves, staggered departures, muted base tracks, bright trailing segments and
+clear over/under crossings give the movement a rhythm. Flags remain upright
+through bends. The map is an illustration, not actual carrier activity.
+
+Native SVG motion avoids a JavaScript animation frame loop. The scene pauses
+off screen and when the tab is hidden, respects reduced-motion preferences and
+has an explicit pause/play button. Country vectors come from
+[flag-icons](https://github.com/lipis/flag-icons), with its MIT notice included
+in the build. Public pages and the sample studio can be reviewed on the private
+Sites preview; the production Railway setup remains separate.
