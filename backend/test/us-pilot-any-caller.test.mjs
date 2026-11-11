@@ -179,3 +179,34 @@ test('simultaneous signed inbound claims cannot create two carrier legs or two c
   assert.equal(legs.length,1,'exactly one carrier leg persisted');
   assert.ok(isHangup((await inbound(env,{call_id:CID(130)})).doc),'replay window remains closed');
 });
+
+test('provider-event UPDATE ABORT rolls back claim and carrier leg',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,...ANY});
+  const created=await (await reserve(env,'event-abort-claim-1')).json();
+  assert.equal((await approveReservation(env,created.id)).status,200);
+  DB.raw.exec("CREATE TRIGGER abort_connect_event BEFORE UPDATE OF outcome ON provider_events WHEN NEW.outcome='connect' BEGIN SELECT RAISE(ABORT,'injected event update failure'); END");
+  const failed=await inbound(env,{call_id:CID(170)});
+  assert.ok(isHangup(failed.doc));
+  assert.equal(status(DB,created.id),'ready');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,0);
+  assert.notEqual(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_inbound'").get(CID(170))?.outcome,'connect');
+  DB.raw.exec('DROP TRIGGER abort_connect_event');
+  assert.equal(connectOf((await inbound(env,{call_id:CID(171)})).doc)?.to,DEST);
+  assert.equal(status(DB,created.id),'connecting');
+  assert.equal(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_inbound'").get(CID(171)).outcome,'connect');
+});
+
+test('silently ignored provider-event connect UPDATE releases claim and carrier leg',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,...ANY});
+  const created=await (await reserve(env,'event-ignore-claim-1')).json();
+  assert.equal((await approveReservation(env,created.id)).status,200);
+  DB.raw.exec("CREATE TRIGGER ignore_connect_event BEFORE UPDATE OF outcome ON provider_events WHEN NEW.outcome='connect' BEGIN SELECT RAISE(IGNORE); END");
+  const failed=await inbound(env,{call_id:CID(172)});
+  assert.ok(isHangup(failed.doc));
+  assert.equal(status(DB,created.id),'ready');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,0);
+  DB.raw.exec('DROP TRIGGER ignore_connect_event');
+  assert.equal(connectOf((await inbound(env,{call_id:CID(173)})).doc)?.to,DEST);
+  assert.equal(status(DB,created.id),'connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,1);
+});
