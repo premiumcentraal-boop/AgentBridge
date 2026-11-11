@@ -158,3 +158,8 @@ Append one dated entry for each substantial incremental development session. Lin
 - Replaced post-buffer UTF-16 length validation of read-only SignalWire inventory responses with a 250,000-byte streaming cap, early oversized Content-Length rejection, stream cancellation, and fatal UTF-8 decoding.
 - Added offline regressions for unbounded chunked responses, multibyte UTF-8, malformed UTF-8, exact-size boundary, oversized declared length, and valid voice-number inventory pagination.
 - This does not enable paid routing, buy numbers, or access carrier credentials. PR CI and review remain pending.
+
+## 2026-11-10 — SignalWire inventory early-rejection cancellation (PR #33 follow-up)
+- Audited PR #33 against the earlier review. Existing inventory fixtures had already been upgraded to streamed `Response` objects, but oversized declared Content-Length still rejected without cancelling the provider body.
+- Cancel the upstream body best-effort before rejecting advertised oversized responses, without reading response bytes or masking the original size error if cancellation fails.
+- Added offline regressions for no body reads, stream cancellation and cancellation failure. Exact-head CI and independent review remain required; no carrier requests, routing, purchases, secrets, calls or deployment.
