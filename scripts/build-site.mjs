@@ -1,12 +1,12 @@
 import {rm,mkdir,cp,readFile,writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 const root=process.cwd(),out=join(root,'dist');
-const pages=['index.html','how-it-works/index.html','pricing/index.html','connect/index.html','docs/index.html','app/index.html','studio/index.html'];
+const pages=['index.html','how-it-works/index.html','pricing/index.html','connect/index.html','docs/index.html','app/index.html','studio/index.html','design/index.html'];
 // All assets must be served locally. Existing inline style attributes require
 // 'unsafe-inline' for styles only; scripts never receive that exemption.
 export const CSP="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; upgrade-insecure-requests";
 await rm(out,{force:true,recursive:true});await mkdir(out,{recursive:true});
-for(const path of ['index.html','favicon.svg','_headers','robots.txt','sitemap.xml','assets','how-it-works','pricing','connect','docs','app','studio'])
+for(const path of ['index.html','favicon.svg','_headers','robots.txt','sitemap.xml','assets','how-it-works','pricing','connect','docs','app','studio','design'])
  await cp(join(root,path),join(out,path),{recursive:true});
 // GitHub Pages project site needs prefix; Cloudflare Pages uses root.
 const base=(process.env.BASE_PATH||'').replace(new RegExp('/+$'),'');

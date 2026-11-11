@@ -180,3 +180,19 @@ Append one dated entry for each substantial incremental development session. Lin
 
 - Final Docker packaging uses an explicit context allowlist and fewer build layers;
   private Worker config, runtime data and credentials cannot enter the image.
+
+## 2026-11-11 — three visual directions for product and studio
+
+- Created original Signal, Material and Atlas design boards from the supplied
+  Swiss Futura, Sanity, Dinamo and RETINAA references. Every board contains a
+  public product page, studio interior, mobile layouts, type and colour system.
+- Added a studio Design boards view and a standalone `/design/` review page,
+  with full-size PNG links, downloads, readable rationale and source notes.
+- Preserved current product styling and backend behavior while the directions
+  are compared. The boards are explicitly concepts with illustrative UI data.
+- Added source/attribution and implementation notes in `DESIGN_DIRECTIONS.md`.
+- Validation: `npm run ci` passed (131 backend/security tests, seven structural
+  tests auditing eight pages); root and `/AgentBridge` path builds passed. All
+  three original PNGs are 1536×1024. The three-page PDF and PNG archive were
+  checked for page count and archive integrity. The review UI was not exercised
+  in a browser in this session.

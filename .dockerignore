@@ -28,6 +28,9 @@ app/**
 !studio/
 studio/**
 !studio/index.html
+!design/
+design/**
+!design/index.html
 !server/
 server/**
 !server/*.mjs
