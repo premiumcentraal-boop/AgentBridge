@@ -230,3 +230,27 @@ test('inventory accepts exact byte cap, rejects malformed UTF-8 and preserves pa
   await assert.rejects(inspectSignalWireNumbers(cfg,async()=>new Response(new Uint8Array([0xff,0xfe]))),/Invalid SignalWire inventory/);
   await assert.rejects(inspectSignalWireNumbers(cfg,async()=>new Response('{}')),/Invalid SignalWire inventory/);
 });
+
+test('SignalWire oversized declared length cancels upstream body without consuming it',async()=>{
+  let reads=0,cancelled=false;
+  const body=new ReadableStream({
+    pull(controller){reads++;controller.enqueue(new Uint8Array([65]));},
+    cancel(){cancelled=true;}
+  },{highWaterMark:0});
+  const cfg={space:'example',projectId,apiToken:'opaque-test-token'};
+  await assert.rejects(inspectSignalWireNumbers(cfg,async()=>new Response(body,{
+    status:200,headers:{'content-length':'250001'}
+  })),/response too large/);
+  assert.equal(reads,0,'must reject declared oversize without reading response');
+  assert.equal(cancelled,true,'must cancel provider response on early rejection');
+});
+
+test('SignalWire oversized declared length remains fail-closed if cancel throws',async()=>{
+  const cfg={space:'example',projectId,apiToken:'opaque-test-token'};
+  const fake=async()=>({
+    ok:true,
+    headers:new Headers({'content-length':'250001'}),
+    body:{async cancel(){throw new Error('transport cancel failed');}}
+  });
+  await assert.rejects(inspectSignalWireNumbers(cfg,fake),/response too large/);
+});
