@@ -160,3 +160,19 @@ Append one dated entry for each substantial incremental development session. Lin
 - Registered the preview-only tool in authenticated HTTP MCP and the existing private local read-only MCP server. The response explicitly marks `ready_to_call=false`, `routing_enabled=false`, no verified carrier rates or Grok Bot compatibility, and `preference_saved=false`. No routing, account preference storage, owner authorization, provider mutation or payment capability was added.
 - Added argument-envelope, mode-invariant and invalid-input tests; included the new module in syntax checks, documented the chat-first golden path, current platform restrictions and the missing account preference/independent in-chat approval milestones. International bridge use is NOT authorized by this preview or an MCP connector; platform and carrier calling terms remain a launch gate.
 - Local clone cannot resolve GitHub DNS, so full local CI and actual Grok Bot host interoperability are not verified in this commit. Keep draft, no merge or deployment without CI and manual review.
+## 2026-11-10 — SignalWire inventory response byte budget (PR pending, issue #31)
+- Replaced unbounded upstream response.text() with a streaming 250,000-byte cap and early reader cancellation; strict UTF-8 decode and generic malformed-response errors.
+- Added offline regression coverage for chunked oversize, false Content-Length, multibyte UTF-8, malformed UTF-8, exact boundary and pagination. No provider requests or routing changes. Pending exact-head CI and human review; not deployed.
+
+
+## 2026-11-10 — PR #32 CI follow-up: numeric Content-Length guard
+GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) at `backend/test/signalwire.test.mjs:221`: the oversized declared-length response reached JSON parsing instead of the early size guard. Inspection found the regex was accidentally written `/^\\d+$/` (matching a literal backslash and `d`) rather than `/^\d+$/` (decimal digits). Corrected the regex on the existing PR branch; streaming byte enforcement remains unchanged and still bounds dishonest or absent headers. Verification of the corrected head is pending GitHub Actions. No routing, carrier resources, credentials or deployments changed.
+## 2026-11-10 — PR #29 review: hardening ported, owner opt-ins kept (owner's assistant)
+- Ported from #29: server-side 60-second DTMF challenge deadline using the persisted `provider_events.swml_inbound.received_at` (invalid, future or >=60 s old challenges hang up before a PIN attempt is consumed), boundary/malformed-timestamp tests, a concurrent-PIN-callback single-connection test and a mode-drift test (an approved `dtmf_pin` reservation can never be claimed after switching to `capped_caller_id`/`any_caller`).
+- Not ported: removal of `any_caller`/`capped_caller_id`. The owner explicitly requires `any_caller` because Grok Bot's voice agent rotates caller ID and cannot send DTMF; both modes remain explicit opt-ins behind their risk-accepted flags, `dtmf_pin` remains the default, and the residual-risk warnings in `docs/US_PRIVATE_PILOT.md` were strengthened.
+- No deploys, secrets, carrier changes, flag changes or calls.
+- Added a pinned, checksum-verified gitleaks secret-scan CI job (history + working tree) and `.gitleaks.toml`, which allowlists only synthetic lowercase test idempotency keys.
+
+## 2026-11-10 — Inventory byte cap: #32 and #33 combined (owner's assistant)
+- #32's `readInventoryResponse` helper kept (chunk type check, trimmed Content-Length); #33's declared-length tests folded in (oversize rejected with zero reads and upstream cancelled; a throwing cancel stays fail-closed). #33 closed as superseded.
+- #30 merged after #35/#32; preview gate text now describes the configured caller proof (DTMF PIN default; owner opt-in caller-ID/any-caller modes with documented risk).
