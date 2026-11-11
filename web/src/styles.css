@@ -3723,6 +3723,13 @@ button {
     left: 3%;
     right: 3%;
     bottom: 4%;
+    z-index: 2;
+  }
+  /* Keep the caption legible where it crosses the cable art on phones. */
+  .object-caption > span {
+    padding: 3px 6px;
+    border-radius: 999px;
+    background: #111514d9;
   }
   .connection-band {
     min-height: 68px;
