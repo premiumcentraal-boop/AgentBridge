@@ -313,3 +313,25 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Updating the same owner-private mobile Site, separate from Railway and its
   operator API. [PR #39](https://github.com/premiumcentraal-boop/AgentBridge/pull/39)
   and [CI result](https://github.com/premiumcentraal-boop/AgentBridge/pull/39/checks).
+
+## 2026-11-11 — moving flag baton and exact relay handoffs
+
+- Replaced independent routes and stationary flag circles with one closed,
+  60-second relay. Every leg ends exactly where the next starts, with continuous
+  tangents through the rounded corners and a matching final-to-first join.
+- A single flag circle travels at the advancing line end. It briefly holds at
+  each shared endpoint, changes country and continues. Line growth, the connected
+  trailing edge, flag exchange and circle movement use the same score.
+- Preserved pause/play, off-screen/hidden-tab suspension and reduced-motion
+  handling. The reduced-motion still is sampled from the same relay geometry.
+- Validation covers all handoffs, a full minute sampled at 50 ms intervals,
+  the moving flag's alignment with the line end, a single connected trail,
+  flag continuity, loop closure and existing studio interactions. Root CI has
+  147 backend/security tests, seven structural checks over 21 pages and eight
+  geometry/DOM tests.
+- Inspected standalone SVG artwork at several timeline positions. Browser
+  layout, native animation rendering, touch and screen-reader QA remain pending
+  because the supported browser-control tool is unavailable in this session.
+- The same owner-private [mobile Site](https://agentbridge-worldwide.premiumcentraal.chatgpt.site)
+  is the review target. Changes remain in [PR #39](https://github.com/premiumcentraal-boop/AgentBridge/pull/39),
+  with [checks](https://github.com/premiumcentraal-boop/AgentBridge/pull/39/checks).

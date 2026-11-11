@@ -186,7 +186,7 @@ motion reference. The user approved this direction and requested country flags
 inside the circles. The composition and animation are original AgentBridge code;
 no artwork from those projects is embedded in the product.
 
-The final hero uses four thick colour bands in pink, orange, cyan and yellow.
+This iteration used four thick colour bands in pink, orange, cyan and yellow.
 Every leg is a straight run or a single circular 90-degree elbow. Flags reveal
 inside large white endpoint circles only after arrival. Outgoing legs start at
 those circles while the incoming bands trim away, creating an unbroken handoff.
@@ -197,3 +197,21 @@ reveal, continuation and tail trimming share one timeline. The scene pauses off
 screen and in hidden tabs; reduced-motion users receive a composed still with
 three flag circles and can explicitly choose to play. This still is available
 through CSS before JavaScript loads.
+
+## 2026-11-11: one connected minute-long relay
+
+The current hero replaces separate streams and stationary endpoint circles with
+one closed circuit and one moving flag circle. Sixteen straight or single-turn
+legs share exact endpoints and continuous tangents, including the last-to-first
+join. A coloured trail follows the circle; its trailing edge retraces the same
+timing 18 seconds later so no isolated pieces are left behind.
+
+The circle rides at the advancing end of the line, briefly holds at a handoff,
+crossfades to the next country's flag and continues in the next colour. Movement,
+stroke growth, trimming and flag exchange use the same 60-second score. Native
+SVG motion follows the combined circuit; no independently positioned flags or
+invisible jumps are used. The flag stays upright through each rounded corner.
+
+Pause/play, off-screen and hidden-tab suspension, theme switching and the
+reduced-motion still remain available. The still samples this same connected
+relay rather than displaying a separate arrangement.

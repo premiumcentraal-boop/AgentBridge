@@ -51,14 +51,16 @@ work before JavaScript starts. The original `/design/` gallery remains available
 - `/studio/demo/{routes,connection,activity,settings,call,design}/` — Matching demo pages
 - `/app/` — Compatibility link to the sample studio
 
-The main hero says **connect agents worldwide** and plays a seamless 40-second
-SVG animation with four broad colour bands and 16 country destinations. Each
-leg is straight or makes one rounded quarter turn. Its destination flag reveals
-inside a large white circle on arrival, and the next leg grows from that circle
-before the incoming band clears. The scene respects reduced motion, offers
-pause/play, and stops when off screen or the tab is hidden. Reduced motion has a
-composed still with flag circles, including before JavaScript starts. Flags are
-inline SVG symbols from the MIT-licensed flag-icons project.
+The main hero says **connect agents worldwide** and plays a seamless 60-second
+SVG relay through 16 countries. One flag-filled white circle travels at the head
+of a connected trail of broad colour bands. Each leg is straight or makes one
+rounded quarter turn, ending exactly where the next begins. The circle briefly
+holds at each shared handoff, changes country, then continues; the final leg
+joins the first without a jump. The flag, line drawing and trailing edge share
+one clock. The scene respects reduced motion, offers pause/play, and stops when
+off screen or the tab is hidden. Reduced motion shows the same connected scene
+as a still, including before JavaScript starts. Flags are inline SVG symbols
+from the MIT-licensed flag-icons project.
 
 The rail has an expanded/compact state, a simulated active call at the top,
 mute/return/end controls, six workspace items and a dark/light switch. On small

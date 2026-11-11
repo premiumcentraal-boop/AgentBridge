@@ -6,110 +6,120 @@ import {
   COUNTRY_RADIUS,
   BAND_WIDTH,
   STATIONS,
-  CONNECTION_STREAMS,
-  CONNECTION_LEGS,
+  RELAY_LEGS,
+  RELAY_PATH,
+  HANDOFF_SECONDS,
+  FLAG_FADE_SECONDS,
+  TRAIL_SECONDS,
+  relayMotion,
+  relayStateAt,
+  pointOnLeg,
   bandAnimation,
-  countryAnimation,
+  flagAnimation,
 } from "../src/network-data.js";
-const near = (a, b) => assert.ok(Math.abs(a - b) < 0.0001, `${a} ≠ ${b}`);
-test("forty-second colour streams visit all sixteen countries in connected sequences", () => {
-  assert.ok(NETWORK_LOOP_SECONDS >= 30);
-  assert.equal(NETWORK_LOOP_SECONDS, 40);
-  assert.equal(CONNECTION_STREAMS.length, 4);
-  assert.equal(new Set(CONNECTION_STREAMS.map((s) => s.colour)).size, 4);
-  assert.equal(CONNECTION_LEGS.length, 16);
+const near = (a, b, epsilon = 0.00001) =>
+  assert.ok(Math.abs(a - b) < epsilon, `${a} ≠ ${b}`);
+const samePoint = (a, b) => {
+  near(a[0], b[0]);
+  near(a[1], b[1]);
+};
+test("all sixteen relay legs meet exactly, including the last-to-first handoff", () => {
+  assert.equal(NETWORK_LOOP_SECONDS, 60);
+  assert.equal(RELAY_LEGS.length, 16);
   assert.ok(BAND_WIDTH >= 100);
-  assert.deepEqual(
-    CONNECTION_LEGS.map((leg) => leg.country.code).sort(),
-    STATIONS.map((s) => s.code).sort(),
-  );
-  const directions = new Set();
-  for (const stream of CONNECTION_STREAMS) {
-    assert.ok(stream.phase > 0 && stream.phase < NETWORK_LOOP_SECONDS);
-    for (let index = 0; index < stream.legs.length; index++) {
-      const leg = stream.legs[index];
-      if (index)
-        assert.deepEqual(
-          leg.start,
-          stream.legs[index - 1].end,
-          "a continuation must begin in the preceding country circle",
-        );
-      for (const axis of [0, 1]) {
-        const delta = leg.end[axis] - leg.start[axis];
-        if (delta) directions.add(axis + ":" + Math.sign(delta));
-      }
-      assert.ok(
-        leg.end[0] > COUNTRY_RADIUS &&
-          leg.end[0] < MAP_SIZE.width - COUNTRY_RADIUS,
-      );
-      assert.ok(
-        leg.end[1] > COUNTRY_RADIUS &&
-          leg.end[1] < MAP_SIZE.height - COUNTRY_RADIUS,
-      );
-    }
-  }
-  assert.equal(
-    directions.size,
-    4,
-    "the composition travels left, right, up and down",
-  );
-});
-test("each connection is straight or has one tangent quarter-circle turn", () => {
-  for (const leg of CONNECTION_LEGS) {
+  assert.equal(new Set(STATIONS.map((s) => s.code)).size, 16);
+  assert.equal((RELAY_PATH.match(/M/g) || []).length, 1);
+  assert.ok(RELAY_PATH.endsWith("Z"));
+  for (let i = 0; i < RELAY_LEGS.length; i++) {
+    const leg = RELAY_LEGS[i],
+      next = RELAY_LEGS[(i + 1) % RELAY_LEGS.length];
+    samePoint(leg.end, next.start);
+    samePoint(leg.outgoing, next.incoming);
     assert.ok(leg.turns === 0 || leg.turns === 1);
     assert.equal((leg.path.match(/A/g) || []).length, leg.turns);
-    assert.doesNotMatch(leg.path, /[CSQT]/);
-    if (!leg.turns) {
-      assert.ok(leg.start[0] === leg.end[0] || leg.start[1] === leg.end[1]);
-      continue;
-    }
-    const { incoming, outgoing, radius, corner, arcStart, arcEnd } = leg;
-    near(incoming[0] * outgoing[0] + incoming[1] * outgoing[1], 0);
-    for (const axis of [0, 1]) {
-      near(corner[axis] - arcStart[axis], incoming[axis] * radius);
-      near(arcEnd[axis] - corner[axis], outgoing[axis] * radius);
-    }
-    assert.ok(radius > 0);
+    if (i < RELAY_LEGS.length - 1) near(leg.endAt, next.startAt);
+    near(leg.endAt - leg.arriveAt, HANDOFF_SECONDS);
   }
+  near(RELAY_LEGS[0].startAt, 0);
+  near(RELAY_LEGS.at(-1).endAt, 60);
 });
-test("flags reveal on arrival and remain through the next departure before both ends of the loop clear", () => {
-  for (const stream of CONNECTION_STREAMS)
-    for (let index = 0; index < stream.legs.length; index++) {
-      const leg = stream.legs[index],
-        next = stream.legs[index + 1];
-      near(leg.revealAt, leg.arriveAt);
-      assert.ok(
-        leg.arriveAt < leg.revealedAt &&
-          leg.revealedAt < leg.holdUntil &&
-          leg.holdUntil < leg.hideAt &&
-          leg.hideAt < NETWORK_LOOP_SECONDS,
+test("the flag baton remains at the advancing end of a single connected coloured trail", () => {
+  for (let seconds = 0; seconds < 60; seconds += 0.05) {
+    const state = relayStateAt(seconds),
+      band = state.bands[state.leg.index];
+    samePoint(state.point, pointOnLeg(state.leg, band.to));
+    const visible = state.bands.map((b) => b.to - b.from > 1e-7);
+    let starts = 0;
+    for (let i = 0; i < visible.length; i++)
+      if (visible[i] && !visible[(i + visible.length - 1) % visible.length])
+        starts++;
+    assert.equal(
+      starts,
+      1,
+      "the trail must not break into disconnected pieces at " + seconds,
+    );
+    for (const piece of state.bands)
+      assert.ok(piece.from >= 0 && piece.to <= 1 && piece.from <= piece.to);
+    assert.ok(
+      state.point[0] > COUNTRY_RADIUS &&
+        state.point[0] < MAP_SIZE.width - COUNTRY_RADIUS,
+    );
+    assert.ok(
+      state.point[1] > COUNTRY_RADIUS &&
+        state.point[1] < MAP_SIZE.height - COUNTRY_RADIUS,
+    );
+  }
+  assert.ok(TRAIL_SECONDS < NETWORK_LOOP_SECONDS);
+});
+test("the baton changes country at the shared point and the minute boundary has no jump or blank flag", () => {
+  for (const leg of RELAY_LEGS) {
+    const next = RELAY_LEGS[(leg.index + 1) % RELAY_LEGS.length];
+    for (const offset of [
+      0,
+      FLAG_FADE_SECONDS / 2,
+      FLAG_FADE_SECONDS,
+      HANDOFF_SECONDS - 0.0001,
+    ]) {
+      const state = relayStateAt(leg.arriveAt + offset);
+      samePoint(state.point, leg.end);
+      near(
+        state.flags.reduce((sum, f) => sum + f.opacity, 0),
+        1,
       );
-      assert.ok(
-        leg.arriveAt < leg.wipeAt &&
-          leg.wipeAt < leg.clearAt &&
-          leg.clearAt < NETWORK_LOOP_SECONDS,
-      );
-      if (next) {
-        assert.ok(next.startAt > leg.arriveAt);
-        assert.ok(next.startAt < leg.wipeAt);
-        assert.ok(next.startAt < leg.holdUntil);
-      }
-      const band = bandAnimation(leg),
-        country = countryAnimation(leg);
-      for (const timing of [
-        band.keyTimes,
-        band.visibilityTimes,
-        country.keyTimes,
-      ]) {
-        const values = timing.split(";").map(Number);
-        assert.equal(values[0], 0);
-        assert.equal(values.at(-1), 1);
-        for (let i = 1; i < values.length; i++)
-          assert.ok(values[i] > values[i - 1], leg.id + " has invalid timing");
-      }
-      assert.equal(band.widths.split(";")[0], "0 2000");
-      assert.equal(band.widths.split(";").at(-1), "0 2000");
-      assert.equal(country.opacity.split(";")[0], "0");
-      assert.equal(country.opacity.split(";").at(-1), "0");
+      if (offset === FLAG_FADE_SECONDS)
+        near(state.flags[next.index].opacity, 1);
+    }
+  }
+  for (const seconds of [0, 0.01, 1, 13, 29, 59.65, 59.99, 60]) {
+    const a = relayStateAt(seconds),
+      b = relayStateAt(seconds + 60);
+    samePoint(a.point, b.point);
+    for (let i = 0; i < a.flags.length; i++) {
+      near(a.flags[i].opacity, b.flags[i].opacity);
+      near(a.bands[i].from, b.bands[i].from);
+      near(a.bands[i].to, b.bands[i].to);
+    }
+  }
+  samePoint(pointOnLeg(RELAY_LEGS.at(-1), 1), pointOnLeg(RELAY_LEGS[0], 0));
+});
+test("motion, line drawing and flag exchange use valid timing on the same sixty-second score", () => {
+  const motion = relayMotion();
+  assert.equal(
+    motion.keyTimes.split(";").length,
+    motion.keyPoints.split(";").length,
+  );
+  assert.equal(motion.keyPoints.split(";")[0], "0");
+  assert.equal(motion.keyPoints.split(";").at(-1), "1");
+  for (const leg of RELAY_LEGS)
+    for (const timeline of [
+      motion.keyTimes,
+      bandAnimation(leg).keyTimes,
+      flagAnimation(leg).keyTimes,
+    ]) {
+      const values = timeline.split(";").map(Number);
+      assert.equal(values[0], 0);
+      assert.equal(values.at(-1), 1);
+      for (let i = 1; i < values.length; i++)
+        assert.ok(values[i] > values[i - 1]);
     }
 });

@@ -119,24 +119,26 @@ test("working preview navigates real pages and keeps call state in the floating 
   );
   assert.equal(
     document.querySelector(".world-network-svg").dataset.loopSeconds,
-    "40",
+    "60",
   );
-  assert.equal(
-    document.querySelectorAll(".world-moving-scene .world-country-circle")
-      .length,
-    16,
+  const baton = document.querySelector(".world-moving-scene .world-baton");
+  assert.ok(baton);
+  const motion = baton.querySelector("animateMotion");
+  assert.equal(motion.getAttribute("dur"), "60s");
+  const path = document.querySelector(
+    motion.querySelector("mpath").getAttribute("href"),
   );
-  assert.equal(document.querySelectorAll("animateMotion").length, 0);
+  assert.ok(path.classList.contains("world-relay-path"));
+  assert.equal(document.querySelectorAll("animateMotion").length, 1);
+  assert.equal(baton.querySelectorAll(".world-baton-flag").length, 16);
+  assert.equal(document.querySelectorAll(".world-country-circle").length, 0);
   for (const band of document.querySelectorAll(".world-band")) {
     assert.ok(Number(band.getAttribute("stroke-width")) >= 100);
     assert.ok(Number(band.dataset.turns) <= 1);
   }
-  assert.equal(
-    document.querySelectorAll(
-      ".world-country-arrivals .world-country-flag[clip-path]",
-    ).length,
-    16,
-  );
+  assert.ok(baton.querySelector(".world-country-flag[clip-path]"));
+  for (const flag of baton.querySelectorAll(".world-baton-flag"))
+    assert.ok(flag.querySelector("use") && flag.querySelector("animate"));
   named(document, "Pause connection animation").click();
   await pause(20);
   assert.equal(document.querySelector(".world-network").dataset.paused, "true");
@@ -321,7 +323,7 @@ test("public navigation keeps a native top-level studio link across the CSP boun
   );
 });
 
-test("reduced motion has a composed flag-circle still and an explicit play override", async (t) => {
+test("reduced motion has a connected relay still and an explicit play override", async (t) => {
   const { dom, document, errors, requests } = setup(
     "file:///AgentBridge-Working-Website.html",
     true,
@@ -336,9 +338,8 @@ test("reduced motion has a composed flag-circle still and an explicit play overr
     "false",
   );
   assert.equal(
-    document.querySelectorAll(".world-static-scene .world-country-circle")
-      .length,
-    3,
+    document.querySelectorAll(".world-static-scene .world-baton-static").length,
+    1,
   );
   named(document, "Play connection animation").click();
   await pause(30);

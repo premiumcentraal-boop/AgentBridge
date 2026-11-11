@@ -41,9 +41,6 @@
 .world-static-scene {
   display: none;
 }
-.world-country-circle {
-  filter: none;
-}
 .world-map-footer {
   position: absolute;
   inset: auto 1% 0 1%;
