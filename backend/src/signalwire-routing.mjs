@@ -95,11 +95,13 @@ async function claim(env,row,callId,segmentId,check,now){
   // insert fails, the reservation update rolls back instead of stranding a
   // 'connecting' reservation that blocks all subsequent preparations.
   try{
-    const [updated,leg]=await env.DB.batch([
-      env.DB.prepare("UPDATE reservations SET status='connecting',provider='signalwire',provider_call_id=?,claimed_at=?,max_call_seconds=?,max_cost_cents=? WHERE id=? AND status='ready' AND approved_at IS NOT NULL AND expires_at>?")
-        .bind(callId,now,check.caps.maxSeconds,check.cost,row.id,now),
-      env.DB.prepare("INSERT INTO reservation_carrier_legs (reservation_id,provider_segment_id,claimed_at) SELECT id,?,? FROM reservations WHERE id=? AND status='connecting' AND provider_call_id=? AND claimed_at=?")
-        .bind(segmentId,now,row.id,callId,now)
+    const [leg,updated]=await env.DB.batch([
+      // Insert first: if a trigger silently suppresses the INSERT, the UPDATE
+      // below cannot transition the reservation without a matching leg.
+      env.DB.prepare("INSERT INTO reservation_carrier_legs (reservation_id,provider_segment_id,claimed_at) SELECT id,?,? FROM reservations WHERE id=? AND status='ready' AND approved_at IS NOT NULL AND expires_at>?")
+        .bind(segmentId,now,row.id,now),
+      env.DB.prepare("UPDATE reservations SET status='connecting',provider='signalwire',provider_call_id=?,claimed_at=?,max_call_seconds=?,max_cost_cents=? WHERE id=? AND status='ready' AND approved_at IS NOT NULL AND expires_at>? AND EXISTS (SELECT 1 FROM reservation_carrier_legs WHERE reservation_id=? AND provider_segment_id=? AND claimed_at=?)")
+        .bind(callId,now,check.caps.maxSeconds,check.cost,row.id,now,row.id,segmentId,now)
     ]);
     return updated.meta?.changes===1&&leg.meta?.changes===1;
   }catch{return false;}
