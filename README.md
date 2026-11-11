@@ -8,7 +8,7 @@ AgentBridge tab in the `victor-ceo` repository, following Meridian’s integrati
 
 - `/` — dark Victor product page, original globe illustration, product walkthrough, studio preview and FAQ.
 - `/studio/?demo=1` — interactive sample workspace; changes reset when the tab reloads.
-- `/design/` — three original design boards (Signal, Material, Atlas); also under **Design boards** in the studio. See [design rationale and references](docs/DESIGN_DIRECTIONS.md).
+- `/design/` — three original design boards (Signal, Material, Atlas) with floating call navigation and an interactive component preview; also under **Design boards** in the studio. See [design rationale and references](docs/DESIGN_DIRECTIONS.md).
 - `/studio/` — private operator sign-in; server-backed route drafts, search, archive, activity,
   guidance preferences, export and optional read-only private backend discovery.
 - `npm start` — standalone Node service; persistent SQLite storage, no runtime dependencies.

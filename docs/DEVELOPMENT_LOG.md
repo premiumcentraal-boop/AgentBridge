@@ -196,3 +196,19 @@ Append one dated entry for each substantial incremental development session. Lin
   three original PNGs are 1536×1024. The three-page PDF and PNG archive were
   checked for page count and archive integrity. The review UI was not exercised
   in a browser in this session.
+
+## 2026-11-11 — floating navigation and call context
+
+- Updated Signal, Material and Atlas concepts with the supplied floating-glass
+  navigation reference: persistent simulated active-call card, six AgentBridge
+  destinations, compact rail, expanded rail and mobile call pill.
+- Added an isolated interactive navigation preview to both design-gallery views:
+  direction/appearance switching, collapse/expand, selected menu state and local
+  mute/end/restart/return-to-call states. No real microphone or carrier access.
+- Reused one navigation item list for the prototype and actual studio menu.
+- Public advertising navigation and operational backend behavior are unchanged.
+- Validation: 131 backend/security tests and seven structural tests passed;
+  root and project-path builds passed. Rendered-gallery semantics passed. A
+  lightweight event harness exercised compact mode, mute, menu/theme changes,
+  light mode and end/restart states with zero network requests. Browser layout
+  and interaction QA was not performed in this session.

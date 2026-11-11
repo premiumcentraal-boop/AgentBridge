@@ -1,4 +1,5 @@
-import {renderDesignBoards} from './design.js';
+import {renderDesignBoards,bindNavigationPreview} from './design.js';
+import {NAV_ITEMS} from './navigation.js';
 const root = document.getElementById('studio-root');
 const demo = new URLSearchParams(location.search).get('demo') === '1';
 const basePath = new URL('../../', import.meta.url).pathname.replace(/\/$/, '');
@@ -6,7 +7,7 @@ const localLinks = html => basePath ? html.replaceAll('href="/', 'href="' + base
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const paths = { design:'M3 3h18v18H3zM3 9h18M9 9v12', overview:'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',routes:'M7 17 17 7M7 7h10v10M4 12v7a1 1 0 0 0 1 1h7',connection:'M10 13a5 5 0 0 0 7 .3l3-3a5 5 0 0 0-7-7l-2 2M14 11a5 5 0 0 0-7-.3l-3 3a5 5 0 0 0 7 7l2-2',activity:'M3 12a9 9 0 1 0 3-6M3 3v6h6M12 7v5l3 2',settings:'M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0',shield:'M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6zM8 12l3 3 5-6',arrow:'M5 12h14M13 6l6 6-6 6',plus:'M12 5v14M5 12h14',search:'M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16M16 16l6 6',logout:'M9 5H4v14h5M10 12h11M17 8l4 4-4 4',copy:'M9 9h12v12H9zM15 5V2H2v13h3',menu:'M4 6h16M4 12h16M4 18h16',check:'M5 12l4 4L19 6'};
 const icon = (name, size=18) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name] || paths.arrow}"/></svg>`;
-const pages = [['overview','Overview'],['routes','Route drafts'],['connection','Connection'],['activity','Activity'],['settings','Settings'],['design','Design boards']];
+const pages = NAV_ITEMS.map(({id,label})=>[id,label]);
 const state = { page: 'overview', authenticated: false, configured: true, loading: true, mobileOpen: false, routes: [], events: [], settings: {experience:'simple'}, integration: {status:'not_configured',message:'Connect a private AgentBridge backend to inspect your assigned number.'}, search:'', filter:'all', integrationChecked:false };
 const demoRoutes = [ ['London design studio','+442079460123'], ['New York office','+12125550124'], ['San Francisco team','+14155550126'] ];
 function seedDemo() {
@@ -108,6 +109,7 @@ function showDetail(id) {
   dialog.showModal();
 }
 function bind() {
+  bindNavigationPreview(root);
   root.querySelectorAll('[data-board-jump]').forEach(button=>button.addEventListener('click',()=>document.getElementById(button.dataset.boardJump)?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'})));
   root.querySelectorAll('[data-new-route]').forEach(button=>button.onclick=openNew);
   root.querySelectorAll('[data-detail]').forEach(button=>button.onclick=()=>showDetail(button.dataset.detail));

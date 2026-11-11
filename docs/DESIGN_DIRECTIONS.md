@@ -52,6 +52,41 @@ when a board is opened; all existing studio/backend controls retain their state.
   subject's material and its interface, not reusable identity artwork.
 - Best for: premium communications positioning and an atmospheric first encounter.
 
+## Shared floating call navigation
+
+The updated boards adapt the user's supplied podcast-navigation reference into
+an AgentBridge component. The public advertising compositions keep their own
+navigation; the studio receives a detached, rounded glass rail. A persistent
+call card sits above all workspace items, where playback appears in the reference.
+
+- Top: **Active call**, recipient, **02:34** sample duration, Grok Bot, waveform,
+  mute, return-to-call and end-call controls. Call artwork is labelled **Demo**.
+- Workspace: **Overview**, **Route drafts**, **Connection**, **Activity**,
+  **Settings**, **Design boards**. These labels share one source with the app's
+  real navigation. Route drafts carries a count; selected state is explicit.
+- Bottom: dark/light navigation appearance and the Victor workspace owner.
+- Expanded: recipient, labels and call controls remain readable.
+- Compact: a call tile and duration remain above the matching icon destinations;
+  buttons retain accessible names. Return-to-call is available on the call tile.
+- Mobile: a persistent call pill and a rounded menu trigger keep call context
+  visible while the drawer is closed.
+
+Signal uses smoked neutral glass and an orange accent. Material uses warm
+olive/charcoal glass and acid-yellow emphasis. Atlas uses navy glass with cyan.
+The rest of each direction's colour/type system remains distinct.
+
+The gallery includes an interactive component preview with direction switching,
+expanded/compact modes, dark/light appearance, all six destinations, simulated
+mute/end/restart and a return-to-call view. All preview state is in memory; no
+microphone permission, carrier request, call or backend mutation occurs. This
+is a design prototype, not an operational live-call interface. A future live
+version must use authenticated carrier state and existing authorization policy.
+
+The supplied screenshot is a social post showing podcast navigation. It is used
+for the floating panel proportions, material and hierarchy. Original component
+and image authorship are not independently established. No podcast artwork,
+portrait, social-media chrome or architectural background is reused.
+
 ## Source and authorship boundary
 
 Inspected all eleven supplied screenshots/contact sheets and the available-space
