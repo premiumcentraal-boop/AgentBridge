@@ -10,7 +10,7 @@ export const REQUIRED_GATES=Object.freeze([
   'Verify that the native Grok Bot call and bridge use are permitted by current platform and carrier terms.',
   'Authenticate the account and verify destination, consent and allowed routing.',
   'Obtain an independently verified rate and enforce server-side spending and duration limits.',
-  'Require separate owner approval and an authenticated one-use caller challenge.',
+  'Require separate owner approval and the configured caller proof: a one-use DTMF PIN by default; caller-ID or any-caller modes are owner opt-ins with documented residual risk.',
   'Require the user to approve the native Grok Bot call before any dialing.'
 ]);
 

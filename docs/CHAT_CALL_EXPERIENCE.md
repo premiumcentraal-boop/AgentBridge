@@ -5,7 +5,7 @@
 The user starts in their **own Grok Bot conversation**:
 > "Call +44 ... with AgentBridge. Keep it simple."
 
-Grok Bot should check account eligibility, recipient consent, carrier permission, verified rate and caps, then request any owner approval and authenticated one-use caller challenge. It should return a truthful ready/not-ready state. If the platform permits the call, **Grok Bot itself**, not AgentBridge, asks the user to approve its native call card and remains the only conversational voice. AgentBridge is an independently branded telecom relay, not an official xAI service.
+Grok Bot should check account eligibility, recipient consent, carrier permission, verified rate and caps, then request any owner approval and the configured caller proof (a one-use DTMF PIN by default; the caller-ID and any-caller modes are owner opt-ins with documented residual risk, see `docs/US_PRIVATE_PILOT.md`). It should return a truthful ready/not-ready state. If the platform permits the call, **Grok Bot itself**, not AgentBridge, asks the user to approve its native call card and remains the only conversational voice. AgentBridge is an independently branded telecom relay, not an official xAI service.
 
 **Important current restriction:** the current Grok Bot calling guide describes calls to US businesses or consenting US people, with acceptance of calling terms and a native confirmation before each call. A US access-number bridge must NOT be marketed or operated as a way to evade the platform's geographic or consent rules. No international call is authorized until applicable platform/provider terms and actual host compatibility are confirmed. Source: https://docs.x.ai/grok-bot/chat-and-collaboration
 
