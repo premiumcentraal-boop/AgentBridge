@@ -273,3 +273,4 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Merged main (#35, #32, #30) into the product/studio branch; root `check` now includes `chat-experience.mjs` alongside the studio files; CI keeps the gitleaks job and the working-preview artifact.
 - Mobile hero: the "01 / A single conversation" caption now has a backdrop so it stays legible over the cable art.
 - Known limitation: studio login throttling is keyed on the socket address, so behind Railway's proxy all clients share one 10-attempts/15-minutes bucket (a lockout nuisance, not a bypass; keys are 256-bit).
+- 2026-11-11: Dockerfile no longer uses a BuildKit secret mount (Railway rejects non-cache mounts); first Railway deploy at agentbridge.up.railway.app.
