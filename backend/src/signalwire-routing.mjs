@@ -101,7 +101,12 @@ async function claim(env,row,callId,segmentId,check,now){
       env.DB.prepare("INSERT INTO reservation_carrier_legs (reservation_id,provider_segment_id,claimed_at) SELECT id,?,? FROM reservations WHERE id=? AND status='ready' AND approved_at IS NOT NULL AND expires_at>?")
         .bind(segmentId,now,row.id,now),
       env.DB.prepare("UPDATE reservations SET status='connecting',provider='signalwire',provider_call_id=?,claimed_at=?,max_call_seconds=?,max_cost_cents=? WHERE id=? AND status='ready' AND approved_at IS NOT NULL AND expires_at>? AND EXISTS (SELECT 1 FROM reservation_carrier_legs WHERE reservation_id=? AND provider_segment_id=? AND claimed_at=?)")
-        .bind(callId,now,check.caps.maxSeconds,check.cost,row.id,now,row.id,segmentId,now)
+        .bind(callId,now,check.caps.maxSeconds,check.cost,row.id,now,row.id,segmentId,now),
+      // A nonthrowing, zero-row UPDATE (for example RAISE(IGNORE)) must
+      // not leave an orphan carrier leg behind. Keep cleanup in the same
+      // transaction; a throwing cleanup rolls back both preceding writes.
+      env.DB.prepare("DELETE FROM reservation_carrier_legs WHERE reservation_id=? AND provider_segment_id=? AND claimed_at=? AND NOT EXISTS (SELECT 1 FROM reservations WHERE id=? AND status='connecting' AND provider='signalwire' AND provider_call_id=? AND claimed_at=?)")
+        .bind(row.id,segmentId,now,row.id,callId,now)
     ]);
     return updated.meta?.changes===1&&leg.meta?.changes===1;
   }catch{return false;}
