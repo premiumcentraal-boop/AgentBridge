@@ -5,8 +5,10 @@ Sign in with the Site owner's ChatGPT account if prompted. The homepage shows
 “connect agents worldwide” and country lines connecting into calls. Choose
 **Open studio** to explore the app; page links and interactions are real DOM
 components, not screenshots. Two coloured lines with moving country flags enter
-from opposite edges and meet in the centre. The country lines fade away, a green
-phone and check mark show **Call connected**, then the call fades too. Twelve
+from opposite edges, glide and accelerate into the centre. Their contact
+triggers a green pulse, a phone pop and a check mark that draws on as the lines
+fade. The **Call connected** confirmation clears before the next pair starts,
+so no earlier call icon appears during an approach. Twelve
 pairings repeat over a 60-second cycle. New pairs always paint above the older
 lines and icons, including when the loop restarts. This graphic is an illustration.
 

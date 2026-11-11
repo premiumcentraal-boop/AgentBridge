@@ -9,6 +9,9 @@ import {
   CONNECTION_PAIRS,
   PAINT_LAYERS,
   APPROACH_SECONDS,
+  ACCELERATE_AT,
+  PAIR_INTERVAL_SECONDS,
+  approachProgress,
   LINE_CLEAR_AT,
   CALL_REVEAL_AT,
   CALL_VISIBLE_AT,
@@ -19,6 +22,8 @@ import {
   lineAnimation,
   flagAnimation,
   callAnimation,
+  contactAnimation,
+  checkAnimation,
   layerAnimation,
   pairStateAt,
   networkStateAt,
@@ -81,8 +86,9 @@ test("twelve country pairs enter from opposite edges and meet at the same middle
     samePoint(arrival.points[0], MEETING_POINT);
   }
 });
-test("country lines disappear before a green connected call appears and the call then fades", () => {
-  assert.ok(CALL_REVEAL_AT > LINE_CLEAR_AT);
+test("contact triggers the call pulse and confirmation, which clear before the next pair", () => {
+  assert.equal(CALL_REVEAL_AT, APPROACH_SECONDS);
+  assert.ok(EVENT_SECONDS < PAIR_INTERVAL_SECONDS);
   for (const pair of CONNECTION_PAIRS) {
     assert.ok(
       pair.flagFadeAt < pair.flagClearAt && pair.flagClearAt < APPROACH_SECONDS,
@@ -91,8 +97,11 @@ test("country lines disappear before a green connected call appears and the call
       const state = pairStateAt(pair, age);
       if (age < APPROACH_SECONDS) assert.equal(state.lineOpacity, 1);
       if (age >= LINE_CLEAR_AT) near(state.lineOpacity, 0);
+      if (age < APPROACH_SECONDS) {
+        near(state.callOpacity, 0);
+        near(state.contactOpacity, 0);
+      }
       if (state.callOpacity > 0) {
-        near(state.lineOpacity, 0);
         near(state.flagOpacity, 0);
         samePoint(state.points[0], MEETING_POINT);
         samePoint(state.points[1], MEETING_POINT);
@@ -108,6 +117,11 @@ test("country lines disappear before a green connected call appears and the call
         );
       if (age >= EVENT_SECONDS) near(state.callOpacity, 0);
     }
+    const impact = pairStateAt(pair, APPROACH_SECONDS + 0.1);
+    assert.ok(impact.contactOpacity > 0);
+    assert.ok(impact.callOpacity > 0);
+    near(pairStateAt(pair, CALL_VISIBLE_AT).checkOffset, 1);
+    near(pairStateAt(pair, CALL_VISIBLE_AT + 0.25).checkOffset, 0);
     near(pairStateAt(pair, CALL_VISIBLE_AT).callOpacity, 1);
     near(pairStateAt(pair, CALL_FADE_AT).callOpacity, 1);
     near(pairStateAt(pair, EVENT_SECONDS).callOpacity, 0);
@@ -120,6 +134,9 @@ test("line heads and country flags share matching native motion, drawing and fad
   validTimeline(lineAnimation());
   validTimeline(callAnimation());
   validTimeline(callAnimation(), "scales");
+  validTimeline(contactAnimation());
+  validTimeline(contactAnimation(), "scales");
+  validTimeline(checkAnimation());
   const drawing = {
     ...motion,
     values: motion.widths
@@ -138,36 +155,65 @@ test("line heads and country flags share matching native motion, drawing and fad
     }
   }
 });
-test("newest connections paint above older ones, including every launch and the minute seam", () => {
+test("the final approach accelerates smoothly into contact without an intermediate stop", () => {
+  const dt = 0.0001;
+  const velocity = (t) =>
+    (approachProgress(t + dt) - approachProgress(t - dt)) / (2 * dt);
+  near(approachProgress(0), 0);
+  near(approachProgress(APPROACH_SECONDS), 1);
+  near(velocity(ACCELERATE_AT - 0.001), velocity(ACCELERATE_AT + 0.001), 0.002);
+  let previous = velocity(ACCELERATE_AT + 0.01);
+  for (let t = ACCELERATE_AT + 0.05; t < APPROACH_SECONDS - 0.01; t += 0.05) {
+    const speed = velocity(t);
+    assert.ok(speed > previous, "the joining movement must accelerate at " + t);
+    previous = speed;
+  }
+  assert.ok(
+    velocity(APPROACH_SECONDS - 0.01) > velocity(ACCELERATE_AT + 0.01) * 4,
+  );
+});
+test("no previous call appears during an approach, including initial paint and the minute seam", () => {
   assert.equal(PAINT_LAYERS.filter((layer) => !layer.previous).length, 12);
-  assert.ok(PAINT_LAYERS.some((layer) => layer.previous));
   for (const layer of PAINT_LAYERS) validTimeline(layerAnimation(layer));
   const samples = [];
-  for (let seconds = 0; seconds < 120; seconds += 0.05) samples.push(seconds);
+  for (let seconds = 0; seconds < 120; seconds += 0.025) samples.push(seconds);
   for (const pair of CONNECTION_PAIRS)
     for (const shift of [-0.0001, 0, 0.0001])
       samples.push(pair.startAt - SCENE_PHASE_SECONDS + shift);
+  assert.equal(networkStateAt(0).length, 1);
+  assert.ok(networkStateAt(0)[0].progress < 1);
+  assert.equal(networkStateAt(0)[0].callOpacity, 0);
   for (const seconds of samples) {
     const painted = networkStateAt(seconds);
-    assert.ok(painted.length >= 1);
-    assert.equal(
-      new Set(painted.map((s) => s.pair.id)).size,
-      painted.length,
-      "a previous-cycle copy and current copy must never both paint",
+    assert.ok(
+      painted.length <= 1,
+      "each confirmation must clear before the next pair starts",
     );
+    assert.equal(
+      new Set(painted.map((state) => state.pair.id)).size,
+      painted.length,
+    );
+    for (const state of painted) {
+      if (state.progress < 1) {
+        assert.equal(
+          state.callOpacity,
+          0,
+          "no call may sit in the middle before these lines meet",
+        );
+        assert.equal(state.contactOpacity, 0);
+      }
+    }
     for (let i = 1; i < painted.length; i++)
-      assert.ok(
-        painted[i].launchedAt > painted[i - 1].launchedAt,
-        "the newest line must be the final painted layer at " + seconds,
-      );
+      assert.ok(painted[i].launchedAt > painted[i - 1].launchedAt);
     const repeat = networkStateAt(seconds + 60);
     assert.deepEqual(
-      painted.map((s) => s.layer.id),
-      repeat.map((s) => s.layer.id),
+      painted.map((state) => state.layer.id),
+      repeat.map((state) => state.layer.id),
     );
     for (let i = 0; i < painted.length; i++) {
       near(painted[i].lineOpacity, repeat[i].lineOpacity);
       near(painted[i].callOpacity, repeat[i].callOpacity);
+      near(painted[i].contactOpacity, repeat[i].contactOpacity);
       for (let side = 0; side < 2; side++)
         samePoint(painted[i].points[side], repeat[i].points[side]);
     }

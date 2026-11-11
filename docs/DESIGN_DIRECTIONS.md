@@ -240,7 +240,7 @@ available.
 
 ## 2026-11-11: opposite edges meet, then a call connects
 
-The current hero sends two coloured country lines from opposite edges to one
+That iteration sent two coloured country lines from opposite edges to one
 exact meeting point in the middle. Left/right and top/bottom pairings alternate,
 mixing straight approaches with single rounded turns. Flags ride the line heads
 and dissolve before their white circles could overlap at the centre.
@@ -259,3 +259,22 @@ moving animated DOM nodes or restarting native SVG clocks.
 Movement, stroke growth, line fades and call states share native SVG timing.
 Reduced motion samples the same composition; pause/play, off-screen suspension
 and hidden-tab suspension remain available.
+
+## 2026-11-11: accelerating contact and an immediate call response
+
+The current composition keeps the same country pairs, paths, colours and
+60-second loop. Each approach now has two continuous stages: a gentle launch
+and glide, followed by acceleration over the final quarter. Matching velocities
+at the transition prevent a pause before the lines join.
+
+Both lines meet after 3.6 seconds. That contact immediately triggers an expanding
+green ring and a phone that pops into place; the check mark draws on as the
+country lines fade. The confirmation clears at 4.72 seconds, before the next
+pair starts at 5 seconds. The previous call therefore cannot remain in the
+middle during a new approach. Initial playback and the reduced-motion still
+also start with approaching flags and no call icon.
+
+Line drawing and flag movement share the same two-stage native SVG timeline.
+The phone, pulse and check share the contact time. Tests verify accelerating
+end velocity, velocity continuity at the glide transition and the absence of
+any call icon during every approach across two complete loops.

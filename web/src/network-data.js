@@ -5,15 +5,21 @@ export const MEETING_POINT = [500, 360];
 export const BAND_WIDTH = 104;
 export const COUNTRY_RADIUS = 62;
 export const PAIR_INTERVAL_SECONDS = 5;
-export const APPROACH_SECONDS = 6;
-export const LINE_FADE_AT = 6.3;
-export const LINE_CLEAR_AT = 7;
-export const CALL_REVEAL_AT = 7.12;
-export const CALL_VISIBLE_AT = 7.5;
-export const CALL_FADE_AT = 9.55;
-export const EVENT_SECONDS = 10.3;
-export const SCENE_PHASE_SECONDS = 3.2;
-export const MOVE_EASING = [0.42, 0, 0.58, 1];
+export const APPROACH_SECONDS = 3.6;
+export const ACCELERATE_AT = 2.7;
+export const GLIDE_PROGRESS = 0.6;
+export const GLIDE_EASING = [0.32, 0, 0.6, 0.6];
+// The initial slope matches the glide's ending velocity, then accelerates
+// into contact. There is no slowing or hesitation just before the join.
+export const JOIN_EASING = [0.3, 0.15, 0.8, 0.4];
+export const LINE_FADE_AT = APPROACH_SECONDS;
+export const LINE_CLEAR_AT = 3.88;
+export const CALL_REVEAL_AT = APPROACH_SECONDS;
+export const CALL_VISIBLE_AT = 3.8;
+export const CALL_SETTLE_AT = 3.98;
+export const CALL_FADE_AT = 4.28;
+export const EVENT_SECONDS = 4.72;
+export const SCENE_PHASE_SECONDS = 1.8;
 export const COUNTRIES = {
   US: "United States",
   GB: "United Kingdom",
@@ -91,7 +97,18 @@ export function cubicEase(progress, spline) {
   }
   return cubic(spline[1], spline[3], (lo + hi) / 2);
 }
-export const ease = (progress) => cubicEase(progress, MOVE_EASING);
+export function approachProgress(seconds) {
+  if (seconds <= ACCELERATE_AT)
+    return GLIDE_PROGRESS * cubicEase(seconds / ACCELERATE_AT, GLIDE_EASING);
+  return (
+    GLIDE_PROGRESS +
+    (1 - GLIDE_PROGRESS) *
+      cubicEase(
+        (seconds - ACCELERATE_AT) / (APPROACH_SECONDS - ACCELERATE_AT),
+        JOIN_EASING,
+      )
+  );
+}
 const mixPoint = (a, b, t) => a.map((n, axis) => n + (b[axis] - n) * t);
 export function pointOnLeg(leg, progress) {
   if (progress <= 0) return [...leg.start];
@@ -204,7 +221,13 @@ function flagClearanceTime(arm, clearance) {
     hi = 1;
   for (let i = 0; i < 36; i++) {
     const t = (lo + hi) / 2;
-    if (distance(pointOnLeg(arm, ease(t)), MEETING_POINT) > clearance) lo = t;
+    if (
+      distance(
+        pointOnLeg(arm, approachProgress(t * APPROACH_SECONDS)),
+        MEETING_POINT,
+      ) > clearance
+    )
+      lo = t;
     else hi = t;
   }
   return ((lo + hi) / 2) * APPROACH_SECONDS;
@@ -224,13 +247,17 @@ export const CONNECTION_PAIRS = scenes.map((scene, index) => {
     },
     colour: scene.colours[side],
   }));
+  const flagClearAt = flagClearanceTime(arms[0], COUNTRY_RADIUS + 2);
   return {
     ...scene,
     id: "pair-" + index,
     startAt: index * PAIR_INTERVAL_SECONDS,
     arms,
-    flagFadeAt: flagClearanceTime(arms[0], COUNTRY_RADIUS * 1.8),
-    flagClearAt: flagClearanceTime(arms[0], COUNTRY_RADIUS + 2),
+    flagFadeAt: Math.min(
+      flagClearanceTime(arms[0], COUNTRY_RADIUS * 1.8),
+      flagClearAt - 0.24,
+    ),
+    flagClearAt,
   };
 });
 // Carry-over scenes paint first; current-cycle scenes paint in launch order.
@@ -257,10 +284,17 @@ export const pairBegin = (pair) =>
   `-${round(modulo(SCENE_PHASE_SECONDS - pair.startAt, NETWORK_LOOP_SECONDS))}s`;
 export function approachAnimation() {
   return {
-    keyTimes: normalized([0, APPROACH_SECONDS, NETWORK_LOOP_SECONDS]),
-    keyPoints: "0;1;1",
-    widths: "0 2000;1000 2000;1000 2000",
-    keySplines: MOVE_EASING.join(" ") + ";0 0 1 1",
+    keyTimes: normalized([
+      0,
+      ACCELERATE_AT,
+      APPROACH_SECONDS,
+      NETWORK_LOOP_SECONDS,
+    ]),
+    keyPoints: `0;${GLIDE_PROGRESS};1;1`,
+    widths: `0 2000;${GLIDE_PROGRESS * 1000} 2000;1000 2000;1000 2000`,
+    keySplines: [GLIDE_EASING.join(" "), JOIN_EASING.join(" "), "0 0 1 1"].join(
+      ";",
+    ),
   };
 }
 function fadeAnimation(start, end) {
@@ -279,13 +313,41 @@ export function callAnimation() {
       0,
       CALL_REVEAL_AT,
       CALL_VISIBLE_AT,
+      CALL_SETTLE_AT,
       CALL_FADE_AT,
       EVENT_SECONDS,
       NETWORK_LOOP_SECONDS,
     ]),
-    values: "0;0;1;1;0;0",
-    scales: ".86;.86;1;1;.96;.96",
-    keySplines: "0 0 1 1;.22 1 .36 1;0 0 1 1;.4 0 .6 1;0 0 1 1",
+    values: "0;0;1;1;1;0;0",
+    scales: ".62;.62;1.04;1;1;.94;.94",
+    keySplines: "0 0 1 1;.2 .7 .2 1;.3 0 .4 1;0 0 1 1;.4 0 .6 1;0 0 1 1",
+  };
+}
+export function contactAnimation() {
+  return {
+    keyTimes: normalized([
+      0,
+      APPROACH_SECONDS,
+      APPROACH_SECONDS + 0.02,
+      CALL_SETTLE_AT + 0.18,
+      NETWORK_LOOP_SECONDS,
+    ]),
+    values: "0;0;.5;0;0",
+    scales: ".3;.3;.45;1.55;1.55",
+    // The ring switches on only at contact, then travels out and fades.
+    keySplines: "0 0 1 1;0 0 1 1;.12 .65 .3 1;0 0 1 1",
+  };
+}
+export function checkAnimation() {
+  return {
+    keyTimes: normalized([
+      0,
+      CALL_VISIBLE_AT,
+      CALL_SETTLE_AT + 0.06,
+      NETWORK_LOOP_SECONDS,
+    ]),
+    values: "1;1;0;0",
+    keySplines: "0 0 1 1;.2 .7 .2 1;0 0 1 1",
   };
 }
 export function layerAnimation(layer) {
@@ -327,7 +389,7 @@ export function sampleAnimation(
 }
 export function pairStateAt(pair, seconds) {
   const age = modulo(seconds, NETWORK_LOOP_SECONDS);
-  const progress = ease(age / APPROACH_SECONDS);
+  const progress = approachProgress(age);
   return {
     pair,
     age,
@@ -337,6 +399,10 @@ export function pairStateAt(pair, seconds) {
     flagOpacity: sampleAnimation(flagAnimation(pair), age),
     callOpacity: sampleAnimation(callAnimation(), age),
     callScale: sampleAnimation(callAnimation(), age, "scales"),
+    contactOpacity:
+      age < APPROACH_SECONDS ? 0 : sampleAnimation(contactAnimation(), age),
+    contactScale: sampleAnimation(contactAnimation(), age, "scales"),
+    checkOffset: sampleAnimation(checkAnimation(), age),
   };
 }
 export function layerStateAt(layer, seconds) {

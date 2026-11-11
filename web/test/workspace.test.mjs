@@ -129,7 +129,7 @@ test("working preview navigates real pages and keeps call state in the floating 
   const layers = document.querySelectorAll(
     ".world-moving-scene > .world-pair-layer",
   );
-  assert.equal(layers.length, 14);
+  assert.equal(layers.length, 12);
   assert.equal(
     document.querySelectorAll(
       '.world-moving-scene > .world-pair-layer[data-copy="current"]',
@@ -161,6 +161,12 @@ test("working preview navigates real pages and keeps call state in the floating 
         false,
         "previous-cycle layers must paint behind current lines",
       );
+    assert.ok(layer.querySelector(".world-contact-pulse animate"));
+    assert.ok(
+      layer.querySelector(
+        '.world-call-check animate[attributeName="stroke-dashoffset"]',
+      ),
+    );
     const travellers = layer.querySelectorAll(".world-country-traveller");
     assert.equal(travellers.length, 2);
     for (const traveller of travellers) {
@@ -380,7 +386,7 @@ test("public navigation keeps a native top-level studio link across the CSP boun
   );
 });
 
-test("reduced motion shows opposite-edge country lines and a connected call with an explicit play override", async (t) => {
+test("reduced motion starts with approaching flags and no early call, with an explicit play override", async (t) => {
   const { dom, document, errors, requests } = setup(
     "file:///AgentBridge-Working-Website.html",
     true,
@@ -395,12 +401,16 @@ test("reduced motion shows opposite-edge country lines and a connected call with
     "false",
   );
   const still = document.querySelector(".world-static-scene");
-  assert.equal(still.querySelectorAll(".world-pair-static").length, 2);
+  assert.equal(still.querySelectorAll(".world-pair-static").length, 1);
   assert.equal(
     still.querySelectorAll("animate, animateMotion, animateTransform").length,
     0,
   );
-  assert.ok(still.querySelector('.world-call-connection[opacity="1"]'));
+  assert.equal(
+    still.querySelectorAll('.world-call-connection[opacity="1"]').length,
+    0,
+  );
+  assert.ok(still.querySelector('.world-call-connection[opacity="0"]'));
   assert.ok(still.querySelector('.world-country-lines[opacity="1"]'));
   named(document, "Play connection animation").click();
   await pause(30);

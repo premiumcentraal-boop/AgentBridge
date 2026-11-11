@@ -52,15 +52,17 @@ work before JavaScript starts. The original `/design/` gallery remains available
 - `/app/` — Compatibility link to the sample studio
 
 The main hero says **connect agents worldwide**. Pairs of bold coloured country
-lines enter from opposite edges and meet at the exact centre. Their flags travel
-with the advancing line heads, then dissolve before the circles overlap. Once
-the country lines have faded, a green telephone with a check mark and **Call
-connected** appears, holds briefly and fades too. Twelve country pairings cover
+lines enter from opposite edges, glide, then accelerate into the exact centre.
+Their flags travel with the advancing line heads, then dissolve before the
+circles overlap. Contact triggers a green pulse, a phone that pops into place
+and a check mark that draws on as the country lines fade. The brief **Call
+connected** confirmation clears before the next pair starts. Twelve pairings cover
 all 16 flags over a 60-second cycle, with straight or single-turn approaches.
 Every new pair paints above the older lines, flags and call icons, including at
 the loop seam. The scene respects reduced motion, offers pause/play, and stops
 when off screen or the tab is hidden. Reduced motion samples the same scene as a
-still, including before JavaScript starts. Flags are local SVG symbols from the
+still, including before JavaScript starts, with no call icon before contact.
+Flags are local SVG symbols from the
 MIT-licensed flag-icons project.
 
 The rail has an expanded/compact state, a simulated active call at the top,

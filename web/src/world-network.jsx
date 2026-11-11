@@ -14,6 +14,8 @@ import {
   lineAnimation,
   flagAnimation,
   callAnimation,
+  contactAnimation,
+  checkAnimation,
   layerAnimation,
   masterBegin,
   pairBegin,
@@ -94,7 +96,9 @@ function CountryCircle({ arm, pair, prefix, still }) {
   );
 }
 function ConnectedCall({ pair, still }) {
-  const timeline = callAnimation();
+  const timeline = callAnimation(),
+    contact = contactAnimation(),
+    check = checkAnimation();
   return (
     <g
       className="world-call-connection"
@@ -104,8 +108,28 @@ function ConnectedCall({ pair, still }) {
     >
       {!still && <Fade timeline={timeline} begin={pairBegin(pair)} />}
       <g
+        className="world-contact-pulse"
+        opacity={still ? still.contactOpacity : 0}
+      >
+        {!still && <Fade timeline={contact} begin={pairBegin(pair)} />}
+        <g
+          className="world-contact-wave"
+          transform={`scale(${still ? still.contactScale : 0.3})`}
+        >
+          {!still && (
+            <animateTransform
+              attributeName="transform"
+              type="scale"
+              values={contact.scales}
+              {...timing(contact, pairBegin(pair))}
+            />
+          )}
+          <circle r="58" fill="none" stroke="#25bc79" strokeWidth="4" />
+        </g>
+      </g>
+      <g
         className="world-call-mark"
-        transform={`scale(${still ? still.callScale : 0.86})`}
+        transform={`scale(${still ? still.callScale : 0.62})`}
       >
         {!still && (
           <animateTransform
@@ -129,13 +153,25 @@ function ConnectedCall({ pair, still }) {
         </g>
         <circle cx="42" cy="-39" r="15" fill="#e8f9ef" />
         <path
+          className="world-call-check"
           d="M35-39l5 5 9-10"
+          pathLength="1"
+          strokeDasharray="1"
+          strokeDashoffset={still ? still.checkOffset : 1}
           fill="none"
           stroke="#128051"
           strokeWidth="3.5"
           strokeLinecap="round"
           strokeLinejoin="round"
-        />
+        >
+          {!still && (
+            <animate
+              attributeName="stroke-dashoffset"
+              values={check.values}
+              {...timing(check, pairBegin(pair))}
+            />
+          )}
+        </path>
         <text
           className="world-call-label"
           textAnchor="middle"
@@ -233,8 +269,9 @@ const Scene = memo(function Scene({ prefix, svgRef }) {
       <title id={prefix + "-title"}>Connect agents worldwide</title>
       <desc id={prefix + "-description"}>
         Pairs of bold coloured lines with country flags enter from opposite
-        edges and meet at the centre. The country lines fade, a green telephone
-        and check mark show a connected call, then the call fades. New
+        edges and accelerate into contact at the centre. Only that contact
+        triggers a green phone pulse and an animated check mark as the country
+        lines fade. The confirmation clears before the next pair approaches. New
         connections always appear above older ones, including when the
         sixty-second loop repeats. This animation illustrates connection and is
         not live call activity.

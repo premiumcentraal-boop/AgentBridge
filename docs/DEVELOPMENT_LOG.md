@@ -380,3 +380,20 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
   pending because the supported browser-control tool is unavailable here.
 - Reuses the same owner-private [mobile Site](https://agentbridge-worldwide.premiumcentraal.chatgpt.site)
   and [PR #39](https://github.com/premiumcentraal-boop/AgentBridge/pull/39).
+
+## 2026-11-11 — accelerate into contact and remove early call icons
+
+- Kept the country pair geometry and 60-second loop. Changed the approach to a
+  continuous glide followed by acceleration over the final quarter, ending in
+  contact rather than slowing to a stop before the join.
+- Contact now triggers a green expanding ring, a phone pop and a drawn check
+  mark as the country lines fade. The confirmation clears before the next pair
+  starts. The previous call can no longer sit in the middle of a new approach;
+  initial playback and the reduced-motion still also have no early call icon.
+- Validation covers final velocity increase, matching transition velocities,
+  native motion/stroke timing, contact-only call/pulse/check activation and
+  no previous call during any approach across two full loops. Root CI includes
+  147 backend/security tests, seven structural checks and nine geometry/DOM tests.
+- Coded SVG artwork samples verify the contact sequence separately from browser
+  playback/layout QA, which remains unavailable through the supported browser
+  tools in this session. The same owner-private mobile Site and PR #39 are reused.
