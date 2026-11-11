@@ -306,3 +306,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 ## 2026-11-11 — PIN provider-event rollback regressions (draft PR #37; not merged/deployed)
 - Added two offline signed DTMF PIN callback regressions to `backend/test/signalwire-routing.test.mjs`: SQLite `RAISE(ABORT)` and `RAISE(IGNORE)` on the final `provider_events` connect outcome. Both assert hangup, ready reservation, no carrier leg, no false connect event, and successful fresh PIN challenge/retry after removing the trigger.
 - These tests complement the earlier initial-inbound event fault tests. No production routing flags, provider settings, paid calls or deployment changed. Exact-commit CI and independent Cloudflare D1 transaction review remain required before merge.
+
+## 2026-11-11 — Compound silent-write rollback guard (draft PR #37; unmerged)
+- Added a final conditional SQL constraint-failure guard inside the SignalWire claim D1 batch. If the provider-event outcome is not persisted while a claimed reservation or carrier leg remains, the guard intentionally violates the reservations NOT NULL constraint, forcing transaction rollback rather than relying on an ignored compensating UPDATE.
+- Added a deterministic SQLite dual-trigger regression: suppress the event connect UPDATE and the reservation reset with RAISE(IGNORE); assert hangup, reservation ready, no orphan carrier leg, no false connect outcome, and successful authorized retry after triggers are removed.
+- Local test execution blocked because this environment could not resolve github.com for git clone. Exact-head CI and independent Cloudflare D1 transaction semantics remain unverified; keep draft PR unmerged and all paid routing flags off. No calls, purchases, secrets, merges or deployments.
