@@ -293,3 +293,7 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 ## 2026-11-11 — Concurrent signed-callback regression (PR #37 pending)
 - Added an offline 12-way Promise.all signed inbound callback regression for the transactional SignalWire reservation claim. It asserts exactly one SWML connect, all losing callbacks hang up, one persisted carrier leg, and no subsequent reuse.
 - This tests the existing SQLite-backed mock's concurrent scheduling, not real distributed D1 worker contention or provider delivery ordering. Exact-head GitHub CI and independent review required; no provider calls, paid routing, purchases, merges or deployments.
+
+## 2026-11-11 — Reservation UPDATE ABORT rollback regression (PR #37 pending)
+- Added a deterministic SQLite BEFORE UPDATE RAISE(ABORT) fault-injection test for the second statement of the D1 batch: verifies hangup, unchanged ready reservation, rollback of the earlier inserted carrier leg, successful authorized retry and single-use after retry.
+- The previous PR head df6070bb passed GitHub Actions quality gate run 43003476766. This new commit needs its own exact-head CI; the test was not executed locally. Distributed D1 transaction semantics and carrier behavior remain unverified. No merge, deployment, calls or routing activation.
