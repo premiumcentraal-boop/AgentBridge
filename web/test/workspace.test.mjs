@@ -111,7 +111,9 @@ async function navigate(document, path) {
 test("working preview navigates real pages and keeps call state in the floating rail", async (t) => {
   const { dom, document, errors, requests } = setup();
   t.after(() => dom.window.close());
-  await pause(150);
+  // The portable file already contains rendered HTML. Wait for the React
+  // mount effect before interacting, rather than clicking the inert SSR copy.
+  await waitFor(() => document.title.includes("connect agents worldwide"));
   await waitFor(() => document.querySelector('a[href="#/studio/demo/"]'));
   assert.match(
     document.querySelector("h1").textContent,
@@ -191,10 +193,14 @@ test("working preview navigates real pages and keeps call state in the floating 
     assert.ok(Number(band.dataset.turns) <= 1);
   }
   named(document, "Pause connection animation").click();
-  await pause(20);
+  await waitFor(
+    () => document.querySelector(".world-network").dataset.paused === "true",
+  );
   assert.equal(document.querySelector(".world-network").dataset.paused, "true");
   named(document, "Play connection animation").click();
-  await pause(20);
+  await waitFor(
+    () => document.querySelector(".world-network").dataset.paused === "false",
+  );
   assert.equal(
     document.querySelector(".world-network").dataset.paused,
     "false",
