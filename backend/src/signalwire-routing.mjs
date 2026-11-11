@@ -114,7 +114,13 @@ async function claim(env,row,callId,segmentId,check,now,eventType){
       // not leave an orphan carrier leg behind. Keep cleanup in the same
       // transaction; a throwing cleanup rolls back both preceding writes.
       env.DB.prepare("DELETE FROM reservation_carrier_legs WHERE reservation_id=? AND provider_segment_id=? AND claimed_at=? AND NOT EXISTS (SELECT 1 FROM reservations WHERE id=? AND status='connecting' AND provider='signalwire' AND provider_call_id=? AND claimed_at=?)")
-        .bind(row.id,segmentId,now,row.id,callId,now)
+        .bind(row.id,segmentId,now,row.id,callId,now),
+      // Fail the entire D1 batch if compensating writes were silently ignored.
+      // This deliberately violates reservations.account_id NOT NULL only when
+      // an unrecorded claim or orphaned leg remains. A thrown constraint error
+      // rolls back the batch, unlike checking meta.changes after commit.
+      env.DB.prepare("INSERT INTO reservations (id) SELECT NULL WHERE (EXISTS (SELECT 1 FROM reservations WHERE id=? AND status='connecting' AND provider_call_id=?) OR EXISTS (SELECT 1 FROM reservation_carrier_legs WHERE reservation_id=? AND provider_segment_id=? AND claimed_at=?)) AND NOT EXISTS (SELECT 1 FROM provider_events WHERE provider='signalwire' AND provider_call_id=? AND event_type=? AND outcome='connect' AND reservation_id=?)")
+        .bind(row.id,callId,row.id,segmentId,now,callId,eventType,row.id)
     ]);
     return updated.meta?.changes===1&&leg.meta?.changes===1&&event.meta?.changes===1&&reset.meta?.changes===0;
   }catch{return false;}
