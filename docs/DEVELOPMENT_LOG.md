@@ -284,3 +284,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Extended transactional claim to insert the carrier leg first, then condition the reservation transition on a matching persisted leg. This prevents a zero-row INSERT (e.g. SQLite RAISE(IGNORE)) from leaving a reservation in connecting.
 - Added deterministic offline trigger regression for silent INSERT suppression, fail-closed hangup and subsequent retry. Existing ABORT-trigger rollback regression retained.
 - Pending exact-head CI and independent review; no routing flags, calls, paid resources or deployment changed.
+
+## 2026-11-11 — Silent reservation UPDATE cleanup (PR #37 pending)
+- Added a third statement to the same D1 claim batch to delete a newly inserted carrier leg when the reservation transition does not persist (including a nonthrowing SQLite RAISE(IGNORE) trigger). This avoids orphan leg rows blocking retries.
+- Added an offline fault-injection regression for ignored UPDATE, hangup, no orphan leg, successful retry and single-use after retry.
+- This remains a reviewable private-test reliability patch, not authorization to route paid calls. Exact-head CI and independent review pending at commit time; no calls, provider purchases, secrets, flag changes, merges or deployments.
