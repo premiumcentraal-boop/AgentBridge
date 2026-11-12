@@ -75,8 +75,9 @@ async function reconcile(row,env,fetchImpl){
   // Multiple children might be additional billable legs: manual review required.
   if(children.length!==1)return failed('UNVERIFIED_OUTBOUND_LEGS');
   const child=children[0];
-  if(typeof child.id!=='string'||!child.id||child.id===inbound.id||
-     !OUTBOUND_DIRECTIONS.has(child.direction)||child.to!==row.destination)
+  if(!UUID.test(child.id||'')||child.id===inbound.id||
+     !OUTBOUND_DIRECTIONS.has(child.direction)||child.from!==env.US_BRIDGE_DID||
+     child.to!==row.destination)
     return failed('OUTBOUND_LOG_MISMATCH');
   if(!OUTBOUND_TERMINAL.has(child.status))return failed('OUTBOUND_CARRIER_NOT_TERMINAL');
   if(!safeMoney(child.charge))return failed('OUTBOUND_CHARGE_UNKNOWN');
