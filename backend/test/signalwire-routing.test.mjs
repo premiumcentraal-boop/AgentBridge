@@ -295,3 +295,23 @@ test('PIN callback: compound silent event and reservation-reset failures roll ba
   assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,1);
   assert.equal(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_pin'").get(retryId).outcome,'connect');
 });
+
+test('denied PIN claim remains hangup when CLAIM_LOST event update also aborts',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const reservation=await reserve(env,'pin-denial-outage-0001');
+  assert.equal((await approveReservation(env,reservation.id)).status,200);
+  const id=CID(340);
+  assert.ok((await inbound(env,{call_id:id})).doc.sections.main.some(x=>x.prompt));
+  DB.raw.exec("CREATE TRIGGER fail_pin_claim BEFORE INSERT ON reservation_carrier_legs BEGIN SELECT RAISE(ABORT,'claim unavailable'); END");
+  DB.raw.exec("CREATE TRIGGER fail_pin_denial BEFORE UPDATE OF outcome ON provider_events WHEN NEW.outcome='CLAIM_LOST' BEGIN SELECT RAISE(ABORT,'denial telemetry unavailable'); END");
+  const result=await pin(env,id,reservation.dtmf_pin);
+  assert.equal(result.status,200,'DB outage must not become a 500');
+  assert.ok(isHangup(result.doc),'no connection on failed claim or telemetry');
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'ready');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,0);
+  DB.raw.exec('DROP TRIGGER fail_pin_claim');
+  DB.raw.exec('DROP TRIGGER fail_pin_denial');
+  const retry=CID(341);
+  assert.ok((await inbound(env,{call_id:retry})).doc.sections.main.some(x=>x.prompt));
+  assert.equal(connectOf((await pin(env,retry,reservation.dtmf_pin)).doc)?.to,DEST);
+});
