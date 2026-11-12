@@ -36,8 +36,8 @@ A premium website and developer-first international telecom bridge for AI agents
 
 The public site and control studio share an Astryx/React 19 foundation. The
 interface uses actual Astryx navigation, buttons, cards, segmented controls,
-dialogs and inputs, with custom glass surfaces and original SVG connection art.
-Build output contains 28 rendered HTML pages, so direct links and public content
+dialogs and inputs, with monochrome surfaces, original status avatars and SVG connection art.
+Build output contains 30 rendered HTML pages, so direct links and public content
 work before JavaScript starts. The original `/design/` gallery remains available.
 
 - `/` — Product overview
@@ -51,11 +51,11 @@ work before JavaScript starts. The original `/design/` gallery remains available
 - `/docs/` — Developer and deployment notes
 - `/studio/` — Protected operator workspace
 - `/studio/demo/` — Sample workspace with persistent in-tab floating call preview
-- `/studio/{routes,calls,memory,connection,activity,settings,call,design}/` — Direct studio pages
-- `/studio/demo/{routes,calls,memory,connection,activity,settings,call,design}/` — Matching demo pages
+- `/studio/{connections,routes,calls,memory,connection,activity,settings,call,design}/` — Direct studio pages
+- `/studio/demo/{connections,routes,calls,memory,connection,activity,settings,call,design}/` — Matching demo pages
 - `/app/` — Compatibility link to the sample studio
 
-The main hero says **connect agents worldwide**. Pairs of bold coloured country
+The main hero says **connect agents worldwide**, alongside an interactive sample-agent widget. A separate worldwide section preserves pairs of bold coloured country
 lines enter from opposite edges, glide, then accelerate into the exact centre.
 Their flags travel with the advancing line heads, then dissolve before the
 circles overlap. Contact triggers a green pulse, a phone that pops into place
@@ -70,8 +70,22 @@ Flags are local SVG symbols from the
 MIT-licensed flag-icons project.
 
 The rail has an expanded/compact state, a simulated active call at the top,
-mute/return/end controls, eight workspace items and a dark/light switch. On small
+mute/return/join/end controls, five primary destinations, four management destinations and a dark/light switch. On small
 screens it becomes a modal drawer with a persistent call strip.
+
+### Grokbot-inspired redesign
+
+The owner-provided style guide informs the system typography, black/white grouped
+surfaces, rounded controls and original state avatars. Colour communicates state
+or agent identity. AgentBridge keeps its own name and connection mark; no Grok,
+xAI or Novra artwork is included. [Design and interaction details](docs/GROKBOT_REDESIGN.md).
+
+The studio opens on a focused call beside its optional transcript. **Connections**
+adds searchable saved destinations; **Routing** keeps destination drafts and review.
+**Listen in** plays the local fictional sample, enters muted and follows the user
+across studio pages. Its transcript follows the playback clock when enabled.
+Leaving listening keeps the simulated call going. Routing review saves an in-tab
+choice, with no transfer or carrier request. Production calling is unchanged.
 
 ### Calling extensions
 
@@ -118,7 +132,7 @@ private API, and route drafts reset when reloaded. This is an actual working UI,
 not a screenshot or replacement for a production deployment.
 
 `npm run test:web` exercises real bundled React interactions in a DOM harness;
-`npm run test:site` checks all 29 pages for landmarks, labels, links and assets.
+`npm run test:site` checks all 31 pages for landmarks, labels, links and assets.
 These checks do not replace browser layout and accessibility testing. For a
 project site, build and audit with `BASE_PATH=/AgentBridge`.
 

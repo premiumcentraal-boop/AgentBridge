@@ -54,3 +54,15 @@ authenticated SQLite persistence for call plans and preferences. Neither mode
 adds live carrier calling, media capture or conference participation. Live use
 requires additional authorized integration; sample actions contact no carrier
 and request no microphone or callback.
+
+## Connection-first redesign
+
+The studio now opens on the focused call and its optional transcript. Use the
+new Connections page or plus action to add/search destinations. Listen in plays
+the fictional local audio, enters muted and keeps a native player available
+across pages. If transcription is enabled, it follows playback position.
+Leaving stops sample audio while the simulated agent continues. Route call
+opens a destination review and saves only an in-tab proposal; no transfer occurs.
+The product page and studio use the owner's Grokbot-inspired monochrome system,
+original expressive status avatars, rounded controls and system typography.
+See [design and behavior](GROKBOT_REDESIGN.md).

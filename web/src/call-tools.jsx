@@ -2,6 +2,8 @@ import React, { useEffect, useId, useRef, useState } from "react";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { A } from "./context.jsx";
 import { Btn, Card, Icon, IconBtn, Pill, Wave } from "./ui.jsx";
+import { BotFace } from "./grok-ui.jsx";
+import { FocusCall, TranscriptPeek } from "./connection-hub.jsx";
 import {
   CALL_COUNTRIES,
   CALL_LANGUAGES,
@@ -402,7 +404,7 @@ export function JoinDialog({ open, onClose, onJoin, preferences }) {
       />
       <form className="tools-dialog-body" onSubmit={join}>
         <div className="join-constellation">
-          <span>✳</span>
+          <BotFace size={46} tone="teal" state="working" />
           <i />
           <span>L</span>
           <i />
@@ -836,7 +838,11 @@ function Participants({ call }) {
   return (
     <div className="call-participants">
       <div>
-        <span className="participant-avatar agent">✳</span>
+        <BotFace
+          size={78}
+          state={call.active ? "working" : "idle"}
+          tone="teal"
+        />
         <strong>Your agent</strong>
         <small>Grok Bot · sample</small>
       </div>
@@ -861,6 +867,63 @@ function Participants({ call }) {
     </div>
   );
 }
+function LiveCallTranscript({ call, allLines, setAllLines, onEnable }) {
+  const position = call.listening ? call.samplePosition || 0 : call.elapsed;
+  return (
+    <Card
+      className="tools-card live-transcript call-inline-transcript"
+      padding={0}
+    >
+      <div className="tools-list-heading">
+        <h2>Sample live transcript</h2>
+        {call.transcription && (
+          <button
+            className="text-action"
+            type="button"
+            onClick={() => setAllLines(!allLines)}
+          >
+            {allLines ? "Follow sample timing" : "Show full sample transcript"}
+          </button>
+        )}
+      </div>
+      {call.transcription ? (
+        <div className="call-transcript-scroll">
+          {sample.transcript
+            .filter((line) => allLines || line.start <= position)
+            .map((line) => (
+              <div className="live-transcript-line" key={line.id}>
+                <span>{clock(line.start)}</span>
+                <div>
+                  <strong>{line.speaker}</strong>
+                  <p>{line.text}</p>
+                </div>
+              </div>
+            ))}
+        </div>
+      ) : (
+        <div className="hub-transcript-empty">
+          <Icon name="transcript" size={28} />
+          <h3>The words, as they happen.</h3>
+          <p>
+            Transcription is optional. Choose it here, with permission, while
+            your agent keeps talking.
+          </p>
+          <Btn
+            label="Transcribe sample call"
+            end="plus"
+            onClick={onEnable}
+            disabled={!call.active}
+          />
+        </div>
+      )}
+      <p className="tools-fine">
+        {call.transcription
+          ? "Prewritten sample dialogue, not speech recognition from a live call."
+          : "Transcription is off. Sample audio can be played without capturing a call."}
+      </p>
+    </Card>
+  );
+}
 export function CallExtensions({
   page,
   snapshot,
@@ -877,6 +940,8 @@ export function CallExtensions({
   notify,
   joinOpen,
   setJoinOpen,
+  onListen,
+  onRoute,
 }) {
   const preferences = snapshot.capture_preferences || DEFAULT_CAPTURE;
   const [planOpen, setPlanOpen] = useState(false),
@@ -934,47 +999,16 @@ export function CallExtensions({
               onClick={() => setPlanOpen(true)}
             />
           </Head>
-          <div className="calls-intro-grid">
-            <Card className="tools-card" padding={0}>
-              <span className="eyebrow">
-                {isDemo ? "EXPLORE A CONVERSATION" : "YOUR CONNECTION"}
-              </span>
-              <h2>
-                {isDemo
-                  ? "Your agent calls. You stay close."
-                  : "A clear plan before you dial."}
-              </h2>
-              <p>
-                {isDemo
-                  ? "Follow a sample call, try optional capture and step into the conversation."
-                  : "Save a destination and capture preferences. A verified route and conference-capable backend are required to place and join live calls."}
-              </p>
-              <A
-                to={isDemo ? navTo("call") : navTo("connection")}
-                className="text-action"
-              >
-                {isDemo ? "Open the sample call" : "Review your connection"}
-                <Icon name="arrow" size={15} />
-              </A>
-            </Card>
-            <Card className="tools-card calls-choice" padding={0}>
-              <div>
-                <Icon name="globe" />
-                <span>International destination</span>
-              </div>
-              <div>
-                <Icon name="record" />
-                <span>Recording, if you choose</span>
-              </div>
-              <div>
-                <Icon name="transcript" />
-                <span>A transcript to return to</span>
-              </div>
-              <div>
-                <Icon name="join" />
-                <span>Room for you to join</span>
-              </div>
-            </Card>
+          <div className="hub-call-grid">
+            <FocusCall
+              call={call}
+              isDemo={isDemo}
+              navTo={navTo}
+              onListen={onListen}
+              onRoute={onRoute}
+              onRestart={onRestart}
+            />
+            <TranscriptPeek call={call} isDemo={isDemo} navTo={navTo} />
           </div>
           <div className="tools-list-heading">
             <div>
@@ -1104,15 +1138,24 @@ export function CallExtensions({
             }
           >
             {isDemo && call.active && (
-              <Btn
-                label={
-                  call.joined ? "You’re in the sample call" : "Let me join"
-                }
-                primary
-                icon="join"
-                onClick={() => !call.joined && setJoinOpen(true)}
-                disabled={Boolean(call.joined)}
-              />
+              <div className="tools-actions">
+                <Btn
+                  label={call.listening ? "Listening to sample" : "Listen in"}
+                  primary
+                  icon="headphones"
+                  end={null}
+                  onClick={onListen}
+                  disabled={Boolean(call.listening)}
+                />
+                <Btn
+                  label={
+                    call.joined ? "You’re in the sample call" : "Let me join"
+                  }
+                  icon="join"
+                  onClick={() => !call.joined && setJoinOpen(true)}
+                  disabled={Boolean(call.joined)}
+                />
+              </div>
             )}
           </Head>
           {!isDemo ? (
@@ -1135,70 +1178,91 @@ export function CallExtensions({
             </div>
           ) : (
             <>
-              <Card className="tools-live-card" padding={0}>
-                <div className="live-card-top">
-                  <Pill tone={call.active ? "sage" : "muted"} dot>
-                    {call.active
-                      ? "Sample call · connected"
-                      : "Sample call · ended"}
-                  </Pill>
-                  <time>{clock(call.elapsed)}</time>
-                </div>
-                <Participants call={call} />
-                <div className="call-centre-wave">
-                  <Wave muted={call.muted || !call.active} />
-                  <small>One familiar agent. You can join alongside.</small>
-                </div>
-                <div className="tools-actions">
-                  <IconBtn
-                    label={
-                      call.muted
-                        ? "Unmute simulated call"
-                        : "Mute simulated call"
-                    }
-                    name={call.muted ? "muted" : "mute"}
-                    onClick={onMute}
-                    disabled={!call.active}
-                    aria-pressed={call.muted}
-                  />
-                  {call.joined && (
-                    <>
-                      <Btn
-                        label={
-                          call.userMuted
-                            ? "Unmute yourself in sample call"
-                            : "Mute yourself in sample call"
-                        }
-                        icon={call.userMuted ? "muted" : "mute"}
-                        end={null}
-                        onClick={() =>
-                          setCall((c) => ({ ...c, userMuted: !c.userMuted }))
-                        }
-                      />
-                      <Btn
-                        label="Leave sample call"
-                        end={null}
-                        onClick={() => {
-                          setCall((c) => ({ ...c, joined: false }));
-                          notify(
-                            "You left. The agent continues the sample call.",
-                          );
-                        }}
-                      />
-                    </>
-                  )}
-                  {call.active ? (
-                    <Btn
-                      label="End sample call"
-                      icon="end"
-                      end={null}
-                      onClick={onEnd}
+              <div className="gb-call-layout">
+                <Card className="tools-live-card" padding={0}>
+                  <div className="live-card-top">
+                    <Pill tone={call.active ? "sage" : "muted"} dot>
+                      {call.active
+                        ? "Sample call · connected"
+                        : "Sample call · ended"}
+                    </Pill>
+                    <time>{clock(call.elapsed)}</time>
+                  </div>
+                  <Participants call={call} />
+                  <div className="call-centre-wave">
+                    <Wave muted={call.muted || !call.active} />
+                    <small>One familiar agent. You can join alongside.</small>
+                  </div>
+                  <div className="tools-actions">
+                    <IconBtn
+                      label={
+                        call.muted
+                          ? "Unmute simulated call"
+                          : "Mute simulated call"
+                      }
+                      name={call.muted ? "muted" : "mute"}
+                      onClick={onMute}
+                      disabled={!call.active}
+                      aria-pressed={call.muted}
                     />
-                  ) : (
-                    <Btn label="Restart sample call" onClick={onRestart} />
+                    {call.joined && (
+                      <>
+                        <Btn
+                          label={
+                            call.userMuted
+                              ? "Unmute yourself in sample call"
+                              : "Mute yourself in sample call"
+                          }
+                          icon={call.userMuted ? "muted" : "mute"}
+                          end={null}
+                          onClick={() =>
+                            setCall((c) => ({ ...c, userMuted: !c.userMuted }))
+                          }
+                        />
+                        <Btn
+                          label="Leave sample call"
+                          end={null}
+                          onClick={() => {
+                            setCall((c) => ({ ...c, joined: false }));
+                            notify(
+                              "You left. The agent continues the sample call.",
+                            );
+                          }}
+                        />
+                      </>
+                    )}
+                    {call.active ? (
+                      <Btn
+                        label="End sample call"
+                        icon="end"
+                        end={null}
+                        onClick={onEnd}
+                      />
+                    ) : (
+                      <Btn label="Restart sample call" onClick={onRestart} />
+                    )}
+                    <Btn
+                      label="Route call"
+                      icon="routes"
+                      end={null}
+                      disabled={!call.active}
+                      onClick={() => onRoute()}
+                    />
+                  </div>
+                  {call.proposedRoute && (
+                    <p className="hub-routing-summary">
+                      <Icon name="routes" size={16} /> Routing preview:{" "}
+                      {call.proposedRoute.label}. No transfer made.
+                    </p>
                   )}
-                </div>
-              </Card>
+                </Card>
+                <LiveCallTranscript
+                  call={call}
+                  allLines={allLines}
+                  setAllLines={setAllLines}
+                  onEnable={() => enable("transcription")}
+                />
+              </div>
               <div className="call-capture-grid">
                 <Card className="tools-card" padding={0}>
                   <div className="capture-control-heading">
@@ -1286,37 +1350,6 @@ export function CallExtensions({
                   />
                 </Card>
               </div>
-              {call.transcription && (
-                <Card className="tools-card live-transcript" padding={0}>
-                  <div className="tools-list-heading">
-                    <h2>Sample live transcript</h2>
-                    <button
-                      className="text-action"
-                      type="button"
-                      onClick={() => setAllLines(!allLines)}
-                    >
-                      {allLines
-                        ? "Follow sample timing"
-                        : "Show full sample transcript"}
-                    </button>
-                  </div>
-                  {sample.transcript
-                    .filter((line) => allLines || line.start <= call.elapsed)
-                    .map((line) => (
-                      <div className="live-transcript-line" key={line.id}>
-                        <span>{clock(line.start)}</span>
-                        <div>
-                          <strong>{line.speaker}</strong>
-                          <p>{line.text}</p>
-                        </div>
-                      </div>
-                    ))}
-                  <p className="tools-fine">
-                    Prewritten sample dialogue, not speech recognition from a
-                    live call.
-                  </p>
-                </Card>
-              )}
               <div className="tools-note">
                 <Icon name="shield" />
                 <p>

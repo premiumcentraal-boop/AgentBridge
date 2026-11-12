@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { A, useRoute } from "./context.jsx";
 import { Btn, Card, Icon, Mark, Pill, Wave } from "./ui.jsx";
 import { SampleRecording } from "./call-tools.jsx";
+import { BotFace } from "./grok-ui.jsx";
 export const EXTENSIONS = [
   {
     key: "international",
@@ -91,8 +92,9 @@ function FeatureArt({ type, interactive = false }) {
       ) : (
         <>
           <div className="feature-people">
-            <span>
-              ✳<small>Your agent</small>
+            <span className="feature-agent-person">
+              <BotFace size={52} tone="teal" />
+              <small>Your agent</small>
             </span>
             <i />
             <span>

@@ -16,7 +16,7 @@ The audio-free bridge remains the default.
 | Active call | Feature illustration and studio entry points | Existing floating navigation retains the sample call across pages and adds a join shortcut. Optional recording/transcription need a sample permission acknowledgement; pause/resume and separate transcript controls update shared call state. |
 
 The four new public pages and four direct studio/demo pages are rendered HTML,
-not images. The complete build is 28 React/Astryx pages plus the existing design
+not images. The complete build is 30 React/Astryx pages plus the existing design
 gallery. Public links cross the studio's CSP boundary as ordinary top-level
 links. Offline/Sites review uses the portable hash router and in-memory samples.
 
@@ -96,6 +96,17 @@ invalid capture options and no provider calls. DOM integration tests cover the
 plan/review flow, defaults retained across pages, join-muted/mute/leave without
 ending, capture acknowledgement, recording pause/resume, separate transcription,
 search/speaker filters, audio seeking, sample outcomes and real page links.
-Static checks cover 29 pages, including all new routes. `ffprobe` verifies a
+Static checks cover 31 pages, including all new routes. `ffprobe` verifies a
 34.104-second MP3 with 24 kHz stereo audio. Browser layout/playback/touch QA
 remains pending when the supported browser-control tool is unavailable.
+
+## Focused studio redesign
+
+The home screen now leads with a focused call and optional transcript. The new
+`/studio/connections/` and `/studio/demo/connections/` pages search saved destination
+drafts. Listen in plays the existing local fictional sample without microphone
+access. Playback stays mounted across studio routes and drives the enabled sample
+transcript clock. Leaving or ending stops playback; a failed or cancelled play
+attempt never creates a listening participant. Routing review keeps an in-tab
+proposed destination and never changes the active recipient. See
+[Grokbot-inspired redesign](GROKBOT_REDESIGN.md).

@@ -27,8 +27,14 @@ import {
   Loop,
 } from "./ui.jsx";
 import { CallExtensions } from "./call-tools.jsx";
-import { ExtensionShortcuts } from "./features.jsx";
 import { DEFAULT_CAPTURE } from "../../shared/call-plans.mjs";
+import { BotFace } from "./grok-ui.jsx";
+import {
+  ConnectionDashboard,
+  ConnectionsPage,
+  RoutingReview,
+} from "./connection-hub.jsx";
+import sampleAudio from "./samples/sample-call.mp3";
 const empty = () => ({
   call_plans: [],
   capture_preferences: { ...DEFAULT_CAPTURE },
@@ -100,6 +106,10 @@ export function Studio({ mode, setMode, isDemo }) {
     [search, setSearch] = useState(""),
     [filter, setFilter] = useState("all"),
     [joinOpen, setJoinOpen] = useState(false);
+  const [routingOpen, setRoutingOpen] = useState(false);
+  const [routingDestination, setRoutingDestination] = useState("");
+  const sampleAudioRef = useRef(null);
+  const samplePlayAttempt = useRef(0);
   const [call, setCall] = useState({
       active: isDemo,
       muted: false,
@@ -411,6 +421,8 @@ export function Studio({ mode, setMode, isDemo }) {
   };
   const endCall = () => {
     if (isDemo) {
+      samplePlayAttempt.current++;
+      if (call.listening) sampleAudioRef.current?.pause();
       setCall((c) => ({
         ...c,
         active: false,
@@ -432,6 +444,56 @@ export function Studio({ mode, setMode, isDemo }) {
     }
   };
   const returnCall = () => go(studioBase + "call/");
+  const reviewRouting = (destinationId = "") => {
+    setRoutingDestination(destinationId);
+    setRoutingOpen(true);
+  };
+  const listenToSample = async () => {
+    if (!isDemo || !call.active || !sampleAudioRef.current) return;
+    const audio = sampleAudioRef.current;
+    const attempt = ++samplePlayAttempt.current;
+    try {
+      await audio.play();
+      if (attempt !== samplePlayAttempt.current) {
+        audio.pause();
+        return;
+      }
+      setCall((c) => ({
+        ...c,
+        listening: true,
+        playbackPaused: false,
+        samplePosition: audio.currentTime,
+        joined: true,
+        userMuted: true,
+      }));
+      notify(
+        "Listening to fictional sample audio. No microphone or live call.",
+      );
+    } catch {
+      if (attempt === samplePlayAttempt.current)
+        notify("Playback could not start. Try the sample audio controls.");
+    }
+  };
+  const leaveListening = () => {
+    samplePlayAttempt.current++;
+    sampleAudioRef.current?.pause();
+    setCall((c) => ({ ...c, listening: false, joined: false }));
+    notify("You left sample playback. The agent continues the simulated call.");
+  };
+  useEffect(() => {
+    if (sampleAudioRef.current) sampleAudioRef.current.muted = call.muted;
+    if (call.listening && (!call.active || !call.joined)) {
+      sampleAudioRef.current?.pause();
+      setCall((c) => ({ ...c, listening: false }));
+    }
+  }, [call.active, call.joined, call.listening, call.muted]);
+  useEffect(
+    () => () => {
+      if (samplePlayAttempt.current) sampleAudioRef.current?.pause();
+      samplePlayAttempt.current++;
+    },
+    [],
+  );
   const restartCall = () => {
     if (isDemo) {
       setCall({
@@ -553,7 +615,9 @@ export function Studio({ mode, setMode, isDemo }) {
       }
     >
       <SideNavSection title="Workspace" isHeaderHidden={compact && !mobile}>
-        {NAV.map(([id, label]) => (
+        {NAV.filter(([id]) =>
+          ["overview", "connections", "calls", "routes", "memory"].includes(id),
+        ).map(([id, label]) => (
           <SideNavItem
             key={id}
             label={label}
@@ -566,6 +630,24 @@ export function Studio({ mode, setMode, isDemo }) {
                 <span className="nav-count">{count}</span>
               ) : undefined
             }
+            className="real-nav-item"
+          />
+        ))}
+      </SideNavSection>
+      <SideNavSection title="Manage" isHeaderHidden={compact && !mobile}>
+        {NAV.filter(
+          ([id]) =>
+            !["overview", "connections", "calls", "routes", "memory"].includes(
+              id,
+            ),
+        ).map(([id, label]) => (
+          <SideNavItem
+            key={id}
+            label={label}
+            icon={<Icon name={id} size={17} />}
+            isSelected={page === id}
+            href={href(navTo(id))}
+            onClick={(e) => link(e, navTo(id))}
             className="real-nav-item"
           />
         ))}
@@ -652,12 +734,24 @@ export function Studio({ mode, setMode, isDemo }) {
               notify={notify}
               joinOpen={joinOpen}
               setJoinOpen={setJoinOpen}
+              onListen={listenToSample}
+              onRoute={reviewRouting}
             />
           ) : page === "overview" ? (
-            <>
-              <Overview {...shared} integration={integration} />
-              <ExtensionShortcuts navTo={navTo} />
-            </>
+            <ConnectionDashboard
+              {...shared}
+              call={call}
+              onNew={() => setNewDraft(true)}
+              onListen={listenToSample}
+              onRoute={reviewRouting}
+              onRestart={restartCall}
+            />
+          ) : page === "connections" ? (
+            <ConnectionsPage
+              {...shared}
+              onNew={() => setNewDraft(true)}
+              onRoute={reviewRouting}
+            />
           ) : page === "routes" ? (
             <Routes
               {...shared}
@@ -717,6 +811,68 @@ export function Studio({ mode, setMode, isDemo }) {
         onClose={() => setDetail(null)}
         archive={archive}
       />
+      <RoutingReview
+        open={routingOpen}
+        destinationId={routingDestination}
+        routes={snapshot.routes}
+        call={call}
+        isDemo={isDemo}
+        onClose={() => setRoutingOpen(false)}
+        onSave={(route) => {
+          if (isDemo)
+            setCall((c) => ({
+              ...c,
+              proposedRoute: {
+                id: route.id,
+                label: route.label,
+                destination: route.destination,
+              },
+            }));
+          notify(
+            isDemo
+              ? "Routing preview saved. No call transferred."
+              : "Destination reviewed. No routing activated.",
+          );
+        }}
+      />
+      {isDemo && (
+        <div className="sample-listen-dock" hidden={!call.listening}>
+          <BotFace
+            size={40}
+            state={call.playbackPaused ? "idle" : "working"}
+            tone="teal"
+          />
+          <div className="sample-listen-title">
+            <strong>
+              {call.playbackPaused
+                ? "Sample playback paused"
+                : "Listening to the sample"}
+            </strong>
+            <small>Fictional audio · Your microphone is off</small>
+          </div>
+          <audio
+            ref={sampleAudioRef}
+            src={sampleAudio}
+            controls
+            preload="none"
+            aria-label="Fictional sample call playback"
+            onTimeUpdate={(event) => {
+              const position = event.currentTarget.currentTime;
+              setCall((c) => ({ ...c, samplePosition: position }));
+            }}
+            onPlay={() => setCall((c) => ({ ...c, playbackPaused: false }))}
+            onPause={() => setCall((c) => ({ ...c, playbackPaused: true }))}
+            onEnded={() =>
+              setCall((c) => ({ ...c, listening: false, joined: false }))
+            }
+          />
+          <IconBtn
+            label="Leave sample listening"
+            name="close"
+            onClick={leaveListening}
+          />
+        </div>
+      )}
       <div
         className={"toast-message " + (message ? "is-visible" : "")}
         role="status"
@@ -760,9 +916,7 @@ function CallCard({
             onClick={onReturn}
             aria-label="Return to the simulated London studio call"
           >
-            <span className="call-avatar">
-              <Icon name="phone" size={17} />
-            </span>
+            <BotFace size={compact ? 34 : 42} state="working" tone="teal" />
             {!compact && (
               <span>
                 <strong>London studio</strong>
@@ -924,176 +1078,6 @@ function RouteRows({ routes, setDetail, emptyAction }) {
     </div>
   );
 }
-function Overview({ snapshot, setNewDraft, setDetail, integration, navTo }) {
-  const active = snapshot.routes.filter((r) => r.status === "draft");
-  return (
-    <>
-      <PageHead
-        eyebrow="A LITTLE LESS TO MANAGE"
-        title={
-          <>
-            Everything, a little
-            <br className="desktop-break" /> more connected.
-          </>
-        }
-        description="A quiet space for your next conversation."
-        action={
-          <Btn
-            label="New route draft"
-            icon="plus"
-            primary
-            end={null}
-            onClick={() => setNewDraft(true)}
-          />
-        }
-      />
-      <div className="workspace-stats">
-        <Card className="stat-tile" padding={0}>
-          <span>
-            ROUTING STATUS
-            <Icon name="connection" size={14} />
-          </span>
-          <strong>
-            <i className="status-orb" />
-            Paused
-          </strong>
-          <small>Prepared with intention.</small>
-        </Card>
-        <Card className="stat-tile" padding={0}>
-          <span>
-            SAVED DESTINATIONS
-            <Icon name="routes" size={14} />
-          </span>
-          <strong>
-            {String(active.length).padStart(2, "0")}
-            <em>route drafts</em>
-          </strong>
-          <small>One place for every detail.</small>
-        </Card>
-        <Card className="stat-tile" padding={0}>
-          <span>
-            YOUR BACKEND
-            <Icon name="shield" size={14} />
-          </span>
-          <strong className="connection-value">
-            {integration.status === "connected"
-              ? "Connected"
-              : snapshot.integration_configured
-                ? "Ready to inspect"
-                : "Not connected"}
-          </strong>
-          <A to={navTo("connection")}>
-            View connection
-            <Icon name="diagonal" size={12} />
-          </A>
-        </Card>
-      </div>
-      <div className="workspace-bento">
-        <Card className="next-connection-card" padding={0}>
-          <span className="eyebrow">THE NEXT LITTLE CONNECTION</span>
-          <h2>
-            Good things start
-            <br />
-            with a little preparation.
-          </h2>
-          <p>
-            A name. A destination.
-            <br />A clear next step.
-          </p>
-          <Btn
-            label="Prepare a draft"
-            end="diagonal"
-            onClick={() => setNewDraft(true)}
-          />
-          <div className="card-loop">
-            <Loop variant="small" />
-          </div>
-          <span className="card-note">
-            <Icon name="shield" size={12} />A draft never places a call.
-          </span>
-        </Card>
-        <Card className="workspace-steps" padding={0}>
-          <div className="section-title">
-            <h2>Make it yours.</h2>
-            <small>{active.length ? "02" : "01"} / 03</small>
-          </div>
-          <p>A few considered details.</p>
-          <div className="setup-step complete">
-            <span>
-              <Icon name="check" size={13} />
-            </span>
-            <div>
-              <strong>Explore your workspace</strong>
-              <small>You’re right where you need to be.</small>
-            </div>
-          </div>
-          <button
-            className={"setup-step " + (active.length ? "complete" : "")}
-            type="button"
-            onClick={() => setNewDraft(true)}
-          >
-            <span>
-              {active.length ? <Icon name="check" size={13} /> : "02"}
-            </span>
-            <div>
-              <strong>Prepare a route draft</strong>
-              <small>A destination to start with.</small>
-            </div>
-            <Icon name="diagonal" size={12} />
-          </button>
-          <A to={navTo("connection")} className="setup-step">
-            <span>03</span>
-            <div>
-              <strong>Connect your private backend</strong>
-              <small>Inspect your own setup.</small>
-            </div>
-            <Icon name="diagonal" size={12} />
-          </A>
-        </Card>
-      </div>
-      <Card className="destinations-card" padding={0}>
-        <div className="section-title">
-          <h2>
-            Your next connections.<span>{active.length}</span>
-          </h2>
-          <A to={navTo("routes")} className="text-action">
-            View all
-            <Icon name="diagonal" size={13} />
-          </A>
-        </div>
-        <RouteRows
-          routes={active.slice(0, 4)}
-          setDetail={setDetail}
-          emptyAction={() => setNewDraft(true)}
-        />
-      </Card>
-      <div className="workspace-bottom-row">
-        <Card className="guidance-summary" padding={0}>
-          <span className="guidance-orb">✳</span>
-          <div>
-            <span className="eyebrow">YOUR PACE. YOUR PREFERENCE.</span>
-            <h3>
-              {snapshot.settings.experience[0].toUpperCase() +
-                snapshot.settings.experience.slice(1)}{" "}
-              feels right.
-            </h3>
-            <p>The same checks. A little more or less guidance.</p>
-          </div>
-          <A to={navTo("settings")} aria-label="Change guidance preference">
-            <Icon name="diagonal" size={17} />
-          </A>
-        </Card>
-        <div className="workspace-principle">
-          <Icon name="shield" size={21} />
-          <p>
-            Permission before connection.
-            <span>Every future live route needs its own review.</span>
-          </p>
-        </div>
-      </div>
-    </>
-  );
-}
 function Routes({
   snapshot,
   setNewDraft,
@@ -1114,8 +1098,8 @@ function Routes({
     <>
       <PageHead
         eyebrow="DESTINATIONS, CONSIDERED"
-        title="Your next connections."
-        description="A little preparation, all in one place."
+        title="Routing."
+        description="Prepare a destination. Review every route before it connects."
         action={
           <Btn
             label="New route draft"

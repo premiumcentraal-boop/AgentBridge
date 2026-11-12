@@ -422,3 +422,14 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
   checks across 29 pages and 12 geometry/DOM tests (170 total). `ffprobe` confirms 24 kHz stereo MP3. Browser
   layout, playback and touch QA remain pending without supported browser tools.
 - Reuses the same owner-private mobile Site and draft PR #39.
+
+
+## 2026-11-12 — Grokbot-inspired connection-first redesign
+
+- Applied the owner's supplied reference: monochrome grouped surfaces, system typography, expressive original state avatars, rounded controls and a complete light appearance.
+- Rebuilt the public hero/task sections while preserving the tagline and the existing country-line animation in a worldwide section.
+- Replaced the studio overview with a focused call/transcript hub; simplified primary navigation and added searchable Connections routes.
+- Added one-tap fictional sample listening with a persistent native player, muted entry and playback-aligned optional transcript. Leaving keeps the simulated agent call going; playback errors and pending-play cancellation are handled.
+- Added routing review from calls/connections. It saves an in-tab proposal without transferring or changing a carrier route. Private mode is review-only.
+- Added DOM journeys for connection creation/search, routing review, cross-page playback, transcript timing and playback failures/cancellation. Browser QA remains unverified because the supported Sites browser helper is unavailable.
+- Validation: `npm run ci` passes 151 backend/security checks, seven structural checks across 31 pages and 15 geometry/DOM journeys (173 total).

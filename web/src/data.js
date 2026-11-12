@@ -1,9 +1,10 @@
 export const NAV = [
-  ["overview", "Overview"],
+  ["overview", "Home"],
+  ["connections", "Connections"],
   ["calls", "Calls"],
-  ["memory", "Recordings & transcripts"],
-  ["routes", "Route drafts"],
-  ["connection", "Connection"],
+  ["routes", "Routing"],
+  ["memory", "Transcripts"],
+  ["connection", "Calling setup"],
   ["activity", "Activity"],
   ["settings", "Settings"],
   ["design", "Design boards"],
@@ -26,6 +27,7 @@ export const WEB_PAGES = [
   "/studio/demo/",
   ...[
     "routes",
+    "connections",
     "calls",
     "memory",
     "connection",

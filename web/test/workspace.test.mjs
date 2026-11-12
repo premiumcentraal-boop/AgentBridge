@@ -336,8 +336,15 @@ test("draft dialog validates, saves, filters, archives and keeps guidance betwee
   assert.equal(document.querySelector(".foundation-app").dataset.mode, "light");
   await navigate(document, "/studio/demo/");
   assert.match(
-    document.querySelector(".guidance-summary").textContent,
-    /Guided feels right/,
+    document.querySelector("main h1").textContent,
+    /Your connections/,
+  );
+  await navigate(document, "/studio/demo/settings/");
+  assert.match(
+    document.querySelector(
+      '.guidance-options [role="radio"][aria-checked="true"]',
+    ).textContent,
+    /Guided/,
   );
   await navigate(document, "/studio/demo/design/");
   assert.equal(
@@ -458,6 +465,205 @@ function fieldValue(window, element, value) {
     }),
   );
 }
+
+test("connections hub adds and searches a destination and reviews routing without transferring the sample call", async (t) => {
+  const { dom, window, document, errors, requests } = setup(
+    "file:///AgentBridge-Working-Website.html#/studio/demo/",
+  );
+  t.after(() => dom.window.close());
+  await waitFor(() => document.title === "Your workspace | AgentBridge");
+  assert.match(
+    document.querySelector("main h1").textContent,
+    /Your connections/,
+  );
+  named(document, "New connection").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Create a route draft"]'),
+  );
+  const dialog = document.querySelector(
+    'dialog[open][aria-label="Create a route draft"]',
+  );
+  const [label, number] = dialog.querySelectorAll("input");
+  change(window, label, "Tokyo office");
+  change(window, number, "+81 3 1234 5678");
+  await waitFor(() => number.value === "+81 3 1234 5678");
+  dialog
+    .querySelector("form")
+    .dispatchEvent(
+      new window.Event("submit", { bubbles: true, cancelable: true }),
+    );
+  await waitFor(
+    () =>
+      !document.querySelector(
+        'dialog[open][aria-label="Create a route draft"]',
+      ),
+  );
+  await navigate(document, "/studio/demo/connections/");
+  fieldValue(
+    window,
+    document.querySelector('input[aria-label="Search connections"]'),
+    "tokyo",
+  );
+  await waitFor(
+    () => document.querySelectorAll(".hub-connection-row").length === 1,
+  );
+  assert.match(
+    document.querySelector(".hub-connection-row").textContent,
+    /\+81312345678/,
+  );
+  named(document, "Route to Tokyo office").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Review call routing"]'),
+  );
+  await waitFor(() =>
+    document
+      .querySelector(".routing-review-path")
+      .textContent.includes("Tokyo office"),
+  );
+  assert.match(
+    document.querySelector(".routing-review-dialog").textContent,
+    /No transfer/,
+  );
+  named(document, "Save routing preview").click();
+  await waitFor(() =>
+    document
+      .querySelector(".toast-message")
+      .textContent.includes("No call transferred"),
+  );
+  named(document, "Return to simulated call").click();
+  await waitFor(() => document.querySelector(".hub-routing-summary"));
+  assert.match(
+    document.querySelector(".hub-routing-summary").textContent,
+    /Tokyo office.*No transfer made/,
+  );
+  assert.match(
+    document.querySelector(".call-recipient strong").textContent,
+    /London studio/,
+  );
+  assert.match(
+    document.querySelector(".live-card-top").textContent,
+    /connected/,
+  );
+  assert.deepEqual(requests, []);
+  assert.deepEqual(
+    errors.map((e) => e.message),
+    [],
+  );
+});
+
+test("one-tap sample listening stays across pages and timed transcript follows playback while capture stays optional", async (t) => {
+  const { dom, window, document, errors, requests } = setup(
+    "file:///AgentBridge-Working-Website.html#/studio/demo/",
+  );
+  t.after(() => dom.window.close());
+  // JSDOM has no decoder. Stub only media playback, then check the actual
+  // application events/state; this does not establish real-browser audio QA.
+  let plays = 0,
+    pauses = 0;
+  window.HTMLMediaElement.prototype.play = function () {
+    plays++;
+    this.dispatchEvent(new window.Event("play"));
+    return Promise.resolve();
+  };
+  window.HTMLMediaElement.prototype.pause = function () {
+    pauses++;
+    this.dispatchEvent(new window.Event("pause"));
+  };
+  await waitFor(() => document.title === "Your workspace | AgentBridge");
+  named(document, "Listen in").click();
+  await waitFor(
+    () => document.querySelector(".sample-listen-dock")?.hidden === false,
+  );
+  assert.equal(plays, 1);
+  const audio = document.querySelector(".sample-listen-dock audio");
+  assert.match(audio.getAttribute("src"), /^data:audio\/(?:mpeg|mp3);base64,/);
+  await navigate(document, "/studio/demo/connections/");
+  assert.equal(document.querySelector(".sample-listen-dock audio"), audio);
+  assert.equal(document.querySelector(".sample-listen-dock").hidden, false);
+  named(document, "Return to simulated call").click();
+  await waitFor(() =>
+    document
+      .querySelector(".call-participants")
+      ?.textContent.includes("Muted on entry"),
+  );
+  assert.match(
+    document.querySelector(".call-inline-transcript").textContent,
+    /Transcription is off/,
+  );
+  assert.ok(named(document, "Record sample call"));
+  named(document, "Transcribe sample call").click();
+  await waitFor(() => document.querySelector("dialog[open]"));
+  labelled(document, "Permission is confirmed in this sample").click();
+  named(document, "Enable sample transcription").click();
+  await waitFor(
+    () => document.querySelectorAll(".live-transcript-line").length === 1,
+  );
+  audio.currentTime = 17;
+  audio.dispatchEvent(new window.Event("timeupdate"));
+  await waitFor(
+    () => document.querySelectorAll(".live-transcript-line").length === 4,
+  );
+  assert.match(
+    document.querySelector(".live-transcript").textContent,
+    /D E M O two zero four/,
+  );
+  named(document, "Mute simulated call").click();
+  await waitFor(() => audio.muted === true);
+  named(document, "Leave sample listening").click();
+  await waitFor(
+    () => document.querySelector(".sample-listen-dock").hidden === true,
+  );
+  assert.ok(pauses >= 1);
+  assert.match(
+    document.querySelector(".live-card-top").textContent,
+    /connected/,
+  );
+  assert.ok(named(document, "Record sample call"));
+  assert.deepEqual(requests, []);
+  assert.deepEqual(
+    errors.map((e) => e.message),
+    [],
+  );
+});
+
+test("blocked playback does not join and ending a call cancels a pending sample listen", async (t) => {
+  const { dom, window, document, errors, requests } = setup(
+    "file:///AgentBridge-Working-Website.html#/studio/demo/",
+  );
+  t.after(() => dom.window.close());
+  let pauses = 0;
+  window.HTMLMediaElement.prototype.pause = function () {
+    pauses++;
+  };
+  window.HTMLMediaElement.prototype.play = () =>
+    Promise.reject(new Error("Playback blocked"));
+  await waitFor(() => document.title === "Your workspace | AgentBridge");
+  named(document, "Listen in").click();
+  await waitFor(() =>
+    document
+      .querySelector(".toast-message")
+      .textContent.includes("Playback could not start"),
+  );
+  assert.equal(document.querySelector(".sample-listen-dock").hidden, true);
+  let finishPlay;
+  window.HTMLMediaElement.prototype.play = () =>
+    new Promise((resolve) => {
+      finishPlay = resolve;
+    });
+  named(document, "Listen in").click();
+  named(document, "End simulated call").click();
+  finishPlay();
+  await waitFor(() => pauses >= 1);
+  await waitFor(() => document.querySelector(".call-idle"));
+  assert.equal(document.querySelector(".sample-listen-dock").hidden, true);
+  assert.ok(named(document, "Restart sample call"));
+  assert.deepEqual(requests, []);
+  assert.deepEqual(
+    errors.map((e) => e.message),
+    [],
+  );
+});
+
 test("international call planning saves optional capture choices and join defaults across studio pages", async (t) => {
   const { dom, window, document, errors, requests } = setup(
     "file:///AgentBridge-Working-Website.html#/studio/demo/calls/",
@@ -599,7 +805,11 @@ test("sample call joins and leaves without ending, requires capture permission a
   assert.equal(named(document, "Enable sample transcription").disabled, true);
   labelled(document, "Permission is confirmed in this sample").click();
   named(document, "Enable sample transcription").click();
-  await waitFor(() => document.querySelector(".live-transcript"));
+  await waitFor(() =>
+    [...document.querySelectorAll(".live-transcript button")].some(
+      (button) => button.textContent.trim() === "Show full sample transcript",
+    ),
+  );
   named(document, "Show full sample transcript").click();
   await waitFor(
     () => document.querySelectorAll(".live-transcript-line").length === 6,
