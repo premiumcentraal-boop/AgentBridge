@@ -64,7 +64,10 @@ async function reconcile(row,env,fetchImpl){
   }catch{return failed('CARRIER_LOOKUP_UNAVAILABLE');}
   if(!isObj(inbound)||!isObj(listing)||!Array.isArray(listing.data))
     return failed('INCOMPLETE_CARRIER_LOGS');
-  if(isObj(listing.links)&&listing.links.next)return failed('PAGINATED_CARRIER_LOGS');
+  if(!isObj(listing.links)||typeof listing.links.self!=='string'||!listing.links.self||
+     typeof listing.links.first!=='string'||!listing.links.first)
+    return failed('INCOMPLETE_CARRIER_PAGINATION');
+  if(listing.links.next)return failed('PAGINATED_CARRIER_LOGS');
   if(inbound.id!==row.provider_segment_id)return failed('INBOUND_LOG_MISMATCH');
   if(inbound.direction!=='inbound'||inbound.to!==env.US_BRIDGE_DID)
     return failed('INBOUND_LOG_MISMATCH');
