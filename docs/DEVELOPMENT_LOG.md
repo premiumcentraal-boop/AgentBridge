@@ -350,3 +350,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 ## 2026-11-12 — Post-commit transport-loss regression (draft PR #40)
 - Added an offline SignalWire PIN fault-injection regression where the database batch commits and its transport response throws afterward. The callback must hang up, preserve the committed `connect` event and single carrier-leg row, and deny both replay of the same PIN event and a new attempt against the stranded `connecting` reservation.
 - This test establishes conservative denial behavior, **not** automatic reconciliation or proof of carrier connection. The ambiguous reservation remains locked pending verified provider-state evidence and owner-authorized recovery. Real Cloudflare D1 execution and exact-head CI remain required; no routing flags, carrier resources, calls or deployments were changed.
+
+## 2026-11-12 — PIN carrier identity binding (draft PR #40; pending review)
+- Added migration 0005 with original challenge segment ID and SHA-256 caller digest columns on the SignalWire provider-event ledger. Existing NULL challenges fail closed; do not infer identity from untrusted callbacks. No plaintext caller number is added to the event ledger.
+- The initial signed inbound callback persists both identity fields before issuing a PIN challenge. Signed PIN callbacks must match the original segment and caller digest before writing a PIN replay event or consuming a PIN attempt; mismatches hang up.
+- Added offline signed cross-segment/caller-drift regression with successful original-identity continuation. Actual SignalWire segment-transition semantics and Cloudflare D1 migration/transaction behavior remain unverified; do not enable paid routing or merge before review and exact-head CI.
+- No calls, purchases, secrets, deployments, routing flag changes or merges.
