@@ -356,3 +356,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - The initial signed inbound callback persists both identity fields before issuing a PIN challenge. Signed PIN callbacks must match the original segment and caller digest before writing a PIN replay event or consuming a PIN attempt; mismatches hang up.
 - Added offline signed cross-segment/caller-drift regression with successful original-identity continuation. Actual SignalWire segment-transition semantics and Cloudflare D1 migration/transaction behavior remain unverified; do not enable paid routing or merge before review and exact-head CI.
 - No calls, purchases, secrets, deployments, routing flag changes or merges.
+
+## 2026-11-12 — PIN identity regression CI follow-up (draft PR #40)
+- Exact-head Actions run 43269796633 failed 1/168 tests: the original PIN flow fixture deliberately changed the inbound caller number but the helper-generated PIN callback used the default caller. New strict carrier-identity binding correctly rejected that callback, so the expected second PIN attempt did not occur (1 vs 2 at line 82).
+- Corrected the ordinary successful-flow fixture to use the same caller on both signed callbacks. The dedicated identity-drift regression still asserts mismatched caller/segment hang up before consuming attempts or creating legs.
+- This is a test-only correction; no routing flags, provider configuration, paid calls or deployment changes. Recheck exact-head CI; SignalWire segment semantics and real D1 behavior remain unverified.
