@@ -326,3 +326,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Made denial-only provider-event outcome writes best effort: a secondary database failure while recording a rejected inbound or PIN callback must not turn a safe hangup into a 500. The `pin_requested` authorization-binding event remains a required write; successful `connect` persistence still occurs atomically in `claim()`.
 - Added offline SQLite ABORT-trigger regressions for initial inbound no-reservation denial and PIN claim failure combined with denial-outcome failure, including a fresh successful PIN retry after recovery.
 - Committed on the isolated PR #40 branch only. Exact-head CI and independent Cloudflare D1 validation pending; no carrier calls, routing activation, purchases, payments, merges or deployments.
+
+## 2026-11-11 — PIN challenge persistence fail-closed (draft PR #40)
+- Require the initial SignalWire PIN challenge event to transition from `received` to `pin_requested` with exactly one durable database row update before emitting a prompt. Previously a thrown write could produce HTTP 500 and a silently ignored update could issue an unusable PIN prompt.
+- A thrown or zero-row challenge update now emits safe SWML hangup; no reservation claim or paid route is attempted. Added offline SQLite ABORT and IGNORE trigger regression cases, verifying no prompt, unchanged ready reservation, no carrier leg, and successful fresh challenge after recovery.
+- Existing claim transaction, connection event persistence, approval gates, provider flags and default-deny routing are unchanged. Exact-head CI and independent D1 validation pending at commit time; no calls, deployments or merges.
