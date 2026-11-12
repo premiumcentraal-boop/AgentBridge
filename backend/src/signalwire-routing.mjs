@@ -156,7 +156,14 @@ export async function handleSignalWireRouting(request,env={}){
   }
   // dtmf_pin: answer silently, collect digits, post them to the signed PIN URL.
   if(!row.pin_sha256){await denialOutcome(env,call.call_id,'swml_inbound','NO_PIN',row.id);return hangup();}
-  await setOutcome(env,call.call_id,'swml_inbound','pin_requested',row.id);
+  // Never issue a PIN challenge unless its reservation binding is durable.
+  // A failed or silently ignored write must hang up rather than prompt for
+  // digits that the follow-up endpoint cannot authenticate.
+  try{
+    const saved=await env.DB.prepare("UPDATE provider_events SET outcome='pin_requested',reservation_id=? WHERE provider='signalwire' AND provider_call_id=? AND event_type='swml_inbound' AND outcome='received'")
+      .bind(row.id,call.call_id).run();
+    if(saved.meta?.changes!==1)return hangup();
+  }catch{return hangup();}
   return swml({version:'1.0.0',sections:{main:[
     {answer:{max_duration:check.caps.maxSeconds+PIN_WINDOW_SECONDS}},
     {prompt:{play:'silence:1',max_digits:PIN_DIGITS,terminators:'#',digit_timeout:5,initial_timeout:15}},
