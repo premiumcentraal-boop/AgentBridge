@@ -315,3 +315,13 @@ test('denied PIN claim remains hangup when CLAIM_LOST event update also aborts',
   assert.ok((await inbound(env,{call_id:retry})).doc.sections.main.some(x=>x.prompt));
   assert.equal(connectOf((await pin(env,retry,reservation.dtmf_pin)).doc)?.to,DEST);
 });
+
+test('inbound no-reservation denial survives provider-event outcome database failure',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  DB.raw.exec("CREATE TRIGGER fail_inbound_denial BEFORE UPDATE OF outcome ON provider_events WHEN NEW.outcome='no_approved_reservation' BEGIN SELECT RAISE(ABORT,'telemetry unavailable'); END");
+  const result=await inbound(env,{call_id:CID(342)});
+  assert.equal(result.status,200);
+  assert.ok(isHangup(result.doc));
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservations').get().n,0);
+  DB.raw.exec('DROP TRIGGER fail_inbound_denial');
+});
