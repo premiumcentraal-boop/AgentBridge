@@ -82,6 +82,30 @@ test('DTMF PIN mode: prompt, then connect only for the right single-use PIN on t
   assert.equal(DB.raw.prepare('SELECT pin_attempts FROM reservations WHERE id=?').get(b.id).pin_attempts,2);
 });
 
+test('signed PIN callbacks cannot switch segment or caller identity',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const b=await reserve(env,'pin-carrier-identity-bound');
+  await approveReservation(env,b.id);
+  const id=CID(960);
+  const initial=await inbound(env,{call_id:id});
+  assert.ok(initial.doc.sections.main.some(x=>x.prompt));
+  const event=DB.raw.prepare("SELECT challenge_segment_id,challenge_caller_sha256 FROM provider_events WHERE provider_call_id=? AND event_type='swml_inbound'").get(id);
+  assert.equal(event.challenge_segment_id,call().segment_id);
+  assert.match(event.challenge_caller_sha256,/^[a-f0-9]{64}$/);
+  const changed=[{segment_id:CID(961)},{from_number:'+13125550199'}];
+  for(const overrides of changed){
+    const response=await worker.fetch(swml({call:call({call_id:id,...overrides}),params:{digits:b.dtmf_pin}},PIN_URL),env);
+    assert.equal(response.status,200);
+    assert.ok(isHangup(await response.json()),'identity drift hangs up');
+    assert.equal(DB.raw.prepare('SELECT pin_attempts FROM reservations WHERE id=?').get(b.id).pin_attempts,0);
+    assert.equal(DB.raw.prepare("SELECT COUNT(*) AS n FROM provider_events WHERE provider_call_id=? AND event_type='swml_pin'").get(id).n,0);
+    assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(b.id).n,0);
+  }
+  const good=await pin(env,id,b.dtmf_pin);
+  assert.equal(connectOf(good.doc)?.to,DEST,'original identity still works');
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(b.id).status,'connecting');
+});
+
 test('DTMF follow-up cannot switch to a later reservation after first one is cancelled',async t=>{
   const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
   const first=await reserve(env,'pin-binding-A');
