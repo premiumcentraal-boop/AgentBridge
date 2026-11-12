@@ -59,9 +59,12 @@ function callMatches(call,env){
 /** Durable replay guard: one row per (call_id, event_type). Returns false on replay. */
 async function recordEvent(env,callId,eventType,now){
   try{
-    await env.DB.prepare("INSERT INTO provider_events (provider,provider_call_id,event_type,received_at,outcome) VALUES ('signalwire',?,?,?,'received')")
+    const inserted=await env.DB.prepare("INSERT INTO provider_events (provider,provider_call_id,event_type,received_at,outcome) VALUES ('signalwire',?,?,?,'received')")
       .bind(callId,eventType,now).run();
-    return true;
+    // A successful D1 response does not prove INSERT persisted: a trigger may
+    // silently suppress it. Never treat missing metadata or zero rows as a
+    // fresh, replay-protected event.
+    return inserted.meta?.changes===1;
   }catch{return false;}
 }
 async function setOutcome(env,callId,eventType,outcome,reservationId=null){
