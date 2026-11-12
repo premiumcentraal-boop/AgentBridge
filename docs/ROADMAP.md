@@ -78,3 +78,17 @@ Never auto-merge production-risk changes. Do not falsely mark a task complete wi
 
 ## Pending review — SignalWire inventory byte bound (issue #31)
 - [ ] Review and merge the streaming 250,000-byte upstream response cap and offline boundary tests; implemented on isolated branch, **not yet merged or deployed**.
+
+## 2026-11-12 — owner-selected calling extensions
+
+- [x] Product pages for International Calling, optional Recording & Transcription, and Let me join.
+- [x] Studio call planning/review/archive, shared schema validation and authenticated SQLite persistence.
+- [x] Independent capture, language/retention and browser/phone join preferences, off by default.
+- [x] Sample participant joining/muting/leaving alongside the original agent, with separate end-call behavior.
+- [x] Original fictional recording, player/downloads, searchable speaker-labelled transcript, timestamp seeking and sample outcome.
+- [ ] Authorized live carrier control and verified international routing/quotes exposed to the studio.
+- [ ] Actual consent-aware recording/transcription ingestion, private media storage and retention/deletion processing.
+- [ ] Conference-capable human joining with verified participant/callback or browser media authorization.
+
+The checked website features are preparation and sample flows. The remaining
+live integrations are detailed in [CALLING_EXTENSIONS.md](CALLING_EXTENSIONS.md).

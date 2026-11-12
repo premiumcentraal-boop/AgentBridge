@@ -11,7 +11,9 @@ import {
   Docs,
 } from "./public.jsx";
 import { Studio } from "./studio.jsx";
+import { Features, FeaturePage } from "./features.jsx";
 import { TITLES } from "./data.js";
+import { Signup } from "./signup.jsx";
 function Pages() {
   const { path, offline } = useRoute();
   const [mode, setMode] = useState("dark");
@@ -20,7 +22,17 @@ function Pages() {
     if (!studio) document.title = TITLES[path] || TITLES["/"];
   }, [path]);
   const page =
-    path === "/how-it-works/" ? (
+    path === "/signup/" ? (
+      <Signup />
+    ) : path === "/features/" ? (
+      <Features />
+    ) : path === "/international-calling/" ? (
+      <FeaturePage type="international" />
+    ) : path === "/call-memory/" ? (
+      <FeaturePage type="memory" />
+    ) : path === "/join-call/" ? (
+      <FeaturePage type="join" />
+    ) : path === "/how-it-works/" ? (
       <HowItWorks />
     ) : path === "/connect/" ? (
       <Connect />

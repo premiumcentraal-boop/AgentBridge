@@ -156,3 +156,125 @@ are used as AgentBridge page images.
 Validation separates DOM interaction tests and structural HTML audits from
 browser visual testing. This environment offers no browser-control tool, so
 actual browser layout, animation, touch and screen-reader QA remain pending.
+
+## 2026-11-11: connect agents worldwide
+
+The main tagline is now exactly “connect agents worldwide”. The homepage hero
+replaces its silver tube with a transit network: eight smooth paths, 16 country
+flag stations, and two oppositely travelling flag capsules per route. The loop
+is 40 seconds; every motion and illumination period divides that score.
+
+The geometry uses continuous cubic tangents. Arc-length measurements distribute
+travel time by distance, with a short dwell at each actual flag station. Long
+curves, staggered departures, muted base tracks, bright trailing segments and
+clear over/under crossings give the movement a rhythm. Flags remain upright
+through bends. The map is an illustration, not actual carrier activity.
+
+Native SVG motion avoids a JavaScript animation frame loop. The scene pauses
+off screen and when the tab is hidden, respects reduced-motion preferences and
+has an explicit pause/play button. Country vectors come from
+[flag-icons](https://github.com/lipis/flag-icons), with its MIT notice included
+in the build. Public pages and the sample studio can be reviewed on the private
+Sites preview; the production Railway setup remains separate.
+
+## 2026-11-11: approved bold bands and flag circles
+
+The selected visual reference is the broad, flat path graphic in
+[Humu, illustrated by Kenzi Quigg](https://www.kenziquigg.com/work/humu), with
+[Uned's Travel Lines](https://uned.studio/projects/transport-for-wales/) as a
+motion reference. The user approved this direction and requested country flags
+inside the circles. The composition and animation are original AgentBridge code;
+no artwork from those projects is embedded in the product.
+
+This iteration used four thick colour bands in pink, orange, cyan and yellow.
+Every leg is a straight run or a single circular 90-degree elbow. Flags reveal
+inside large white endpoint circles only after arrival. Outgoing legs start at
+those circles while the incoming bands trim away, creating an unbroken handoff.
+Four offset streams cover 16 countries over a seamless 40-second score.
+
+SVG symbols keep flags crisp and avoid nested image decoding. Arrival, flag
+reveal, continuation and tail trimming share one timeline. The scene pauses off
+screen and in hidden tabs; reduced-motion users receive a composed still with
+three flag circles and can explicitly choose to play. This still is available
+through CSS before JavaScript loads.
+
+## 2026-11-11: one connected minute-long relay
+
+This iteration replaced separate streams and stationary endpoint circles with
+one closed circuit and one moving flag circle. Sixteen straight or single-turn
+legs share exact endpoints and continuous tangents, including the last-to-first
+join. A coloured trail follows the circle; its trailing edge retraces the same
+timing 18 seconds later so no isolated pieces are left behind.
+
+The circle rides at the advancing end of the line, briefly holds at a handoff,
+crossfades to the next country's flag and continues in the next colour. Movement,
+stroke growth, trimming and flag exchange use the same 60-second score. Native
+SVG motion follows the combined circuit; no independently positioned flags or
+invisible jumps are used. The flag stays upright through each rounded corner.
+
+Pause/play, off-screen and hidden-tab suspension, theme switching and the
+reduced-motion still remain available. The still samples this same connected
+relay rather than displaying a separate arrangement.
+
+## 2026-11-11: preserve multiple overlapping routes
+
+That iteration restored the approved broad subway-route composition: four
+distinct pink, orange, cyan and yellow routes cross the canvas from different
+directions. Each route has its own moving flag circle. The routes cover all 16
+countries and share four actual transfer stations (GB, JP, NL and CH). Their
+incoming and outgoing connections use the same station coordinates.
+
+Each straight or single-turn leg draws to its destination with its flag at the
+leading end. The flag holds at the shared endpoint, changes country and departs
+along the next connection. The completed incoming band remains drawn until the
+outgoing connection has arrived, then fades as a whole. This retains long,
+overlapping coloured lines throughout the composition.
+
+Four staggered journeys share a 60-second score, with at least two flag circles
+inside the canvas throughout the minute. Each route enters and leaves beyond
+the frame; its repeat therefore happens outside the visible composition. Native
+motion and line growth use matching distances and easing. All flag circles are
+drawn above the routes and stay upright through bends. The reduced-motion still
+samples the same overlapping network; pause/play and visibility suspension stay
+available.
+
+## 2026-11-11: opposite edges meet, then a call connects
+
+That iteration sent two coloured country lines from opposite edges to one
+exact meeting point in the middle. Left/right and top/bottom pairings alternate,
+mixing straight approaches with single rounded turns. Flags ride the line heads
+and dissolve before their white circles could overlap at the centre.
+
+Both lines arrive together. The country lines then fade completely; a green
+telephone with a check mark and “Call connected” appears, holds briefly, and
+fades too. Twelve pairings cover all 16 country flags over a 60-second score.
+Successive pairs overlap gently so the scene continues while a call connects.
+
+Each pair is one paint layer containing its lines, flags and call icon. Layers
+paint in launch order, so the latest lines are above every older element.
+Previous-cycle copies paint behind the current-cycle layers and use visibility
+gates at the loop boundary. This keeps the order correct across the seam without
+moving animated DOM nodes or restarting native SVG clocks.
+
+Movement, stroke growth, line fades and call states share native SVG timing.
+Reduced motion samples the same composition; pause/play, off-screen suspension
+and hidden-tab suspension remain available.
+
+## 2026-11-11: accelerating contact and an immediate call response
+
+The current composition keeps the same country pairs, paths, colours and
+60-second loop. Each approach now has two continuous stages: a gentle launch
+and glide, followed by acceleration over the final quarter. Matching velocities
+at the transition prevent a pause before the lines join.
+
+Both lines meet after 3.6 seconds. That contact immediately triggers an expanding
+green ring and a phone that pops into place; the check mark draws on as the
+country lines fade. The confirmation clears at 4.72 seconds, before the next
+pair starts at 5 seconds. The previous call therefore cannot remain in the
+middle during a new approach. Initial playback and the reduced-motion still
+also start with approaching flags and no call icon.
+
+Line drawing and flag movement share the same two-stage native SVG timeline.
+The phone, pulse and check share the contact time. Tests verify accelerating
+end velocity, velocity continuity at the glide transition and the absence of
+any call icon during every approach across two complete loops.

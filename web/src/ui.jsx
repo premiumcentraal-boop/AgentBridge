@@ -8,6 +8,21 @@ import {
 } from "@astryxdesign/core/SegmentedControl";
 export { Button, Card, Badge, SegmentedControl, SegmentedControlItem };
 const paths = {
+  numbers:
+    "M5 3h14v18H5zM9 6h6M9 18h6M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01",
+  connections:
+    "M10 13a5 5 0 0 0 7 .3l3-3a5 5 0 0 0-7-7l-2 2M14 11a5 5 0 0 0-7-.3l-3 3a5 5 0 0 0 7 7l2-2",
+  headphones: "M4 14v-3a8 8 0 0 1 16 0v3M4 12H2v8h5v-8H4M20 12h2v8h-5v-8h3",
+  chevron: "m9 5 7 7-7 7",
+  calls:
+    "M5 3h4l1 5-2 2a14 14 0 0 0 6 6l2-2 5 1v4a2 2 0 0 1-2 2C10 20 4 14 3 5a2 2 0 0 1 2-2",
+  memory: "M5 3h14v18H5zM8 8h8M8 12h8M8 16h5",
+  transcript: "M5 3h14v18H5zM8 8h8M8 12h8M8 16h5",
+  record:
+    "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0",
+  join: "M9 21H3v-3a5 5 0 0 1 10 0M11 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M18 8v10M13 13h10",
+  browser: "M3 4h18v16H3zM3 9h18M6 6.5h.01M9 6.5h.01",
+  wave: "M3 10v4M7 6v12M11 3v18M15 7v10M19 5v14M23 10v4",
   overview: "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z",
   routes: "M5 19 19 5M5 5h14v14",
   connection:
@@ -21,6 +36,8 @@ const paths = {
   plus: "M12 5v14M5 12h14",
   close: "m6 6 12 12M6 18 18 6",
   menu: "M4 7h16M4 12h16M4 17h16",
+  play: "m9 5 11 7-11 7z",
+  pause: "M9 5v14M15 5v14",
   phone:
     "M5 3h4l1 5-2 2a14 14 0 0 0 6 6l2-2 5 1v4a2 2 0 0 1-2 2C10 20 4 14 3 5a2 2 0 0 1 2-2",
   mute: "M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8",
@@ -125,16 +142,28 @@ export function IconBtn({ label, name, className = "", ...props }) {
     />
   );
 }
-export function Wave({ muted = false }) {
+export function Wave({ muted = false, animated = false }) {
   return (
     <span
-      className={"voice-wave " + (muted ? "is-muted" : "")}
+      className={
+        "voice-wave " +
+        (muted ? "is-muted " : "") +
+        (animated ? "is-animated" : "")
+      }
       aria-hidden="true"
     >
       {Array.from({ length: 21 }, (_, i) => (
         <i
           key={i}
-          style={{ "--wave-h": 4 + (Math.sin(i * 1.3) + 1) * 6 + "px" }}
+          style={{
+            "--wave-h": 4 + (Math.sin(i * 1.3) + 1) * 6 + "px",
+            ...(animated
+              ? {
+                  "--wave-delay": (i % 7) * -0.16 + "s",
+                  "--wave-duration": 1.1 + (i % 5) * 0.12 + "s",
+                }
+              : {}),
+          }}
         />
       ))}
     </span>

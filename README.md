@@ -1,17 +1,21 @@
 # AgentBridge
-**Your agent. A wider world.**
+**connect agents worldwide**
 
 ## Victor product page & control studio
 
 The new product experience is prepared for **agentbridge.victor.ceo**, with a dedicated
 AgentBridge tab in the `victor-ceo` repository, following Meridian’s integration.
 
-- `/` — real React/Astryx product page, original silver connection loop, product walkthrough and rendered studio preview.
+- `/` — real React/Astryx product page, animated country-to-call connections, product walkthrough and rendered studio preview.
 - `/studio/demo/` — interactive sample workspace; changes reset when the tab reloads. The old `/studio/?demo=1` link still works.
 - `/design/` — three original design boards (Signal, Material, Atlas) with floating call navigation and an interactive component preview; also under **Design boards** in the studio. See [design rationale and references](docs/DESIGN_DIRECTIONS.md).
 - `/studio/` — private operator sign-in; server-backed route drafts, search, archive, activity,
-  guidance preferences, export and optional read-only private backend discovery.
+  call plans, capture/join preferences, export and optional read-only private backend discovery.
 - `npm start` — standalone Node service; persistent SQLite storage, no runtime dependencies.
+
+**Mobile preview:** [Open the working pages](https://agentbridge-worldwide.premiumcentraal.chatgpt.site).
+The preview is private to your ChatGPT account. Tap **Open studio** for the sample
+workspace. [Preview setup and limitations](docs/MOBILE_PREVIEW.md).
 
 **Railway deployment:** [new service, volume, access key and custom domain setup](docs/RAILWAY_STUDIO.md).
 The Docker service does not load or expose the telephony Worker. New studio drafts
@@ -32,24 +36,94 @@ A premium website and developer-first international telecom bridge for AI agents
 
 The public site and control studio share an Astryx/React 19 foundation. The
 interface uses actual Astryx navigation, buttons, cards, segmented controls,
-dialogs and inputs, with custom glass surfaces and original SVG connection art.
-Build output contains 20 rendered HTML pages, so direct links and public content
+dialogs and inputs, with monochrome surfaces, original status avatars and SVG connection art.
+Build output contains 33 rendered HTML pages, so direct links and public content
 work before JavaScript starts. The original `/design/` gallery remains available.
 
 - `/` — Product overview
+- `/signup/` — Early-access signup design preview; details stay in the tab and no account/request is created
+- `/features/` — Calling extensions overview
+- `/international-calling/` — International call planning walkthrough
+- `/call-memory/` — Optional recording/transcription and playable sample
+- `/join-call/` — Let me join walkthrough and interactive participant illustration
 - `/how-it-works/` — Interactive three-step walkthrough
 - `/pricing/` — Preview and self-hosting options
 - `/connect/` — Studio access and private backend setup
 - `/docs/` — Developer and deployment notes
 - `/studio/` — Protected operator workspace
 - `/studio/demo/` — Sample workspace with persistent in-tab floating call preview
-- `/studio/{routes,connection,activity,settings,call,design}/` — Direct studio pages
-- `/studio/demo/{routes,connection,activity,settings,call,design}/` — Matching demo pages
+- `/studio/{numbers,connections,routes,calls,memory,connection,activity,settings,call,design}/` — Direct studio pages
+- `/studio/demo/{numbers,connections,routes,calls,memory,connection,activity,settings,call,design}/` — Matching demo pages
 - `/app/` — Compatibility link to the sample studio
 
+The main hero says **connect agents worldwide**, with a signup-first action, secondary studio entry and an interactive sample-agent widget showing a three-message agent/business exchange. The sample waveform animates with reduced-motion support. A separate worldwide section preserves pairs of bold coloured country
+lines enter from opposite edges, glide, then accelerate into the exact centre.
+Their flags travel with the advancing line heads, then dissolve before the
+circles overlap. Contact triggers a green pulse, a phone that pops into place
+and a check mark that draws on as the country lines fade. The brief **Call
+connected** confirmation clears before the next pair starts. Twelve pairings cover
+all 16 flags over a 60-second cycle, with straight or single-turn approaches.
+Every new pair paints above the older lines, flags and call icons, including at
+the loop seam. The scene respects reduced motion, offers pause/play, and stops
+when off screen or the tab is hidden. Reduced motion samples the same scene as a
+still, including before JavaScript starts, with no call icon before contact.
+Flags are local SVG symbols from the
+MIT-licensed flag-icons project.
+
 The rail has an expanded/compact state, a simulated active call at the top,
-mute/return/end controls, six workspace items and a dark/light switch. On small
-screens it becomes a modal drawer with a persistent call strip.
+a clickable call card and a labelled Jump in action, six primary destinations, four compact management destinations and a theme switch. On mobile it slides in from the left at full viewport height. Mute/end controls stay in the call view, with confirmation before ending.
+
+### Grokbot-inspired redesign
+
+The owner-provided style guide informs the system typography, black/white grouped
+surfaces, rounded controls and original state avatars. Colour communicates state
+or agent identity. AgentBridge keeps its own name and connection mark; no Grok,
+xAI or Novra artwork is included. [Design and interaction details](docs/GROKBOT_REDESIGN.md).
+
+The studio starts with an active-call card and operational controls. **Numbers**
+shows dedicated routing numbers; **Connections** pairs each owned routing number
+with an outside destination. Country filters, country/name search, editing and
+removal are available. Legacy destination drafts remain under Unassigned destinations.
+**Listen in** plays the local fictional sample, enters muted and follows the user
+across studio pages. Its transcript follows the playback clock when enabled.
+Leaving listening keeps the simulated call going. Routing review saves an in-tab
+choice, with no transfer or carrier request. Production calling is unchanged.
+
+### Routing numbers and destinations
+
+A connection always has two numbers: a verified, owned routing number and an
+outside destination. New authenticated endpoints persist inventory references,
+connections and number-purchase requests. Each routing number has one current
+destination; unowned numbers, duplicate assignments and routing back to owned
+numbers are rejected. [Model, APIs and SignalWire import](docs/STUDIO_NUMBERS.md).
+
+Number purchase requests remain pending until confirmed provisioning; they do
+not charge a provider or create owned inventory. An operator can import an
+already purchased SignalWire voice number after a bounded, read-only inventory
+check. Live billing, customer provisioning and carrier-route application remain
+separate integrations. The static review uses example data, identified in Settings.
+
+### Calling extensions
+
+International Calling, optional Recording & Transcription, and **Let me join**
+now have rendered product pages and complete sample studio flows. The studio
+can save validated international call plans, independent capture preferences,
+transcript language/retention preferences and browser/phone join preferences.
+Private plans and preferences persist in SQLite; demo changes stay in memory.
+
+The sample call supports joining muted, muting your participant, leaving while
+its agent continues, optional recording permission, pause/resume and optional
+transcription. Call Memory includes an original fictional stereo recording,
+transcript search/speaker filters, timestamp-to-audio navigation, downloads and
+a clearly labelled sample outcome. The MP3 is bundled locally and uses synthetic
+stock demonstration voices; it is not a real Grok call or a real booking.
+
+**Live capability boundary:** these website flows do not add a chargeable
+carrier route, media pipeline, recording service or live conference integration.
+The current backend connection remains read-only discovery. Live international
+calling, recording/transcription and joining require their separately implemented
+and authorized integrations. Saving a plan or preference never enables them.
+See [calling extensions and integration requirements](docs/CALLING_EXTENSIONS.md).
 
 ### Run locally
 
@@ -74,7 +148,7 @@ private API, and route drafts reset when reloaded. This is an actual working UI,
 not a screenshot or replacement for a production deployment.
 
 `npm run test:web` exercises real bundled React interactions in a DOM harness;
-`npm run test:site` checks all 21 pages for landmarks, labels, links and assets.
+`npm run test:site` checks all 34 pages for landmarks, labels, links and assets.
 These checks do not replace browser layout and accessibility testing. For a
 project site, build and audit with `BASE_PATH=/AgentBridge`.
 
@@ -108,7 +182,7 @@ Follow **[docs/STAGING_DEPLOY.md](docs/STAGING_DEPLOY.md)** (owner runbook) and 
 **Important:** This is not approved for public paid use. Shared phone numbers, fluctuating AI caller IDs, caller-ID based access, stuck connecting calls, missing callback retries, exact carrier billing, multiple providers, KYC, fraud protection and regulatory obligations remain unresolved. Time-limited DID access alone is **not sufficient anti-fraud protection** for a commercial relay. **Caller ID can be spoofed**, so \`TEST_CALLER_E164\` is only a conservative additional private-test guard, not proof of identity or an authorization mechanism suitable for public service. Carrier-verified origin or a cryptographic per-call challenge remains required before expansion.
 
 ### Security rules
-Never put real carrier credentials into public site code or the Git repo. No authorization fallback or arbitrary forwarding. Never turn off webhook validation to make a test pass. No premium/emergency/short-code destinations. Avoid recording or transcribing calls. Do not present made-up telecom prices as live quotations.
+Never put real carrier credentials into public site code or the Git repo. No authorization fallback or arbitrary forwarding. Never turn off webhook validation to make a test pass. No premium/emergency/short-code destinations. The private-pilot Worker still has no audio capture. Optional live capture requires its own authorized integration and permission policy. Do not present made-up telecom prices as live quotations.
 
 ## Continuous development
 - \`.github/workflows/ci.yml\`: quality gate on push and pull requests.

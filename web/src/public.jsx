@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { A, useRoute } from "./context.jsx";
+import { ProductHome } from "./product-home.jsx";
+import { BotFace } from "./grok-ui.jsx";
 import {
   Button,
   Card,
@@ -16,6 +18,7 @@ import {
 
 const publicNav = [
   ["/", "Overview"],
+  ["/features/", "Features"],
   ["/how-it-works/", "How it works"],
   ["/connect/", "Get connected"],
   ["/docs/", "Developers"],
@@ -64,13 +67,15 @@ export function PublicShell({ children, mode, setMode }) {
             name={mode === "dark" ? "sun" : "moon"}
             onClick={() => setMode(mode === "dark" ? "light" : "dark")}
           />
+          <A to="/studio/" className="header-studio-link">
+            Open studio
+          </A>
           <Btn
-            label="Open studio"
-            target="_top"
+            label="Sign me up"
             primary
-            href={href("/studio/demo/")}
-            onClick={(e) => link(e, "/studio/demo/")}
-            end="diagonal"
+            href={href("/signup/")}
+            onClick={(e) => link(e, "/signup/")}
+            end="arrow"
           />
           <IconBtn
             className="mobile-nav-toggle"
@@ -89,9 +94,9 @@ export function PublicShell({ children, mode, setMode }) {
             <Mark />
             <span>AgentBridge</span>
           </A>
-          <p>A quiet connection. An independent Victor project.</p>
         </div>
         <nav aria-label="Footer navigation">
+          <A to="/features/">Calling extensions</A>
           <A to="/how-it-works/">How it works</A>
           <A to="/connect/">Get connected</A>
           <A to="/pricing/">Preview & plans</A>
@@ -105,7 +110,7 @@ export function PublicShell({ children, mode, setMode }) {
         </nav>
         <div className="footer-line">
           <span>© 2026 AgentBridge</span>
-          <span>Independent of Grok / xAI. Development preview.</span>
+          <span>Independent of Grok / xAI.</span>
           <a href="https://victor.ceo" target="_top">
             A product by VICTOR ↗
           </a>
@@ -147,7 +152,13 @@ export function ConnectionDiagram({ stage = 0, compact = false }) {
   return (
     <div className={"connection-diagram " + (compact ? "is-small" : "")}>
       <div className={"diagram-node " + (stage === 0 ? "selected" : "")}>
-        <span className="diagram-icon agent-glyph">✳</span>
+        <span className="diagram-icon agent-glyph">
+          <BotFace
+            size={48}
+            tone="teal"
+            state={stage === 0 ? "working" : "idle"}
+          />
+        </span>
         <span>Your agent</span>
         <small>One familiar voice</small>
       </div>
@@ -174,285 +185,8 @@ export function ConnectionDiagram({ stage = 0, compact = false }) {
     </div>
   );
 }
-function MiniWorkspace() {
-  return (
-    <div className="mini-workspace" aria-label="Illustrative control studio">
-      <div className="mini-top">
-        <span>
-          <Mark /> Your workspace
-        </span>
-        <Pill dot tone="sage">
-          Preview
-        </Pill>
-      </div>
-      <div className="mini-workspace-body">
-        <span className="eyebrow">YOUR NEXT CONNECTION</span>
-        <h3>A clear view of everything.</h3>
-        <div className="mini-rows">
-          {[
-            ["LD", "London studio", "Draft"],
-            ["NY", "New York office", "Draft"],
-          ].map(([avatar, name, status]) => (
-            <div key={name}>
-              <span className="initials">{avatar}</span>
-              <b>{name}</b>
-              <Pill>{status}</Pill>
-              <Icon name="diagonal" size={12} />
-            </div>
-          ))}
-        </div>
-        <p>
-          <i className="tiny-dot" />
-          Prepared, never placed automatically.
-        </p>
-      </div>
-    </div>
-  );
-}
 export function Home() {
-  const { href, link } = useRoute();
-  return (
-    <main id="main" tabIndex={-1}>
-      <section className="hero-section frame">
-        <div className="hero-copy">
-          <Pill dot>CONNECTION, WITHOUT THE COMPLEXITY</Pill>
-          <h1>
-            A little closer.
-            <br />
-            <span>A wider world.</span>
-          </h1>
-          <p>
-            The quiet connection between your AI agent and the people you need
-            to reach. One familiar voice. A little less in the way.
-          </p>
-          <div className="hero-actions">
-            <StudioLink />
-            <A to="/how-it-works/" className="text-action">
-              See how it works <Icon name="diagonal" size={15} />
-            </A>
-          </div>
-          <div className="hero-assurance">
-            <Icon name="shield" size={14} />
-            <span>Independent project · Development preview</span>
-          </div>
-        </div>
-        <div className="hero-object">
-          <div className="object-grid" />
-          <Loop />
-          <div className="floating-identity identity-agent">
-            <span className="agent-glyph">✳</span>
-            <div>
-              <small>THE VOICE</small>
-              <strong>Your agent</strong>
-            </div>
-            <i className="tiny-dot" />
-          </div>
-          <div className="floating-identity identity-bridge">
-            <Mark />
-            <span>Beautifully connected.</span>
-          </div>
-          <div className="object-caption">
-            <span>01 / A SINGLE CONVERSATION</span>
-            <span>MORE POSSIBILITY ↗</span>
-          </div>
-        </div>
-      </section>
-      <div className="connection-band frame">
-        <span>YOUR AGENT</span>
-        <span className="band-line" />
-        <Mark />
-        <span>AGENTBRIDGE</span>
-        <span className="band-line" />
-        <span>THE PEOPLE YOU NEED</span>
-      </div>
-      <section className="public-section frame">
-        <SectionHead
-          eyebrow="A SMALL CONNECTION. A BIGGER IDEA."
-          title={
-            <>
-              Less to manage.
-              <br />
-              <span>More room to connect.</span>
-            </>
-          }
-          description="Your agent already understands the request. AgentBridge is being built to help it reach the right person, with thoughtful checks along the way."
-        />
-        <div className="feature-bento">
-          <Card className="feature-card voice-feature" padding={0}>
-            <div className="feature-art voice-art">
-              <div className="voice-orb">
-                <Icon name="mute" size={27} />
-              </div>
-              <Wave />
-            </div>
-            <span className="eyebrow">ONE CONVERSATIONAL VOICE</span>
-            <h3>
-              Still your agent.
-              <br />
-              Still your conversation.
-            </h3>
-            <p>
-              Grok Bot stays the only speaking AI. No second personality halfway
-              through the call.
-            </p>
-          </Card>
-          <Card className="feature-card preparation-feature" padding={0}>
-            <div className="feature-art preparation-art">
-              <div className="soft-avatars">
-                <span>G</span>
-                <i />
-                <span>
-                  <Mark />
-                </span>
-              </div>
-              <Pill dot tone="sage">
-                A LITTLE PREPARATION
-              </Pill>
-            </div>
-            <span className="eyebrow">INTENTION BEFORE CONNECTION</span>
-            <h3>
-              Everything considered.
-              <br />
-              Nothing rushed.
-            </h3>
-            <p>
-              Destination permissions, caller proof and a verified price ceiling
-              belong before any future connection.
-            </p>
-          </Card>
-          <Card className="feature-card workspace-feature" padding={0}>
-            <MiniWorkspace />
-            <div>
-              <span className="eyebrow">A QUIETER WORKSPACE</span>
-              <h3>A place for every detail.</h3>
-              <p>
-                Save destination drafts. Inspect your setup. Keep a clear view
-                of what’s ready and what needs attention.
-              </p>
-              <StudioLink label="Look inside" primary={false} end="diagonal" />
-            </div>
-          </Card>
-        </div>
-      </section>
-      <section className="public-section flow-section frame">
-        <SectionHead
-          eyebrow="THE INTENDED FLOW"
-          title={
-            <>
-              One simple thread.
-              <br />
-              <span>From request to review.</span>
-            </>
-          }
-          description="Designed to begin in your agent’s conversation, with meaningful approval before anything connects."
-        />
-        <ConnectionDiagram stage={1} />
-        <div className="flow-caption">
-          <p>
-            Today, the studio lets you prepare and organise drafts. Live
-            end-to-end calling is still being verified.
-          </p>
-          <A to="/how-it-works/" className="text-action">
-            Follow the connection <Icon name="arrow" size={15} />
-          </A>
-        </div>
-      </section>
-      <section className="public-section frame">
-        <div className="studio-story">
-          <div>
-            <Pill>YOUR CONNECTION, YOUR CONTROL</Pill>
-            <h2>
-              Small details.
-              <br />
-              <span>A clearer picture.</span>
-            </h2>
-            <p>
-              A considered workspace, with everything close at hand. The
-              floating navigation keeps your context, while the rest of the
-              studio gives your next task room to breathe.
-            </p>
-            <StudioLink label="Open the working preview" />
-          </div>
-          <div className="studio-story-preview">
-            <div className="story-rail">
-              <Mark />
-              <div className="story-call">
-                <span className="eyebrow">DEMO CALL</span>
-                <strong>London studio</strong>
-                <Wave />
-                <div>
-                  <Icon name="mute" size={12} />
-                  <span>02:34</span>
-                  <Icon name="end" size={13} />
-                </div>
-              </div>
-              {["overview", "routes", "connection", "activity", "settings"].map(
-                (name) => (
-                  <span
-                    key={name}
-                    className={name === "routes" ? "is-current" : ""}
-                  >
-                    <Icon name={name} size={16} />
-                  </span>
-                ),
-              )}
-              <span className="story-avatar">V</span>
-            </div>
-            <MiniWorkspace />
-          </div>
-        </div>
-      </section>
-      <section className="public-section frame">
-        <SectionHead
-          eyebrow="CLEAR BY DESIGN"
-          title={
-            <>
-              Good connections
-              <br />
-              <span>start with trust.</span>
-            </>
-          }
-        />
-        <div className="trust-list">
-          {[
-            [
-              "01",
-              "Permission comes first.",
-              "A short-lived route, an allowed destination, and independent approval. Never an open forwarder.",
-            ],
-            [
-              "02",
-              "The voice stays yours.",
-              "No additional conversational AI. No call recordings or transcripts in the studio.",
-            ],
-            [
-              "03",
-              "Preview means preview.",
-              "The working interface manages drafts and setup. Live calling and payments are not enabled.",
-            ],
-          ].map(([n, title, copy]) => (
-            <article key={n}>
-              <span>{n}</span>
-              <h3>{title}</h3>
-              <p>{copy}</p>
-              <Icon name="diagonal" size={15} />
-            </article>
-          ))}
-        </div>
-      </section>
-      <section className="final-invitation frame">
-        <Mark />
-        <span className="eyebrow">ONE VOICE. MORE POSSIBILITY.</span>
-        <h2>
-          Make room for
-          <br />
-          <span>the next conversation.</span>
-        </h2>
-        <StudioLink label="Take a look inside" />
-        <p>A working preview. No account needed to explore.</p>
-      </section>
-    </main>
-  );
+  return <ProductHome />;
 }
 export function HowItWorks() {
   const [stage, setStage] = useState("prepare");
@@ -677,6 +411,7 @@ export function Pricing() {
               "Interactive control studio",
               "Destination draft creation",
               "Floating call-navigation demo",
+              "Optional capture and joining previews",
             ].map((s) => (
               <li key={s}>
                 <Icon name="check" size={15} />
@@ -700,7 +435,7 @@ export function Pricing() {
           <ul>
             {[
               "Protected operator sign-in",
-              "Persistent drafts and preferences",
+              "Persistent drafts, call plans and preferences",
               "Workspace activity and export",
               "Private backend discovery checks",
             ].map((s) => (

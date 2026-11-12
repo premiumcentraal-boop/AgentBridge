@@ -275,6 +275,184 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Known limitation: studio login throttling is keyed on the socket address, so behind Railway's proxy all clients share one 10-attempts/15-minutes bucket (a lockout nuisance, not a bypass; keys are 256-bit).
 - 2026-11-11: Dockerfile no longer uses a BuildKit secret mount (Railway rejects non-cache mounts); first Railway deploy at agentbridge.up.railway.app.
 
+## 2026-11-11 — worldwide transit animation and mobile preview
+
+- Changed the main tagline to “connect agents worldwide” and replaced the
+  homepage tube artwork with a coded 40-second SVG transit network: eight
+  routes, 16 flag stations, 16 flag travellers, both directions and overpasses.
+- Used smooth cubic joins, arc-length-weighted travel, station pauses, staggered
+  departures and subdued track colours to give simultaneous motion a rhythm.
+- Added native pause/play, reduced-motion handling, off-screen/tab-hidden
+  suspension and local MIT-licensed flag vectors with preserved notices.
+- Validation: 147 backend/security tests, seven structural tests over 21 pages
+  and six geometry/DOM checks pass. Geometry checks cover continuous tangents,
+  map bounds, country coverage and arrival/dwell timing in both directions.
+- Published a private static [Sites review](https://agentbridge-worldwide.premiumcentraal.chatgpt.site) for mobile viewing, separate
+  from the Railway service and real studio API. Browser visual QA remains
+  pending because this session exposes no supported browser-control tool.
+- This follows the merged product/studio PR #34; the worldwide hero is a new
+  focused change based on the current main branch, preserving the later Railway
+  Docker fix and backend work. CI result: [worldwide hero quality checks](https://github.com/premiumcentraal-boop/AgentBridge/actions?query=branch%3Afeat%2Fworldwide-transit-hero).
+
+## 2026-11-11 — approved bold paths with flags inside endpoint circles
+
+- Applied the user's approved Humu/Travel Lines reference: four broad flat-colour
+  bands, straight runs or one rounded 90-degree turn per leg, and country flags
+  inside large white circles. Flags reveal on arrival; each outgoing leg begins
+  at the prior circle before the incoming band clears. The loop stays 40 seconds.
+- Replaced nested SVG images with locally scoped inline flag symbols. Preserved
+  the flag-icons MIT notice. Added an immediate reduced-motion still, explicit
+  play override and the existing off-screen/hidden-tab suspension.
+- Validation: `npm run ci` passes: 147 backend/security tests, seven structural
+  checks over 21 pages and seven geometry/DOM tests. Checks cover one-turn limits,
+  all-country coverage, arrival timing and connected handoffs, large circle/flag
+  structure, pause/play, reduced-motion behavior and existing studio workflows.
+- Inspected standalone SVG artwork stills at several timeline positions. This
+  verifies artwork composition, not browser layout or touch behavior; browser
+  QA remains pending because the supported browser-control tool is unavailable.
+- Updating the same owner-private mobile Site, separate from Railway and its
+  operator API. [PR #39](https://github.com/premiumcentraal-boop/AgentBridge/pull/39)
+  and [CI result](https://github.com/premiumcentraal-boop/AgentBridge/pull/39/checks).
+
+## 2026-11-11 — moving flag baton and exact relay handoffs
+
+- Replaced independent routes and stationary flag circles with one closed,
+  60-second relay. Every leg ends exactly where the next starts, with continuous
+  tangents through the rounded corners and a matching final-to-first join.
+- A single flag circle travels at the advancing line end. It briefly holds at
+  each shared endpoint, changes country and continues. Line growth, the connected
+  trailing edge, flag exchange and circle movement use the same score.
+- Preserved pause/play, off-screen/hidden-tab suspension and reduced-motion
+  handling. The reduced-motion still is sampled from the same relay geometry.
+- Validation covers all handoffs, a full minute sampled at 50 ms intervals,
+  the moving flag's alignment with the line end, a single connected trail,
+  flag continuity, loop closure and existing studio interactions. Root CI has
+  147 backend/security tests, seven structural checks over 21 pages and eight
+  geometry/DOM tests.
+- Inspected standalone SVG artwork at several timeline positions. Browser
+  layout, native animation rendering, touch and screen-reader QA remain pending
+  because the supported browser-control tool is unavailable in this session.
+- The same owner-private [mobile Site](https://agentbridge-worldwide.premiumcentraal.chatgpt.site)
+  is the review target. Changes remain in [PR #39](https://github.com/premiumcentraal-boop/AgentBridge/pull/39),
+  with [checks](https://github.com/premiumcentraal-boop/AgentBridge/pull/39/checks).
+
+## 2026-11-11 — restore overlapping route composition
+
+- Restored four distinct bold routes with separate moving flag circles, covering
+  all 16 countries. GB, JP, NL and CH are shared transfer stations with matching
+  coordinates across routes. Each leg remains straight or has one rounded turn.
+- Each flag travels at its own line's advancing end and holds at the exact next
+  departure point. Completed incoming connections stay drawn until the outgoing
+  leg reaches its next destination, then fade as whole connections.
+- Staggered the four journeys over a 60-second cycle. At least two flag circles
+  remain inside the canvas throughout the minute. Entries, exits and repeat
+  transitions occur beyond the frame. Reduced motion samples these same routes.
+- Geometry/DOM checks cover route count, country coverage, the connected transfer
+  graph, exact handoffs, no immediate doubling back, simultaneous travellers,
+  native timing alignment, off-frame repeats and existing studio interactions.
+- Validation uses the root CI suite (147 backend/security tests, seven structural
+  checks over 21 pages and eight geometry/DOM tests) and standalone coded SVG
+  artwork samples. Browser layout, native playback and touch QA remain pending
+  because the supported browser-control tool is unavailable in this session.
+- Reuses the same owner-private [mobile Site](https://agentbridge-worldwide.premiumcentraal.chatgpt.site)
+  and [PR #39](https://github.com/premiumcentraal-boop/AgentBridge/pull/39).
+
+## 2026-11-11 — opposite-edge country connections and call states
+
+- Added twelve pairings that start at opposite edges and meet at one central
+  point over a 60-second score. All 16 flags appear; approaches remain straight
+  or make one rounded turn. Country circles ride the line heads and dissolve
+  before they overlap in the middle.
+- Country lines fade after meeting. Only after they have cleared does a green
+  telephone, check mark and “Call connected” appear, hold and fade away.
+- Grouped each pair's lines, flags and call icon into one paint layer. Newest
+  pairs paint last. Previous-cycle copies and native visibility gates preserve
+  that order at the minute seam without reordering or restarting animated nodes.
+- Preserved reduced-motion stills, explicit play override, pause/play and
+  off-screen/hidden-tab suspension. No browser animation rendering loop added.
+- Validation covers opposite edges, exact simultaneous meetings, flag clearance,
+  matching native drawing/motion timing, line-before-call sequencing, fading,
+  newest-on-top layering through every launch and two full minutes of repeats.
+  Root CI includes 147 backend/security tests, seven structural checks over
+  21 pages and eight geometry/DOM tests.
+- Inspected six coded SVG artwork samples, separate from browser playback/layout
+  QA. Browser playback, layout, touch and screen-reader verification remain
+  pending because the supported browser-control tool is unavailable here.
+- Reuses the same owner-private [mobile Site](https://agentbridge-worldwide.premiumcentraal.chatgpt.site)
+  and [PR #39](https://github.com/premiumcentraal-boop/AgentBridge/pull/39).
+
+## 2026-11-11 — accelerate into contact and remove early call icons
+
+- Kept the country pair geometry and 60-second loop. Changed the approach to a
+  continuous glide followed by acceleration over the final quarter, ending in
+  contact rather than slowing to a stop before the join.
+- Contact now triggers a green expanding ring, a phone pop and a drawn check
+  mark as the country lines fade. The confirmation clears before the next pair
+  starts. The previous call can no longer sit in the middle of a new approach;
+  initial playback and the reduced-motion still also have no early call icon.
+- Validation covers final velocity increase, matching transition velocities,
+  native motion/stroke timing, contact-only call/pulse/check activation and
+  no previous call during any approach across two full loops. Root CI includes
+  147 backend/security tests, seven structural checks and nine geometry/DOM tests.
+- Coded SVG artwork samples verify the contact sequence separately from browser
+  playback/layout QA, which remains unavailable through the supported browser
+  tools in this session. The same owner-private mobile Site and PR #39 are reused.
+
+## 2026-11-12 — calling extensions across product pages and studio
+
+- Added Features, International Calling, optional Recording & Transcription and
+  Let me join pages, with direct studio Calls and Call Memory routes. Home and
+  navigation link to the new flows; the original hero motion remains intact.
+- Added international call-plan preparation/review/archive and independent
+  capture, language, retention and browser/phone join preferences. Private
+  records persist through authenticated same-origin studio APIs and additive
+  SQLite tables. Validation rejects activation fields; saving never contacts a
+  provider or enables dialing, recording, transcription or joining.
+- Added a complete sample call workspace: join muted, mute/unmute yourself,
+  leave while the agent continues, separate end-call control, optional capture
+  acknowledgement, recording pause/resume and sample transcript controls.
+- Added an original fictional 34-second stereo sample, native playback,
+  transcript/speaker search, audio timestamp navigation, downloads and a clearly
+  labelled demonstration outcome. Audio is bundled locally; no microphone,
+  carrier callback or external transcription service is used in the preview.
+- Updated the product contract for optional capture/human participation while
+  preserving the audio-free default and the original conversational agent.
+  Documented the live calling/media/conference integrations still required.
+- Validation: `npm run ci` passes 151 backend/server tests, seven structural
+  checks across 29 pages and 12 geometry/DOM tests (170 total). `ffprobe` confirms 24 kHz stereo MP3. Browser
+  layout, playback and touch QA remain pending without supported browser tools.
+- Reuses the same owner-private mobile Site and draft PR #39.
+
+
+## 2026-11-12 — Grokbot-inspired connection-first redesign
+
+- Applied the owner's supplied reference: monochrome grouped surfaces, system typography, expressive original state avatars, rounded controls and a complete light appearance.
+- Rebuilt the public hero/task sections while preserving the tagline and the existing country-line animation in a worldwide section.
+- Replaced the studio overview with a focused call/transcript hub; simplified primary navigation and added searchable Connections routes.
+- Added one-tap fictional sample listening with a persistent native player, muted entry and playback-aligned optional transcript. Leaving keeps the simulated agent call going; playback errors and pending-play cancellation are handled.
+- Added routing review from calls/connections. It saves an in-tab proposal without transferring or changing a carrier route. Private mode is review-only.
+- Added DOM journeys for connection creation/search, routing review, cross-page playback, transcript timing and playback failures/cancellation. Browser QA remains unverified because the supported Sites browser helper is unavailable.
+- Validation: `npm run ci` passes 151 backend/security checks, seven structural checks across 31 pages and 15 geometry/DOM journeys (173 total).
+
+
+## 2026-11-12 — Homepage live-review feedback
+
+- Removed the hero kicker/working-preview notice; kept connect agents worldwide and the direct conversation copy.
+- Promoted Sign me up in the hero/header and added a secondary Open studio link. Added a dedicated early-access signup design preview without network collection or account-creation claims.
+- Added labelled agent/business/agent dialogue to the sample and animated its waveform with reduced-motion support. Verified real-call audio remains future work.
+- Replaced vague section copy with Agentic calling / Made easy, Same agent / Bigger reach and Your agent / Connected to the world. Removed the quiet-connection/Victor-project sentence; kept Grok/xAI independence.
+- Validation: 151 backend/security tests, seven structural checks over 32 pages and 16 geometry/DOM journeys pass (174 total).
+
+
+## 2026-11-12 — Operational studio, mobile drawer and owned-number pairing
+
+- Replaced the centered mobile menu with a full-height left drawer, compact navigation, backdrop/Escape dismissal, scroll lock and focus restoration. Removed mute/end from navigation and added a labelled Jump in action plus clickable call cards. Ending in the call view requires confirmation.
+- Removed promotional/sample-workspace banners, made studio surfaces neutral gray, and moved example-data context into Settings. The active call precedes country/number controls.
+- Added Numbers and a two-number connection editor with country/flag search, owned routing-number selection, editing/removal, and preservation of legacy destination drafts.
+- Added authenticated persistence and server ownership/one-destination/loop checks. Number requests are idempotent and pending; they cannot charge or create owned inventory. An operator-only SignalWire inventory import verifies an already purchased voice number before registration.
+- Corrected Docker context allowlisting to include shared schemas and the import tool. No carrier routing, provider purchasing, audience, DNS or Railway deployment was activated.
+- Validation: 157 backend/security checks, seven structural checks across 34 pages and 16 geometry/DOM journeys pass (180 total). Native-media and drawer tests use DOM stubs; browser layout/playback/touch QA remains unverified.
+
 ## 2026-11-11 — Transactional SignalWire claim and carrier-leg write (PR pending)
 - Corrected the two-step reservation claim: the reservation update and Voice Logs segment insertion now execute inside one D1 batch transaction, with a conditional segment insert tied to the claimed reservation and call ID.
 - A failed carrier-leg insert rolls back the reservation state instead of leaving an unconnected call in `connecting` and blocking the account.

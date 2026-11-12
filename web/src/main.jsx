@@ -5,6 +5,8 @@ import "@astryxdesign/core/astryx.css";
 import "@astryxdesign/theme-neutral/theme.css";
 import "./styles.css";
 import App from "./app.jsx";
+import "./grok-language.css";
+import "./studio-interface.css";
 const root = document.getElementById("foundation-root");
 const offline = root.dataset.offline === "true";
 const base = root.dataset.base || "";

@@ -5,7 +5,7 @@ control studio. Victor's `/agentbridge` route frames only the public product,
 following Meridian's integration. The studio opens at the top level and cannot
 be framed. Deploy AgentBridge first, then release the Victor tab.
 
-This service is a workspace for **drafts and read-only backend inspection**.
+This service is a workspace for **routing-number references, two-number connections, purchase requests, drafts, call plans, capture/join preferences and read-only backend inspection**.
 It does not load the telephony Worker, expose its webhooks, issue a live access
 number, approve a call, provision a number, take payment, or enable routing.
 The existing `backend/` Worker and its pending security PRs remain separate.
@@ -107,11 +107,11 @@ No number is purchased and no carrier settings change.
 
 ## Data and operations
 
-Route drafts contain destination phone numbers. Only the signed-in operator can
-read or write them. Current limits: 200 total drafts, latest 100 activity events
+Route drafts and call plans contain destination phone numbers; saved join preferences may contain an operator callback number. Only the signed-in operator can
+read or write them. Current limits: 200 route drafts and 200 call plans, latest 100 activity events
 in API responses. Export contains full destination numbers. Treat volume backups
-and exports as private. The service stores no audio, transcripts or provider
-credentials in SQLite. Studio preference changes affect its own presentation;
+and exports as private. The service stores no live audio, transcripts or provider
+credentials in SQLite. The bundled public sample is a fictional synthetic MP3. Preferences do not activate live capture, joining or any provider operation. Studio preference changes affect its own presentation;
 they do not persist preferences in Grok Bot or change carrier policy.
 
 Use Railway volume backups appropriate to your account before relying on stored
@@ -138,3 +138,35 @@ The development server binds only to `127.0.0.1:3000`; an explicit development
 mode enables the key `local-development`. Persistent local records live in the
 git-ignored `data/` directory. This development key is never accepted in
 production. Open `/studio/demo/` for a browser-only sample workspace.
+
+## Calling extension pages and APIs
+
+The build now renders `/features/`, `/international-calling/`, `/call-memory/`
+and `/join-call/`, plus `/studio/{calls,memory}/` and matching demo paths.
+Private APIs add authenticated, same-origin `POST /api/studio/call-plans`,
+`POST /api/studio/call-plans/:id/archive` and
+`PATCH /api/studio/capture-preferences`. Plans/preferences appear in overview
+and export responses. Schema validation is shared with the UI, but the server
+validates every request again. State and provider-activation fields are not
+accepted from the client. SQLite adds its studio-only tables idempotently.
+
+The current private integration still calls only setup/number-discovery tools.
+Live dialing, capture, transcription and conference joining need further carrier
+and media integration; deploying the website does not implement or enable them.
+The browser/phone join in the sample requests neither microphone nor callback.
+`Permissions-Policy` continues to deny microphone access. A real browser join
+needs a deliberately scoped microphone/media permission policy and authorization.
+Sample playback permits only local/data media in CSP and contacts no audio host.
+See [CALLING_EXTENSIONS.md](CALLING_EXTENSIONS.md).
+
+## Routing-number inventory and purchase requests
+
+Additive SQLite tables store verified routing numbers, outside-number pairings
+and pending purchase requests. Legacy drafts are preserved. Private studio writes
+require login, the configured origin and bounded JSON. A browser cannot mark
+a number owned or an order paid. Each routing number has one current destination.
+
+The allowlisted Docker context now includes shared validation modules and the
+operator number-import script. The HTTP service still does not load the telephony
+Worker or expose provider mutation endpoints. Read [STUDIO_NUMBERS.md](STUDIO_NUMBERS.md)
+for SignalWire credentials, exact inventory verification, import and limitations.
