@@ -384,3 +384,24 @@ test('inbound reservation SELECT outage returns safe hangup without claiming',as
   const retry=await inbound(env,{call_id:CID(363)});
   assert.ok(retry.doc.sections.main.some(x=>x.prompt),'recovery allows a new challenge');
 });
+
+
+test('post-commit missing D1 metadata never downgrades a durable connect event',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const reservation=await reserve(env,'ambiguous-claim-meta-1');
+  assert.equal((await approveReservation(env,reservation.id)).status,200);
+  const id=CID(370);
+  assert.ok((await inbound(env,{call_id:id})).doc.sections.main.some(x=>x.prompt));
+  const original=env.DB;
+  env.DB={prepare:(...args)=>original.prepare(...args),batch:async statements=>{
+    const results=await original.batch(statements);
+    return results.map(result=>({...result,meta:{}}));
+  }};
+  const result=await pin(env,id,reservation.dtmf_pin);
+  assert.equal(result.status,200);
+  assert.ok(isHangup(result.doc),'ambiguous post-commit response must not emit connect');
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,1);
+  assert.equal(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_pin'").get(id).outcome,'connect','denial telemetry must not overwrite committed connect');
+  env.DB=original;
+});
