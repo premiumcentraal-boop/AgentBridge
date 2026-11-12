@@ -336,3 +336,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added a carrier-facing fail-closed exception boundary around both signed SignalWire callback handlers. Unexpected D1 read/write exceptions now return hangup SWML rather than an unhandled HTTP 500; existing explicit signature/body rejection responses remain unchanged. A connect still requires successful authorization and atomic claim persistence.
 - Added offline regression tests for a PIN attempt counter UPDATE ABORT and an inbound approved-reservation SELECT outage. Tests assert valid hangup, unchanged ready reservation, zero carrier legs and successful fresh challenge after recovery.
 - Changes are on the unmerged integration branch only. Exact-head CI and independent Cloudflare D1 verification pending at commit time. No calls, paid routing, flags, provider resources, merges or deployments.
+
+## 2026-11-12 — PR #40: monotonic SignalWire event outcome on ambiguous commit
+- Restricted denial event updates to rows still marked `received`, so a post-commit missing-metadata result cannot rewrite a durable `connect` event as `CLAIM_LOST`.
+- Added an offline fault-injection regression that executes the real batch, strips response metadata, asserts safe hangup, and checks the committed `connect` event remains intact. The reservation can still remain `connecting` after an ambiguous commit; reconciliation is a separate unresolved P0 gate.
+- Changes remain on draft PR #40 only. No paid routing, deployment, calls, merges, or carrier changes. Exact-head CI pending.
