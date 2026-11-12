@@ -405,3 +405,40 @@ test('post-commit missing D1 metadata never downgrades a durable connect event',
   assert.equal(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_pin'").get(id).outcome,'connect','denial telemetry must not overwrite committed connect');
   env.DB=original;
 });
+
+
+test('silently ignored replay-event INSERT cannot authorize a PIN challenge',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const reservation=await reserve(env,'ignored-replay-event-1');
+  await approveReservation(env,reservation.id);
+  DB.raw.exec("CREATE TRIGGER ignore_inbound_event BEFORE INSERT ON provider_events WHEN NEW.event_type='swml_inbound' BEGIN SELECT RAISE(IGNORE); END");
+  const id=CID(380);
+  const result=await inbound(env,{call_id:id});
+  assert.equal(result.status,200);
+  assert.ok(isHangup(result.doc),'missing replay guard must not issue PIN prompt');
+  assert.equal(DB.raw.prepare("SELECT COUNT(*) AS n FROM provider_events WHERE provider_call_id=?").get(id).n,0);
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'ready');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,0);
+  DB.raw.exec('DROP TRIGGER ignore_inbound_event');
+  const retry=await inbound(env,{call_id:CID(381)});
+  assert.ok(retry.doc.sections.main.some(x=>x.prompt),'fresh durable event can prompt after recovery');
+});
+
+test('silently ignored PIN replay-event INSERT cannot claim a reservation',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const reservation=await reserve(env,'ignored-pin-event-1');
+  await approveReservation(env,reservation.id);
+  const id=CID(382);
+  assert.ok((await inbound(env,{call_id:id})).doc.sections.main.some(x=>x.prompt));
+  DB.raw.exec("CREATE TRIGGER ignore_pin_event BEFORE INSERT ON provider_events WHEN NEW.event_type='swml_pin' BEGIN SELECT RAISE(IGNORE); END");
+  const result=await pin(env,id,reservation.dtmf_pin);
+  assert.equal(result.status,200);
+  assert.ok(isHangup(result.doc),'missing PIN replay guard must not connect');
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'ready');
+  assert.equal(DB.raw.prepare('SELECT pin_attempts FROM reservations WHERE id=?').get(reservation.id).pin_attempts,0);
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,0);
+  DB.raw.exec('DROP TRIGGER ignore_pin_event');
+  const retryId=CID(383);
+  assert.ok((await inbound(env,{call_id:retryId})).doc.sections.main.some(x=>x.prompt));
+  assert.equal(connectOf((await pin(env,retryId,reservation.dtmf_pin)).doc)?.to,DEST);
+});
