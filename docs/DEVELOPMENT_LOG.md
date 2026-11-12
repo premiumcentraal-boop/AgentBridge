@@ -341,3 +341,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Restricted denial event updates to rows still marked `received`, so a post-commit missing-metadata result cannot rewrite a durable `connect` event as `CLAIM_LOST`.
 - Added an offline fault-injection regression that executes the real batch, strips response metadata, asserts safe hangup, and checks the committed `connect` event remains intact. The reservation can still remain `connecting` after an ambiguous commit; reconciliation is a separate unresolved P0 gate.
 - Changes remain on draft PR #40 only. No paid routing, deployment, calls, merges, or carrier changes. Exact-head CI pending.
+
+## 2026-11-12 — SignalWire replay-event durability (draft PR #40)
+- Changed the replay-event INSERT guard to require exactly one confirmed persisted row; a nonthrowing SQLite RAISE(IGNORE) or absent D1 write metadata now fails closed instead of treating a missing replay record as fresh.
+- Added offline trigger fault-injection regressions for both initial inbound and PIN callbacks, checking hangup, no carrier leg, unchanged ready reservation and fresh retry after recovery.
+- This does not resolve post-commit ambiguity or validate Cloudflare D1 production semantics. Changes remain unmerged; no paid routing, calls, provider purchases, secrets or deployment. Exact-head CI pending.
