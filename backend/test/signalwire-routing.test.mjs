@@ -90,7 +90,7 @@ test('signed PIN callbacks cannot switch segment or caller identity',async t=>{
   const initial=await inbound(env,{call_id:id});
   assert.ok(initial.doc.sections.main.some(x=>x.prompt));
   const event=DB.raw.prepare("SELECT challenge_segment_id,challenge_caller_sha256 FROM provider_events WHERE provider_call_id=? AND event_type='swml_inbound'").get(id);
-  assert.equal(event.challenge_segment_id,call().segment_id);
+  assert.equal(event.challenge_segment_id,call({call_id:id}).segment_id);
   assert.match(event.challenge_caller_sha256,/^[a-f0-9]{64}$/);
   const changed=[{segment_id:CID(961)},{from_number:'+13125550199'}];
   for(const overrides of changed){
