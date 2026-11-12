@@ -325,3 +325,25 @@ test('inbound no-reservation denial survives provider-event outcome database fai
   assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservations').get().n,0);
   DB.raw.exec('DROP TRIGGER fail_inbound_denial');
 });
+
+test('PIN prompt requires a durable challenge binding, including ignored and aborted writes',async t=>{
+  for(const [kind,trigger] of [
+    ['abort',"SELECT RAISE(ABORT,'injected challenge persistence failure')"],
+    ['ignore','SELECT RAISE(IGNORE)']
+  ]){
+    const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+    const reservation=await reserve(env,'challenge-write-'+kind);
+    await approveReservation(env,reservation.id);
+    DB.raw.exec("CREATE TRIGGER fail_challenge BEFORE UPDATE OF outcome ON provider_events WHEN NEW.outcome='pin_requested' BEGIN "+trigger+"; END");
+    const callId=CID(kind==='abort'?350:351);
+    const result=await inbound(env,{call_id:callId});
+    assert.equal(result.status,200,kind+' must return valid SWML');
+    assert.ok(isHangup(result.doc),kind+' must never prompt without durable binding');
+    assert.equal(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_inbound'").get(callId)?.outcome,'received');
+    assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'ready');
+    assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,0);
+    DB.raw.exec('DROP TRIGGER fail_challenge');
+    const retry=await inbound(env,{call_id:CID(kind==='abort'?352:353)});
+    assert.ok(retry.doc.sections.main.some(x=>x.prompt),'fresh challenge works after recovery');
+  }
+});
