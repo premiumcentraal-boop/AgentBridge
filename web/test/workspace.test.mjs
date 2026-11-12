@@ -523,7 +523,13 @@ test("international call planning saves optional capture choices and join defaul
   await waitFor(() => document.querySelector(".tools-success"));
   await navigate(document, "/studio/demo/call/");
   named(document, "Let me join").click();
-  await waitFor(() => document.querySelector("dialog[open]"));
+  // Opening the dialog and applying saved preferences happen in separate
+  // renders. Wait for the actual phone field before asserting its value.
+  await waitFor(() =>
+    [...document.querySelectorAll("dialog[open] label[for]")].some((el) =>
+      el.textContent.trim().startsWith("Number where I’ll join"),
+    ),
+  );
   assert.equal(
     labelled(document, "Number where I’ll join").value,
     "+31612345678",
