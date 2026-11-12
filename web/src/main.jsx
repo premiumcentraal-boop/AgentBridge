@@ -7,6 +7,7 @@ import "./styles.css";
 import App from "./app.jsx";
 import "./grok-language.css";
 import "./studio-interface.css";
+import "./studio-refinements.css";
 const root = document.getElementById("foundation-root");
 const offline = root.dataset.offline === "true";
 const base = root.dataset.base || "";

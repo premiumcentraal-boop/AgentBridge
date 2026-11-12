@@ -23,7 +23,8 @@ import {
   Wave,
   Loop,
 } from "./ui.jsx";
-import { CallExtensions } from "./call-tools.jsx";
+import { CallExtensions, SAMPLE_CALL } from "./call-tools.jsx";
+import { StudioSearch } from "./studio-search.jsx";
 import { DEFAULT_CAPTURE, CALL_COUNTRIES } from "../../shared/call-plans.mjs";
 import { BotFace } from "./grok-ui.jsx";
 import { RoutingReview } from "./connection-hub.jsx";
@@ -97,6 +98,8 @@ export function Studio({ mode, setMode, isDemo }) {
     [mobileOpen, setMobileOpen] = useState(false),
     [joinOpen, setJoinOpen] = useState(false);
   const [routingOpen, setRoutingOpen] = useState(false);
+  const [searchTarget, setSearchTarget] = useState(null);
+  const [connectionRecency, setConnectionRecency] = useState({});
   const [numberEditorOpen, setNumberEditorOpen] = useState(false);
   const [numberConnection, setNumberConnection] = useState(null);
   const [selectedRoutingNumber, setSelectedRoutingNumber] = useState("");
@@ -104,7 +107,6 @@ export function Studio({ mode, setMode, isDemo }) {
   const [routingDestination, setRoutingDestination] = useState("");
   const sampleAudioRef = useRef(null);
   const samplePlayAttempt = useRef(0);
-  const jumpTimer = useRef();
   const [call, setCall] = useState({
       active: isDemo,
       muted: false,
@@ -189,7 +191,6 @@ export function Studio({ mode, setMode, isDemo }) {
   useEffect(
     () => () => {
       clearTimeout(toastTimer.current);
-      clearTimeout(jumpTimer.current);
     },
     [],
   );
@@ -210,7 +211,7 @@ export function Studio({ mode, setMode, isDemo }) {
     message: text,
     created_at: new Date().toISOString(),
   });
-  const beginConnection = (numberId = "") => {
+  const beginConnection = (numberId = "", countryCode = "GB") => {
     const owned = (snapshot.routing_numbers || []).filter(
       (number) => number.status === "owned",
     );
@@ -222,11 +223,19 @@ export function Studio({ mode, setMode, isDemo }) {
             connection.routing_number_id === number.id,
         ),
     );
+    const country =
+      CALL_COUNTRIES.find((item) => item.code === countryCode) ||
+      CALL_COUNTRIES.find((item) => item.code === "GB");
+    setNumberConnection({
+      label: "",
+      country: country.code,
+      destination: "+" + country.prefix,
+      routing_number_id: numberId || free?.id || "",
+    });
     if (!numberId && !free) {
       setBuyNumberOpen(true);
       return;
     }
-    setNumberConnection(null);
     setSelectedRoutingNumber(numberId || free.id);
     setNumberEditorOpen(true);
   };
@@ -307,6 +316,8 @@ export function Studio({ mode, setMode, isDemo }) {
   };
   const saveNumberOrder = async (value, candidate) => {
     if (isDemo) {
+      if (!candidate || !/^\+1[2-9][0-9]{2}55501[0-9]{2}$/.test(candidate))
+        throw new Error("Choose an available number.");
       if (snapshot.routing_numbers.some((number) => number.e164 === candidate))
         throw new Error("This number has already been added.");
       if (snapshot.routing_numbers.length >= 100)
@@ -626,13 +637,37 @@ export function Studio({ mode, setMode, isDemo }) {
     setMobileOpen(false);
     returnCall();
   };
-  const jumpIntoCall = () => {
-    setMobileOpen(false);
-    returnCall();
-    clearTimeout(jumpTimer.current);
-    if (mobileOpen)
-      jumpTimer.current = setTimeout(() => setJoinOpen(true), 230);
-    else setJoinOpen(true);
+  const editConnection = (connection) => {
+    setConnectionRecency((current) => ({
+      ...current,
+      [connection.id]: Date.now(),
+    }));
+    setNumberConnection(connection);
+    setSelectedRoutingNumber(connection.routing_number_id);
+    setNumberEditorOpen(true);
+  };
+  const selectSearchResult = (entry) => {
+    if (entry.action === "buy") setBuyNumberOpen(true);
+    else if (entry.action === "connect") beginConnection();
+    else if (entry.action === "connection") editConnection(entry.record);
+    else if (entry.action === "number") {
+      setSearchTarget({
+        id: uuid(),
+        page: "numbers",
+        query: entry.record.e164,
+      });
+      go(navTo("numbers"));
+    } else if (entry.action === "country") {
+      setSearchTarget({
+        id: uuid(),
+        page: "connections",
+        country: entry.record.code,
+      });
+      go(navTo("connections"));
+    } else {
+      setSearchTarget(null);
+      go(navTo(entry.page));
+    }
   };
   const primaryIds = [
     "overview",
@@ -673,7 +708,6 @@ export function Studio({ mode, setMode, isDemo }) {
         compact={compact && !mobile}
         navigation
         onOpen={openCall}
-        onJump={jumpIntoCall}
       />
       <div className="studio-nav-primary">
         {NAV.filter(([id]) => primaryIds.includes(id)).map(([id, label]) => (
@@ -781,17 +815,16 @@ export function Studio({ mode, setMode, isDemo }) {
             <A to="/" className="text-action">
               Product page <Icon name="diagonal" size={13} />
             </A>
-            <span className="owner-dot">V</span>
+            <StudioSearch
+              snapshot={snapshot}
+              call={call}
+              onSelect={selectSearchResult}
+            />
           </div>
         </header>
         {call.active && !["overview", "call", "calls"].includes(page) && (
           <div className="mobile-current-call">
-            <ActiveCallCard
-              call={call}
-              navigation
-              onOpen={openCall}
-              onJump={jumpIntoCall}
-            />
+            <ActiveCallCard call={call} navigation onOpen={openCall} />
           </div>
         )}
         <main className="workspace-main" id="main" tabIndex={-1}>
@@ -819,20 +852,27 @@ export function Studio({ mode, setMode, isDemo }) {
               page,
             ) ? (
             <NumberWorkspace
-              key={page}
+              key={`${page}:${searchTarget?.page === page ? searchTarget.id || "" : ""}`}
               page={page}
               snapshot={snapshot}
               call={call}
               navTo={navTo}
               onOpenCall={openCall}
-              onJump={jumpIntoCall}
+              transcript={
+                isDemo && call.transcription ? SAMPLE_CALL.transcript : []
+              }
+              recentConnections={connectionRecency}
+              initialSearch={
+                searchTarget?.page === page ? searchTarget.query || "" : ""
+              }
+              initialCountry={
+                searchTarget?.page === page
+                  ? searchTarget.country || "all"
+                  : "all"
+              }
               onBuy={() => setBuyNumberOpen(true)}
               onAdd={beginConnection}
-              onEdit={(connection) => {
-                setNumberConnection(connection);
-                setSelectedRoutingNumber(connection.routing_number_id);
-                setNumberEditorOpen(true);
-              }}
+              onEdit={editConnection}
               onArchive={archiveNumberConnection}
               onLegacy={(route) => {
                 const free = snapshot.routing_numbers.find(
@@ -915,6 +955,10 @@ export function Studio({ mode, setMode, isDemo }) {
         isDemo={isDemo}
         onClose={() => setRoutingOpen(false)}
         onSave={(route) => {
+          setConnectionRecency((current) => ({
+            ...current,
+            [route.id]: Date.now(),
+          }));
           if (isDemo)
             setCall((c) => ({
               ...c,

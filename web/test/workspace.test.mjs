@@ -331,7 +331,7 @@ test("numbers are obtained before a new connection is paired; country search, ed
   );
   t.after(() => dom.window.close());
   await waitFor(() => document.title === "Connections | AgentBridge");
-  named(document, "Add connection").click();
+  named(document, "Connect a destination").click();
   await waitFor(() =>
     document.querySelector('dialog[open][aria-label="Add routing number"]'),
   );
@@ -581,7 +581,9 @@ function labelled(document, label) {
     el.textContent.trim().startsWith(label),
   );
   assert.ok(node, "Missing field: " + label);
-  const input = document.getElementById(node.htmlFor);
+  const input = (document.ownerDocument || document).getElementById(
+    node.htmlFor,
+  );
   assert.ok(input, "Missing labelled control: " + label);
   return input;
 }
@@ -638,7 +640,7 @@ test("mobile navigation is a dismissible left drawer with all destinations and a
     false,
   );
   assert.ok(drawer.querySelector(".active-call-numbers"));
-  assert.ok(named(drawer, "Jump in"));
+  assert.ok(named(drawer, "Call overview"));
   drawer.dispatchEvent(new window.Event("cancel", { cancelable: true }));
   await waitFor(() => !drawer.open);
   assert.equal(document.body.style.overflow, "");
@@ -668,8 +670,14 @@ test("mobile navigation is a dismissible left drawer with all destinations and a
   await waitFor(() => !drawer.open);
   trigger.click();
   await waitFor(() => drawer.open);
-  named(drawer, "Jump in").click();
+  named(drawer, "Call overview").click();
   await waitFor(() => !drawer.open);
+  assert.equal(
+    document.querySelector('dialog[open][aria-label="Join call"]'),
+    null,
+    "Navigation opens the overview without joining",
+  );
+  named(document.querySelector("main"), "Jump in").click();
   await waitFor(() =>
     document.querySelector('dialog[open][aria-label="Join call"]'),
   );
@@ -1061,6 +1069,329 @@ test("feature pages link into international planning, call memory and joining th
   assert.deepEqual(requests, []);
   assert.deepEqual(
     errors.map((e) => e.message),
+    [],
+  );
+});
+
+test("studio search groups live calls, connections, numbers, countries and settings, then opens the selected part", async (t) => {
+  const { dom, window, document, errors, requests } = setup(
+    "file:///AgentBridge-Working-Website.html#/studio/demo/",
+  );
+  t.after(() => dom.window.close());
+  await waitFor(() => document.title === "Your workspace | AgentBridge");
+  assert.equal(document.querySelector(".workspace-top .owner-dot"), null);
+  const input = document.querySelector('input[aria-label="Search studio"]');
+  input.focus();
+  fieldValue(window, input, "london");
+  await waitFor(() =>
+    document.querySelector(
+      '.studio-search [role="group"][aria-label="Connections"]',
+    ),
+  );
+  assert.ok(
+    document.querySelector('.studio-search [role="group"][aria-label="Calls"]'),
+  );
+  document
+    .querySelector(
+      '.studio-search [role="group"][aria-label="Connections"] [role="option"]',
+    )
+    .click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Edit connection"]'),
+  );
+  let dialog = document.querySelector(
+    'dialog[open][aria-label="Edit connection"]',
+  );
+  assert.equal(labelled(dialog, "Name").value, "London studio");
+  named(dialog, "Close").click();
+  await waitFor(
+    () => !document.querySelector('dialog[open][aria-label="Edit connection"]'),
+  );
+  input.focus();
+  fieldValue(window, input, "+1 (202) 555-0111");
+  await waitFor(() =>
+    document.querySelector(
+      '.studio-search [role="group"][aria-label="Numbers"]',
+    ),
+  );
+  document
+    .querySelector(
+      '.studio-search [role="group"][aria-label="Numbers"] [role="option"]',
+    )
+    .click();
+  await waitFor(() => document.title === "Numbers | AgentBridge");
+  await waitFor(
+    () => document.querySelectorAll(".owned-number-card").length === 1,
+  );
+  assert.match(
+    document.querySelector(".owned-number-card").textContent,
+    /\+12025550111/,
+  );
+  input.focus();
+  fieldValue(window, input, "Netherlands");
+  await waitFor(() =>
+    document.querySelector(
+      '.studio-search [role="group"][aria-label="Countries"]',
+    ),
+  );
+  document
+    .querySelector(
+      '.studio-search [role="group"][aria-label="Countries"] [role="option"]',
+    )
+    .click();
+  await waitFor(() => document.title === "Connections | AgentBridge");
+  assert.equal(
+    named(document, "Netherlands").getAttribute("aria-pressed"),
+    "true",
+  );
+  input.focus();
+  fieldValue(window, input, "no-such-entry-284");
+  await waitFor(() => document.querySelector(".studio-search-empty"));
+  input.dispatchEvent(
+    new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+  );
+  await waitFor(() => input.getAttribute("aria-expanded") === "false");
+  document.dispatchEvent(
+    new window.KeyboardEvent("keydown", {
+      key: "k",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  await waitFor(() => input.getAttribute("aria-expanded") === "true");
+  fieldValue(window, input, "dark");
+  await waitFor(() =>
+    document.querySelector('.studio-search [role="group"][aria-label="Pages"]'),
+  );
+  input.dispatchEvent(
+    new window.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+  );
+  await waitFor(() => input.getAttribute("aria-activedescendant"));
+  input.dispatchEvent(
+    new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+  );
+  await waitFor(() => document.title === "Settings | AgentBridge");
+  assert.deepEqual(requests, []);
+  assert.deepEqual(
+    errors.map((error) => error.message),
+    [],
+  );
+});
+
+test("home connections default to a recent horizontal row, expand for search, and remember opened connections", async (t) => {
+  const { dom, window, document, errors, requests } = setup(
+    "file:///AgentBridge-Working-Website.html#/studio/demo/",
+  );
+  t.after(() => dom.window.close());
+  await waitFor(() => document.title === "Your workspace | AgentBridge");
+  const main = document.querySelector("main");
+  assert.ok(named(main, "Buy a number"));
+  assert.ok(named(main, "Connect a destination"));
+  assert.ok(document.querySelector(".number-country-rail .country-card-flag"));
+  assert.ok(document.querySelector(".number-connection-list.is-horizontal"));
+  assert.equal(
+    main.querySelector('input[aria-label="Search connections"]'),
+    null,
+  );
+  assert.match(
+    main.querySelector(".number-connection-card h3").textContent,
+    /London/,
+  );
+  named(main, "Expand connections").click();
+  await waitFor(() =>
+    document.querySelector(".number-connection-list.is-expanded"),
+  );
+  const search = main.querySelector('input[aria-label="Search connections"]');
+  fieldValue(window, search, "San Francisco");
+  await waitFor(
+    () => main.querySelectorAll(".number-connection-card").length === 1,
+  );
+  named(main, "Edit San Francisco team").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Edit connection"]'),
+  );
+  named(
+    document.querySelector('dialog[open][aria-label="Edit connection"]'),
+    "Close",
+  ).click();
+  await waitFor(
+    () => !document.querySelector('dialog[open][aria-label="Edit connection"]'),
+  );
+  named(main, "Collapse connections").click();
+  await waitFor(
+    () => main.querySelectorAll(".number-connection-card").length === 3,
+  );
+  assert.equal(
+    main.querySelector('input[aria-label="Search connections"]'),
+    null,
+  );
+  assert.match(
+    main.querySelector(".number-connection-card h3").textContent,
+    /San Francisco/,
+  );
+  named(main, "United Kingdom").click();
+  await waitFor(
+    () => main.querySelectorAll(".number-connection-card").length === 1,
+  );
+  assert.match(
+    main.querySelector(".number-connection-card").textContent,
+    /London studio/,
+  );
+  assert.deepEqual(requests, []);
+  assert.deepEqual(
+    errors.map((error) => error.message),
+    [],
+  );
+});
+
+test("home live call expands and minimizes in place while its action opens the full overview without listening or joining", async (t) => {
+  const { dom, document, errors, requests } = setup(
+    "file:///AgentBridge-Working-Website.html#/studio/demo/",
+  );
+  t.after(() => dom.window.close());
+  await waitFor(() => document.title === "Your workspace | AgentBridge");
+  const card = document.querySelector("main .active-call-card");
+  assert.equal(card.querySelector(".active-call-details").hidden, true);
+  named(card, "Expand live call").click();
+  await waitFor(() => !card.querySelector(".active-call-details").hidden);
+  assert.match(card.textContent, /Routing number/);
+  assert.match(card.textContent, /Transcription is off/);
+  named(card, "Minimize live call").click();
+  await waitFor(() => card.querySelector(".active-call-details").hidden);
+  assert.equal(document.title, "Your workspace | AgentBridge");
+  named(card, "Call overview").click();
+  await waitFor(() => document.querySelector(".gb-call-layout"));
+  assert.equal(
+    document.querySelector('dialog[open][aria-label="Join call"]'),
+    null,
+  );
+  assert.equal(document.querySelector(".sample-listen-dock").hidden, true);
+  const main = document.querySelector("main");
+  assert.ok(named(main, "Listen in"));
+  named(main, "Jump in").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Join call"]'),
+  );
+  let dialog = document.querySelector('dialog[open][aria-label="Join call"]');
+  assert.ok(dialog.querySelector(".tools-dialog-actions"));
+  named(dialog, "Cancel").click();
+  await waitFor(
+    () => !document.querySelector('dialog[open][aria-label="Join call"]'),
+  );
+  named(main, "Jump in").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Join call"]'),
+  );
+  dialog = document.querySelector('dialog[open][aria-label="Join call"]');
+  named(dialog, "Close").click();
+  await waitFor(
+    () => !document.querySelector('dialog[open][aria-label="Join call"]'),
+  );
+  assert.doesNotMatch(
+    document.querySelector(".call-participants").textContent,
+    /You’re in/,
+  );
+  named(main, "Route call").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Review call routing"]'),
+  );
+  named(
+    document.querySelector('dialog[open][aria-label="Review call routing"]'),
+    "Close",
+  ).click();
+  await waitFor(
+    () =>
+      !document.querySelector('dialog[open][aria-label="Review call routing"]'),
+  );
+  assert.deepEqual(requests, []);
+  assert.deepEqual(
+    errors.map((error) => error.message),
+    [],
+  );
+});
+
+test("number acquisition has a visible exit, handles missing inventory, and continues offering unowned numbers after the first three", async (t) => {
+  const { dom, window, document, errors, requests } = setup(
+    "file:///AgentBridge-Working-Website.html#/studio/demo/numbers/",
+  );
+  t.after(() => dom.window.close());
+  await waitFor(() => document.title === "Numbers | AgentBridge");
+  named(document.querySelector("main"), "Buy a number").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Add routing number"]'),
+  );
+  named(
+    document.querySelector('dialog[open][aria-label="Add routing number"]'),
+    "Close",
+  ).click();
+  await waitFor(
+    () =>
+      !document.querySelector('dialog[open][aria-label="Add routing number"]'),
+  );
+  named(document.querySelector("main"), "Buy a number").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Add routing number"]'),
+  );
+  let buyer = document.querySelector(
+    'dialog[open][aria-label="Add routing number"]',
+  );
+  fieldValue(window, labelled(buyer, "Area code"), "000");
+  await waitFor(() => buyer.querySelector(".number-inventory-empty"));
+  assert.equal(buyer.querySelector(".number-candidates"), null);
+  assert.equal(named(buyer, "Add example number").disabled, true);
+  buyer
+    .querySelector("form")
+    .dispatchEvent(
+      new window.Event("submit", { bubbles: true, cancelable: true }),
+    );
+  await waitFor(() => buyer.querySelector('[role="alert"]'));
+  assert.match(buyer.textContent, /Choose an available number/);
+  named(buyer, "Try another area code").click();
+  await waitFor(() => buyer.querySelector(".number-candidates input:checked"));
+  assert.match(
+    buyer.querySelector(".number-candidates input:checked").value,
+    /^\+1415/,
+  );
+  named(buyer, "Cancel").click();
+  await waitFor(
+    () =>
+      !document.querySelector('dialog[open][aria-label="Add routing number"]'),
+  );
+  const added = new Set();
+  for (let index = 0; index < 4; index++) {
+    named(document.querySelector("main"), "Buy a number").click();
+    await waitFor(() =>
+      document.querySelector('dialog[open][aria-label="Add routing number"]'),
+    );
+    buyer = document.querySelector(
+      'dialog[open][aria-label="Add routing number"]',
+    );
+    const selected = buyer.querySelector(
+      ".number-candidates input:checked",
+    ).value;
+    assert.equal(added.has(selected), false);
+    added.add(selected);
+    named(buyer, "Add example number").click();
+    await waitFor(() =>
+      document.querySelector('dialog[open][aria-label="Add connection"]'),
+    );
+    const editor = document.querySelector(
+      'dialog[open][aria-label="Add connection"]',
+    );
+    const routing = labelled(editor, "Routing number");
+    assert.equal(routing.selectedOptions[0].disabled, false);
+    assert.ok(routing.value);
+    named(editor, "Close").click();
+    await waitFor(
+      () =>
+        !document.querySelector('dialog[open][aria-label="Add connection"]'),
+    );
+  }
+  assert.equal(document.querySelectorAll(".owned-number-card").length, 7);
+  assert.deepEqual(requests, []);
+  assert.deepEqual(
+    errors.map((error) => error.message),
     [],
   );
 });

@@ -32,6 +32,7 @@ const paths = {
     "M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0",
   design: "M3 3h18v18H3zM3 9h18M9 9v12",
   arrow: "M5 12h14M13 6l6 6-6 6",
+  "arrow-down": "M12 5v14M6 13l6 6 6-6",
   diagonal: "M6 18 18 6M6 6h12v12",
   plus: "M12 5v14M5 12h14",
   close: "m6 6 12 12M6 18 18 6",
