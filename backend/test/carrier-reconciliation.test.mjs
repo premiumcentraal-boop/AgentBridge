@@ -14,7 +14,9 @@ const env={US_BRIDGE_DID:DID,SIGNALWIRE_SPACE:'example-space',
   SIGNALWIRE_PROJECT_ID:PROJECT,SIGNALWIRE_VOICE_API_TOKEN:SECRET};
 const inbound={id:SEG,status:'completed',direction:'inbound',to:DID,charge:0.01};
 const child={id:CHILD,parent_id:SEG,direction:'outbound',from:DID,to:DEST,status:'completed',charge:0.02};
-function provider(inRow=inbound,children=[child],links={}){
+const COMPLETE_LINKS={self:'https://example-space.signalwire.com/api/voice/logs?page_size=1000',
+  first:'https://example-space.signalwire.com/api/voice/logs?page_size=1000'};
+function provider(inRow=inbound,children=[child],links=COMPLETE_LINKS){
   const calls=[];
   const fetchImpl=async(url,options)=>{
     calls.push({url,options});
@@ -60,13 +62,21 @@ test('fail closed on stale, mismatched, multiple or paginated voice logs',async(
     provider(inbound,[{...child,id:'not-a-uuid'}]),
     provider(inbound,[]),
     provider(inbound,[child,{...child,id:'68313c74-b321-4c08-a3ea-7123449130ab'}]),
-    provider(inbound,[child],{next:'opaque-page-token'}),
+    provider(inbound,[child],{...COMPLETE_LINKS,next:'opaque-page-token'}),
     provider({...inbound,charge:'1.00'}),
     provider(inbound,[{...child,charge:99}])
   ];
   for(const p of cases){
     const r=await fetchCarrierReconciliation(row,env,p.fetchImpl);
     assert.equal(r.ok,false,'unexpected unlock from mismatched carrier logs: '+JSON.stringify(r));
+  }
+});
+test('missing or malformed pagination metadata cannot prove exhaustive child legs',async()=>{
+  for(const links of [null,{}, {next:null}, {self:'x'}, {first:'x'},
+    {self:'',first:'x'}, {self:'x',first:''}]){
+    const p=provider(inbound,[child],links);
+    const result=await fetchCarrierReconciliation(row,env,p.fetchImpl);
+    assert.equal(result.code,'INCOMPLETE_CARRIER_PAGINATION',JSON.stringify({links,result}));
   }
 });
 test('actual charges above reservation cap never unlock',async()=>{
