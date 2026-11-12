@@ -321,3 +321,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 ## 2026-11-11 — Isolated PR #37 integration with current main (unverified)
 - Prepared a non-merged integration tree combining main's Railway Dockerfile and append-only deployment record with PR #37's transactional SignalWire source, regressions and all prior append-only entries. Both parents retained for review; this does not merge into main or enable routing.
 - CI, Cloudflare D1 batch semantics and independent security review remain required. No calls, secrets, paid resources or deployment performed.
+
+## 2026-11-11 — SignalWire denial telemetry outage hardening (draft PR #40)
+- Made denial-only provider-event outcome writes best effort: a secondary database failure while recording a rejected inbound or PIN callback must not turn a safe hangup into a 500. The `pin_requested` authorization-binding event remains a required write; successful `connect` persistence still occurs atomically in `claim()`.
+- Added offline SQLite ABORT-trigger regressions for initial inbound no-reservation denial and PIN claim failure combined with denial-outcome failure, including a fresh successful PIN retry after recovery.
+- Committed on the isolated PR #40 branch only. Exact-head CI and independent Cloudflare D1 validation pending; no carrier calls, routing activation, purchases, payments, merges or deployments.
