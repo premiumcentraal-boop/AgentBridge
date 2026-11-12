@@ -68,6 +68,9 @@ async function setOutcome(env,callId,eventType,outcome,reservationId=null){
   await env.DB.prepare("UPDATE provider_events SET outcome=?,reservation_id=? WHERE provider='signalwire' AND provider_call_id=? AND event_type=?")
     .bind(outcome,reservationId,callId,eventType).run();
 }
+async function denialOutcome(env,callId,eventType,outcome,reservationId=null){
+  try{await setOutcome(env,callId,eventType,outcome,reservationId);}catch{/* hangup must survive telemetry failure */}
+}
 async function findRoutable(env,now){
   return env.DB.prepare("SELECT r.id,r.account_id,r.destination,r.expires_at,r.status,r.pin_sha256,r.pin_attempts FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE a.did=? AND a.status='active' AND r.status='ready' AND r.approved_at IS NOT NULL AND r.expires_at>? ORDER BY r.created_at DESC LIMIT 1")
     .bind(env.US_BRIDGE_DID,now).first();
@@ -142,17 +145,17 @@ export async function handleSignalWireRouting(request,env={}){
   const now=Math.floor(Date.now()/1000);
   if(!await recordEvent(env,call.call_id,'swml_inbound',now))return hangup();
   const row=await findRoutable(env,now);
-  if(!row){await setOutcome(env,call.call_id,'swml_inbound','no_approved_reservation');return hangup();}
+  if(!row){await denialOutcome(env,call.call_id,'swml_inbound','no_approved_reservation');return hangup();}
   const check=await policyCheck(env,row,mode,now);
-  if(!check.ok){await setOutcome(env,call.call_id,'swml_inbound',check.code,row.id);return hangup();}
+  if(!check.ok){await denialOutcome(env,call.call_id,'swml_inbound',check.code,row.id);return hangup();}
   if(mode==='capped_caller_id'||mode==='any_caller'){
     // any_caller: the first signed inbound call during the approved window claims it.
-    if(mode==='capped_caller_id'&&call.from_number!==env.TEST_CALLER_E164){await setOutcome(env,call.call_id,'swml_inbound','CALLER_MISMATCH',row.id);return hangup();}
-    if(!await claim(env,row,call.call_id,call.segment_id,check,now,'swml_inbound')){await setOutcome(env,call.call_id,'swml_inbound','CLAIM_LOST',row.id);return hangup();}
+    if(mode==='capped_caller_id'&&call.from_number!==env.TEST_CALLER_E164){await denialOutcome(env,call.call_id,'swml_inbound','CALLER_MISMATCH',row.id);return hangup();}
+    if(!await claim(env,row,call.call_id,call.segment_id,check,now,'swml_inbound')){await denialOutcome(env,call.call_id,'swml_inbound','CLAIM_LOST',row.id);return hangup();}
     return connectFor(env,row,check);
   }
   // dtmf_pin: answer silently, collect digits, post them to the signed PIN URL.
-  if(!row.pin_sha256){await setOutcome(env,call.call_id,'swml_inbound','NO_PIN',row.id);return hangup();}
+  if(!row.pin_sha256){await denialOutcome(env,call.call_id,'swml_inbound','NO_PIN',row.id);return hangup();}
   await setOutcome(env,call.call_id,'swml_inbound','pin_requested',row.id);
   return swml({version:'1.0.0',sections:{main:[
     {answer:{max_duration:check.caps.maxSeconds+PIN_WINDOW_SECONDS}},
@@ -184,20 +187,20 @@ export async function handleSignalWirePin(request,env={}){
   if(!await recordEvent(env,call.call_id,'swml_pin',now))return hangup();
   const row=await env.DB.prepare("SELECT r.id,r.account_id,r.destination,r.expires_at,r.status,r.pin_sha256,r.pin_attempts FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE r.id=? AND a.did=? AND a.status='active' AND r.status='ready' AND r.approved_at IS NOT NULL AND r.expires_at>?")
     .bind(started.reservation_id,env.US_BRIDGE_DID,now).first();
-  if(!row||!row.pin_sha256){await setOutcome(env,call.call_id,'swml_pin','original_reservation_unavailable',started.reservation_id);return hangup();}
+  if(!row||!row.pin_sha256){await denialOutcome(env,call.call_id,'swml_pin','original_reservation_unavailable',started.reservation_id);return hangup();}
   const bumped=await env.DB.prepare("UPDATE reservations SET pin_attempts=pin_attempts+1 WHERE id=? AND status='ready' AND approved_at IS NOT NULL AND expires_at>? AND pin_attempts<?")
     .bind(row.id,now,MAX_PIN_ATTEMPTS).run();
-  if(!bumped.meta?.changes){await setOutcome(env,call.call_id,'swml_pin','PIN_LOCKED',row.id);return hangup();}
+  if(!bumped.meta?.changes){await denialOutcome(env,call.call_id,'swml_pin','PIN_LOCKED',row.id);return hangup();}
   const raw=read.body?.params?.digits??read.body?.vars?.prompt_value;
   const digits=typeof raw==='string'?raw.replace(/#$/,''):'';
   if(!await verifyPin(row.id,digits,row.pin_sha256)){
     await env.DB.prepare("UPDATE reservations SET status='failed',completed_at=? WHERE id=? AND status='ready' AND pin_attempts>=?")
       .bind(now,row.id,MAX_PIN_ATTEMPTS).run();
-    await setOutcome(env,call.call_id,'swml_pin','PIN_REJECTED',row.id);
+    await denialOutcome(env,call.call_id,'swml_pin','PIN_REJECTED',row.id);
     return hangup();
   }
   const check=await policyCheck(env,row,'dtmf_pin',now);
-  if(!check.ok){await setOutcome(env,call.call_id,'swml_pin',check.code,row.id);return hangup();}
-  if(!await claim(env,row,call.call_id,call.segment_id,check,now,'swml_pin')){await setOutcome(env,call.call_id,'swml_pin','CLAIM_LOST',row.id);return hangup();}
+  if(!check.ok){await denialOutcome(env,call.call_id,'swml_pin',check.code,row.id);return hangup();}
+  if(!await claim(env,row,call.call_id,call.segment_id,check,now,'swml_pin')){await denialOutcome(env,call.call_id,'swml_pin','CLAIM_LOST',row.id);return hangup();}
   return connectFor(env,row,check);
 }
