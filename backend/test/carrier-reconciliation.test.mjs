@@ -13,7 +13,7 @@ const row={provider_segment_id:SEG,provider_call_id:CALL,created_at:1800000000,
 const env={US_BRIDGE_DID:DID,SIGNALWIRE_SPACE:'example-space',
   SIGNALWIRE_PROJECT_ID:PROJECT,SIGNALWIRE_VOICE_API_TOKEN:SECRET};
 const inbound={id:SEG,status:'completed',direction:'inbound',to:DID,charge:0.01};
-const child={id:CHILD,parent_id:SEG,direction:'outbound',to:DEST,status:'completed',charge:0.02};
+const child={id:CHILD,parent_id:SEG,direction:'outbound',from:DID,to:DEST,status:'completed',charge:0.02};
 function provider(inRow=inbound,children=[child],links={}){
   const calls=[];
   const fetchImpl=async(url,options)=>{
@@ -55,6 +55,9 @@ test('fail closed on stale, mismatched, multiple or paginated voice logs',async(
     provider({...inbound,status:'completed',to:'+12025550144'}),
     provider(inbound,[{...child,status:'ringing'}]),
     provider(inbound,[{...child,to:'+12125550155'}]),
+    provider(inbound,[{...child,from:'+13125550111'}]),
+    provider(inbound,[{...child,from:null}]),
+    provider(inbound,[{...child,id:'not-a-uuid'}]),
     provider(inbound,[]),
     provider(inbound,[child,{...child,id:'68313c74-b321-4c08-a3ea-7123449130ab'}]),
     provider(inbound,[child],{next:'opaque-page-token'}),
@@ -122,6 +125,9 @@ test('missing or unexpected documented fields stay locked with a specific code, 
   const drop=(o,k)=>{const c={...o};delete c[k];return c;};
   const cases=[
     [provider(drop(docInbound,'status'),[docChild],docLinks),'INBOUND_CARRIER_NOT_TERMINAL'],
+    [provider(docInbound,[drop(docChild,'from')],docLinks),'OUTBOUND_LOG_MISMATCH'],
+    [provider(docInbound,[{...docChild,from:'+13125550111'}],docLinks),'OUTBOUND_LOG_MISMATCH'],
+    [provider(docInbound,[{...docChild,id:'not-a-uuid'}],docLinks),'OUTBOUND_LOG_MISMATCH'],
     [provider({...docInbound,status:'ending'},[docChild],docLinks),'INBOUND_CARRIER_NOT_TERMINAL'],
     [provider(drop(docInbound,'charge'),[docChild],docLinks),'INBOUND_CHARGE_UNKNOWN'],
     [provider(drop(docInbound,'to'),[docChild],docLinks),'INBOUND_LOG_MISMATCH'],
