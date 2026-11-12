@@ -93,3 +93,139 @@ test('any_caller keeps destination allowlist, caps, expiry and approval binding'
    assert.ok(isHangup(res.doc));
    assert.equal(status(DB,r.id),'ready');}
 });
+
+test('carrier-leg insertion failure rolls back the claim and permits a later authorized retry',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,...ANY});
+  const created=await (await reserve(env,'any-atomic-claim-1')).json();
+  assert.equal((await approveReservation(env,created.id)).status,200);
+  DB.raw.exec("CREATE TRIGGER reject_carrier_leg BEFORE INSERT ON reservation_carrier_legs BEGIN SELECT RAISE(ABORT,'injected leg failure'); END");
+  const failed=await inbound(env,{call_id:CID(91)});
+  assert.ok(isHangup(failed.doc),'a failed transactional claim must not emit connect');
+  assert.equal(status(DB,created.id),'ready','the reservation must not be stranded connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,0);
+  DB.raw.exec('DROP TRIGGER reject_carrier_leg');
+  const retry=await inbound(env,{call_id:CID(92)});
+  assert.equal(connectOf(retry.doc)?.to,DEST,'a new signed call can claim after the transient DB failure');
+  assert.equal(status(DB,created.id),'connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,1);
+  assert.ok(isHangup((await inbound(env,{call_id:CID(93)})).doc),'a successful claim remains single-use');
+});
+
+test('silently ignored carrier-leg INSERT cannot strand the reservation',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,...ANY});
+  const created=await (await reserve(env,'any-silent-insert-1')).json();
+  assert.equal((await approveReservation(env,created.id)).status,200);
+  DB.raw.exec("CREATE TRIGGER ignore_carrier_leg BEFORE INSERT ON reservation_carrier_legs BEGIN SELECT RAISE(IGNORE); END");
+  const failed=await inbound(env,{call_id:CID(94)});
+  assert.ok(isHangup(failed.doc),'a suppressed carrier-leg write must never emit connect');
+  assert.equal(status(DB,created.id),'ready','no stranded connecting reservation');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,0);
+  DB.raw.exec('DROP TRIGGER ignore_carrier_leg');
+  const retry=await inbound(env,{call_id:CID(95)});
+  assert.equal(connectOf(retry.doc)?.to,DEST);
+  assert.equal(status(DB,created.id),'connecting');
+});
+
+test('silently ignored reservation UPDATE removes orphan carrier leg and allows retry',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,...ANY});
+  const created=await (await reserve(env,'any-silent-update-1')).json();
+  assert.equal((await approveReservation(env,created.id)).status,200);
+  DB.raw.exec("CREATE TRIGGER ignore_reservation_claim BEFORE UPDATE OF status ON reservations WHEN NEW.status='connecting' BEGIN SELECT RAISE(IGNORE); END");
+  const failed=await inbound(env,{call_id:CID(96)});
+  assert.ok(isHangup(failed.doc),'suppressed reservation transition cannot emit connect');
+  assert.equal(status(DB,created.id),'ready');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,0,
+    'transaction must clean up the inserted leg after the ignored UPDATE');
+  DB.raw.exec('DROP TRIGGER ignore_reservation_claim');
+  const retry=await inbound(env,{call_id:CID(97)});
+  assert.equal(connectOf(retry.doc)?.to,DEST);
+  assert.equal(status(DB,created.id),'connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,1);
+  assert.ok(isHangup((await inbound(env,{call_id:CID(98)})).doc));
+});
+
+
+test('reservation UPDATE exception rolls back inserted carrier leg and permits retry',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,...ANY});
+  const created=await (await reserve(env,'any-abort-update-1')).json();
+  assert.equal((await approveReservation(env,created.id)).status,200);
+  DB.raw.exec("CREATE TRIGGER abort_reservation_claim BEFORE UPDATE OF status ON reservations WHEN NEW.status='connecting' BEGIN SELECT RAISE(ABORT,'injected reservation update failure'); END");
+  const failed=await inbound(env,{call_id:CID(140)});
+  assert.ok(isHangup(failed.doc),'a failing reservation transition cannot emit connect');
+  assert.equal(status(DB,created.id),'ready','transaction rolls back the reservation transition');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,0,
+    'the preceding carrier-leg INSERT must roll back with the failed UPDATE');
+  DB.raw.exec('DROP TRIGGER abort_reservation_claim');
+  const retry=await inbound(env,{call_id:CID(141)});
+  assert.equal(connectOf(retry.doc)?.to,DEST);
+  assert.equal(status(DB,created.id),'connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,1);
+  assert.ok(isHangup((await inbound(env,{call_id:CID(142)})).doc));
+});
+
+test('simultaneous signed inbound claims cannot create two carrier legs or two connects',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,...ANY});
+  const created=await (await reserve(env,'any-concurrent-claim-1')).json();
+  assert.equal((await approveReservation(env,created.id)).status,200);
+  const ids=Array.from({length:12},(_,i)=>CID(110+i));
+  const results=await Promise.all(ids.map(call_id=>inbound(env,{call_id})));
+  const connected=results.filter(r=>connectOf(r.doc));
+  assert.equal(connected.length,1,'only one simultaneous callback may receive a connect');
+  assert.ok(results.every(r=>r.status===200),'all valid signed callbacks receive SWML');
+  assert.ok(results.filter(r=>!connectOf(r.doc)).every(r=>isHangup(r.doc)),
+    'every losing callback must hang up');
+  assert.equal(status(DB,created.id),'connecting');
+  const legs=DB.raw.prepare('SELECT provider_segment_id FROM reservation_carrier_legs WHERE reservation_id=?').all(created.id);
+  assert.equal(legs.length,1,'exactly one carrier leg persisted');
+  assert.ok(isHangup((await inbound(env,{call_id:CID(130)})).doc),'replay window remains closed');
+});
+
+test('provider-event UPDATE ABORT rolls back claim and carrier leg',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,...ANY});
+  const created=await (await reserve(env,'event-abort-claim-1')).json();
+  assert.equal((await approveReservation(env,created.id)).status,200);
+  DB.raw.exec("CREATE TRIGGER abort_connect_event BEFORE UPDATE OF outcome ON provider_events WHEN NEW.outcome='connect' BEGIN SELECT RAISE(ABORT,'injected event update failure'); END");
+  const failed=await inbound(env,{call_id:CID(170)});
+  assert.ok(isHangup(failed.doc));
+  assert.equal(status(DB,created.id),'ready');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,0);
+  assert.notEqual(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_inbound'").get(CID(170))?.outcome,'connect');
+  DB.raw.exec('DROP TRIGGER abort_connect_event');
+  assert.equal(connectOf((await inbound(env,{call_id:CID(171)})).doc)?.to,DEST);
+  assert.equal(status(DB,created.id),'connecting');
+  assert.equal(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_inbound'").get(CID(171)).outcome,'connect');
+});
+
+test('silently ignored provider-event connect UPDATE releases claim and carrier leg',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,...ANY});
+  const created=await (await reserve(env,'event-ignore-claim-1')).json();
+  assert.equal((await approveReservation(env,created.id)).status,200);
+  DB.raw.exec("CREATE TRIGGER ignore_connect_event BEFORE UPDATE OF outcome ON provider_events WHEN NEW.outcome='connect' BEGIN SELECT RAISE(IGNORE); END");
+  const failed=await inbound(env,{call_id:CID(172)});
+  assert.ok(isHangup(failed.doc));
+  assert.equal(status(DB,created.id),'ready');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,0);
+  DB.raw.exec('DROP TRIGGER ignore_connect_event');
+  assert.equal(connectOf((await inbound(env,{call_id:CID(173)})).doc)?.to,DEST);
+  assert.equal(status(DB,created.id),'connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,1);
+});
+
+test('compound silent event and reservation-reset failures abort the entire claim batch',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,...ANY});
+  const created=await (await reserve(env,'compound-silent-reset-1')).json();
+  assert.equal((await approveReservation(env,created.id)).status,200);
+  DB.raw.exec("CREATE TRIGGER ignore_event_connect_compound BEFORE UPDATE OF outcome ON provider_events WHEN NEW.outcome='connect' BEGIN SELECT RAISE(IGNORE); END");
+  DB.raw.exec("CREATE TRIGGER ignore_reservation_reset_compound BEFORE UPDATE OF status ON reservations WHEN OLD.status='connecting' AND NEW.status='ready' BEGIN SELECT RAISE(IGNORE); END");
+  const failed=await inbound(env,{call_id:CID(180)});
+  assert.ok(isHangup(failed.doc),'compound failure must never emit connect');
+  assert.equal(status(DB,created.id),'ready','entire batch must roll back despite ignored compensation');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,0,'no orphaned leg');
+  assert.notEqual(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_inbound'").get(CID(180))?.outcome,'connect');
+  DB.raw.exec('DROP TRIGGER ignore_event_connect_compound');
+  DB.raw.exec('DROP TRIGGER ignore_reservation_reset_compound');
+  const retry=await inbound(env,{call_id:CID(181)});
+  assert.equal(connectOf(retry.doc)?.to,DEST,'fresh authorized callback succeeds');
+  assert.equal(status(DB,created.id),'connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(created.id).n,1);
+});

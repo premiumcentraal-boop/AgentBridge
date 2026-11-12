@@ -57,16 +57,27 @@ function callMatches(call,env){
     E164.test(call.from_number||'')&&call.from_number!==call.to_number;
 }
 /** Durable replay guard: one row per (call_id, event_type). Returns false on replay. */
-async function recordEvent(env,callId,eventType,now){
+async function callerDigest(number){
+  const bytes=new TextEncoder().encode(number);
+  const hash=await crypto.subtle.digest('SHA-256',bytes);
+  return Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function recordEvent(env,callId,eventType,now,segmentId=null,callerHash=null){
   try{
-    await env.DB.prepare("INSERT INTO provider_events (provider,provider_call_id,event_type,received_at,outcome) VALUES ('signalwire',?,?,?,'received')")
-      .bind(callId,eventType,now).run();
-    return true;
+    const inserted=await env.DB.prepare("INSERT INTO provider_events (provider,provider_call_id,event_type,received_at,outcome,challenge_segment_id,challenge_caller_sha256) VALUES ('signalwire',?,?,?,'received',?,?)")
+      .bind(callId,eventType,now,segmentId,callerHash).run();
+    // A successful D1 response does not prove INSERT persisted: a trigger may
+    // silently suppress it. Never treat missing metadata or zero rows as a
+    // fresh, replay-protected event.
+    return inserted.meta?.changes===1;
   }catch{return false;}
 }
 async function setOutcome(env,callId,eventType,outcome,reservationId=null){
-  await env.DB.prepare("UPDATE provider_events SET outcome=?,reservation_id=? WHERE provider='signalwire' AND provider_call_id=? AND event_type=?")
+  await env.DB.prepare("UPDATE provider_events SET outcome=?,reservation_id=? WHERE provider='signalwire' AND provider_call_id=? AND event_type=? AND outcome='received'")
     .bind(outcome,reservationId,callId,eventType).run();
+}
+async function denialOutcome(env,callId,eventType,outcome,reservationId=null){
+  try{await setOutcome(env,callId,eventType,outcome,reservationId);}catch{/* hangup must survive telemetry failure */}
 }
 async function findRoutable(env,now){
   return env.DB.prepare("SELECT r.id,r.account_id,r.destination,r.expires_at,r.status,r.pin_sha256,r.pin_attempts FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE a.did=? AND a.status='active' AND r.status='ready' AND r.approved_at IS NOT NULL AND r.expires_at>? ORDER BY r.created_at DESC LIMIT 1")
@@ -89,17 +100,40 @@ async function policyCheck(env,row,mode,now){
   return {ok:true,caps,cost};
 }
 /** Atomic single claim; the one-active-reservation index also blocks concurrent routes. */
-async function claim(env,row,callId,segmentId,check,now){
+async function claim(env,row,callId,segmentId,check,now,eventType){
   if(!UUID.test(segmentId))return false;
-  const r=await env.DB.prepare("UPDATE reservations SET status='connecting',provider='signalwire',provider_call_id=?,claimed_at=?,max_call_seconds=?,max_cost_cents=? WHERE id=? AND status='ready' AND approved_at IS NOT NULL AND expires_at>?")
-    .bind(callId,now,check.caps.maxSeconds,check.cost,row.id,now).run();
-  if(r.meta?.changes!==1)return false;
-  // Persist the Voice Logs segment identity BEFORE emitting connect. If this
-  // insert fails, no paid SWML is returned and the reservation stays locked.
+  // D1 batch executes statements in a single transaction. If the carrier-leg
+  // insert fails, the reservation update rolls back instead of stranding a
+  // 'connecting' reservation that blocks all subsequent preparations.
   try{
-    await env.DB.prepare('INSERT INTO reservation_carrier_legs (reservation_id,provider_segment_id,claimed_at) VALUES (?,?,?)')
-      .bind(row.id,segmentId,now).run();
-    return true;
+    const [leg,updated,event,reset]=await env.DB.batch([
+      // Insert first: if a trigger silently suppresses the INSERT, the UPDATE
+      // below cannot transition the reservation without a matching leg.
+      env.DB.prepare("INSERT INTO reservation_carrier_legs (reservation_id,provider_segment_id,claimed_at) SELECT id,?,? FROM reservations WHERE id=? AND status='ready' AND approved_at IS NOT NULL AND expires_at>?")
+        .bind(segmentId,now,row.id,now),
+      env.DB.prepare("UPDATE reservations SET status='connecting',provider='signalwire',provider_call_id=?,claimed_at=?,max_call_seconds=?,max_cost_cents=? WHERE id=? AND status='ready' AND approved_at IS NOT NULL AND expires_at>? AND EXISTS (SELECT 1 FROM reservation_carrier_legs WHERE reservation_id=? AND provider_segment_id=? AND claimed_at=?)")
+        .bind(callId,now,check.caps.maxSeconds,check.cost,row.id,now,row.id,segmentId,now),
+      // Persist the connection outcome in the SAME transaction as the claim.
+      // Never emit connect for an unrecorded event, including ignored UPDATEs.
+      env.DB.prepare("UPDATE provider_events SET outcome='connect',reservation_id=? WHERE provider='signalwire' AND provider_call_id=? AND event_type=? AND outcome='received' AND EXISTS (SELECT 1 FROM reservations WHERE id=? AND status='connecting' AND provider_call_id=?)")
+        .bind(row.id,callId,eventType,row.id,callId),
+      // If event persistence was silently ignored, release the claim before
+      // deleting its carrier leg. This is conditional on THIS call identity.
+      env.DB.prepare("UPDATE reservations SET status='ready',provider=NULL,provider_call_id=NULL,claimed_at=NULL,max_call_seconds=NULL,max_cost_cents=NULL WHERE id=? AND status='connecting' AND provider_call_id=? AND NOT EXISTS (SELECT 1 FROM provider_events WHERE provider='signalwire' AND provider_call_id=? AND event_type=? AND outcome='connect' AND reservation_id=?)")
+        .bind(row.id,callId,callId,eventType,row.id),
+      // A nonthrowing, zero-row UPDATE (for example RAISE(IGNORE)) must
+      // not leave an orphan carrier leg behind. Keep cleanup in the same
+      // transaction; a throwing cleanup rolls back both preceding writes.
+      env.DB.prepare("DELETE FROM reservation_carrier_legs WHERE reservation_id=? AND provider_segment_id=? AND claimed_at=? AND NOT EXISTS (SELECT 1 FROM reservations WHERE id=? AND status='connecting' AND provider='signalwire' AND provider_call_id=? AND claimed_at=?)")
+        .bind(row.id,segmentId,now,row.id,callId,now),
+      // Fail the entire D1 batch if compensating writes were silently ignored.
+      // This deliberately violates reservations.account_id NOT NULL only when
+      // an unrecorded claim or orphaned leg remains. A thrown constraint error
+      // rolls back the batch, unlike checking meta.changes after commit.
+      env.DB.prepare("INSERT INTO reservations (id) SELECT NULL WHERE (EXISTS (SELECT 1 FROM reservations WHERE id=? AND status='connecting' AND provider_call_id=?) OR EXISTS (SELECT 1 FROM reservation_carrier_legs WHERE reservation_id=? AND provider_segment_id=? AND claimed_at=?)) AND NOT EXISTS (SELECT 1 FROM provider_events WHERE provider='signalwire' AND provider_call_id=? AND event_type=? AND outcome='connect' AND reservation_id=?)")
+        .bind(row.id,callId,row.id,segmentId,now,callId,eventType,row.id)
+    ]);
+    return updated.meta?.changes===1&&leg.meta?.changes===1&&event.meta?.changes===1&&reset.meta?.changes===0;
   }catch{return false;}
 }
 function connectFor(env,row,check){
@@ -107,7 +141,7 @@ function connectFor(env,row,check){
 }
 
 /** Initial inbound SWML fetch for the bridge DID. */
-export async function handleSignalWireRouting(request,env={}){
+async function handleSignalWireRoutingInner(request,env={}){
   if(!configured(env))return text('Not configured',503);
   const read=await readSigned(request,env,env.SIGNALWIRE_SWML_WEBHOOK_URL,SIGNALWIRE_SWML_PATH);
   if(read.res)return read.res;
@@ -117,21 +151,27 @@ export async function handleSignalWireRouting(request,env={}){
   await logInboundCall(env,call,'swml_routing','mode_'+mode);
   if(mode==='none')return hangup();
   const now=Math.floor(Date.now()/1000);
-  if(!await recordEvent(env,call.call_id,'swml_inbound',now))return hangup();
+  if(!await recordEvent(env,call.call_id,'swml_inbound',now,call.segment_id,await callerDigest(call.from_number)))return hangup();
   const row=await findRoutable(env,now);
-  if(!row){await setOutcome(env,call.call_id,'swml_inbound','no_approved_reservation');return hangup();}
+  if(!row){await denialOutcome(env,call.call_id,'swml_inbound','no_approved_reservation');return hangup();}
   const check=await policyCheck(env,row,mode,now);
-  if(!check.ok){await setOutcome(env,call.call_id,'swml_inbound',check.code,row.id);return hangup();}
+  if(!check.ok){await denialOutcome(env,call.call_id,'swml_inbound',check.code,row.id);return hangup();}
   if(mode==='capped_caller_id'||mode==='any_caller'){
     // any_caller: the first signed inbound call during the approved window claims it.
-    if(mode==='capped_caller_id'&&call.from_number!==env.TEST_CALLER_E164){await setOutcome(env,call.call_id,'swml_inbound','CALLER_MISMATCH',row.id);return hangup();}
-    if(!await claim(env,row,call.call_id,call.segment_id,check,now)){await setOutcome(env,call.call_id,'swml_inbound','CLAIM_LOST',row.id);return hangup();}
-    await setOutcome(env,call.call_id,'swml_inbound','connect',row.id);
+    if(mode==='capped_caller_id'&&call.from_number!==env.TEST_CALLER_E164){await denialOutcome(env,call.call_id,'swml_inbound','CALLER_MISMATCH',row.id);return hangup();}
+    if(!await claim(env,row,call.call_id,call.segment_id,check,now,'swml_inbound')){await denialOutcome(env,call.call_id,'swml_inbound','CLAIM_LOST',row.id);return hangup();}
     return connectFor(env,row,check);
   }
   // dtmf_pin: answer silently, collect digits, post them to the signed PIN URL.
-  if(!row.pin_sha256){await setOutcome(env,call.call_id,'swml_inbound','NO_PIN',row.id);return hangup();}
-  await setOutcome(env,call.call_id,'swml_inbound','pin_requested',row.id);
+  if(!row.pin_sha256){await denialOutcome(env,call.call_id,'swml_inbound','NO_PIN',row.id);return hangup();}
+  // Never issue a PIN challenge unless its reservation binding is durable.
+  // A failed or silently ignored write must hang up rather than prompt for
+  // digits that the follow-up endpoint cannot authenticate.
+  try{
+    const saved=await env.DB.prepare("UPDATE provider_events SET outcome='pin_requested',reservation_id=? WHERE provider='signalwire' AND provider_call_id=? AND event_type='swml_inbound' AND outcome='received'")
+      .bind(row.id,call.call_id).run();
+    if(saved.meta?.changes!==1)return hangup();
+  }catch{return hangup();}
   return swml({version:'1.0.0',sections:{main:[
     {answer:{max_duration:check.caps.maxSeconds+PIN_WINDOW_SECONDS}},
     {prompt:{play:'silence:1',max_digits:PIN_DIGITS,terminators:'#',digit_timeout:5,initial_timeout:15}},
@@ -141,7 +181,7 @@ export async function handleSignalWireRouting(request,env={}){
 }
 
 /** Signed follow-up fetch carrying the DTMF digits (dtmf_pin mode only). */
-export async function handleSignalWirePin(request,env={}){
+async function handleSignalWirePinInner(request,env={}){
   if(!configured(env))return text('Not configured',503);
   if(callerProofMode(env)!=='dtmf_pin')return hangup();
   const read=await readSigned(request,env,pinUrl(env),SIGNALWIRE_PIN_PATH);
@@ -152,9 +192,13 @@ export async function handleSignalWirePin(request,env={}){
   // A PIN must authenticate the reservation chosen by THIS call's first webhook.
   // Selecting the newest ready reservation here would allow a delayed call from A
   // to consume B after A is cancelled/expired and B becomes ready.
-  const started=await env.DB.prepare("SELECT reservation_id,received_at FROM provider_events WHERE provider='signalwire' AND provider_call_id=? AND event_type='swml_inbound' AND outcome='pin_requested'")
+  const started=await env.DB.prepare("SELECT reservation_id,received_at,challenge_segment_id,challenge_caller_sha256 FROM provider_events WHERE provider='signalwire' AND provider_call_id=? AND event_type='swml_inbound' AND outcome='pin_requested'")
     .bind(call.call_id).first();
   if(!started?.reservation_id||!UUID.test(started.reservation_id))return hangup();
+  // A signed PIN payload is not proof that it belongs to the initial carrier
+  // segment. Reject identity drift before consuming a replay event or PIN try.
+  if(started.challenge_segment_id!==call.segment_id||
+     started.challenge_caller_sha256!==await callerDigest(call.from_number))return hangup();
   // Carrier prompt timeouts are not an authorization boundary. Validate the
   // persisted challenge start against server time, including clock anomalies.
   if(!Number.isSafeInteger(started.received_at)||started.received_at>now||
@@ -162,21 +206,34 @@ export async function handleSignalWirePin(request,env={}){
   if(!await recordEvent(env,call.call_id,'swml_pin',now))return hangup();
   const row=await env.DB.prepare("SELECT r.id,r.account_id,r.destination,r.expires_at,r.status,r.pin_sha256,r.pin_attempts FROM reservations r JOIN accounts a ON r.account_id=a.id WHERE r.id=? AND a.did=? AND a.status='active' AND r.status='ready' AND r.approved_at IS NOT NULL AND r.expires_at>?")
     .bind(started.reservation_id,env.US_BRIDGE_DID,now).first();
-  if(!row||!row.pin_sha256){await setOutcome(env,call.call_id,'swml_pin','original_reservation_unavailable',started.reservation_id);return hangup();}
+  if(!row||!row.pin_sha256){await denialOutcome(env,call.call_id,'swml_pin','original_reservation_unavailable',started.reservation_id);return hangup();}
   const bumped=await env.DB.prepare("UPDATE reservations SET pin_attempts=pin_attempts+1 WHERE id=? AND status='ready' AND approved_at IS NOT NULL AND expires_at>? AND pin_attempts<?")
     .bind(row.id,now,MAX_PIN_ATTEMPTS).run();
-  if(!bumped.meta?.changes){await setOutcome(env,call.call_id,'swml_pin','PIN_LOCKED',row.id);return hangup();}
+  if(!bumped.meta?.changes){await denialOutcome(env,call.call_id,'swml_pin','PIN_LOCKED',row.id);return hangup();}
   const raw=read.body?.params?.digits??read.body?.vars?.prompt_value;
   const digits=typeof raw==='string'?raw.replace(/#$/,''):'';
   if(!await verifyPin(row.id,digits,row.pin_sha256)){
     await env.DB.prepare("UPDATE reservations SET status='failed',completed_at=? WHERE id=? AND status='ready' AND pin_attempts>=?")
       .bind(now,row.id,MAX_PIN_ATTEMPTS).run();
-    await setOutcome(env,call.call_id,'swml_pin','PIN_REJECTED',row.id);
+    await denialOutcome(env,call.call_id,'swml_pin','PIN_REJECTED',row.id);
     return hangup();
   }
   const check=await policyCheck(env,row,'dtmf_pin',now);
-  if(!check.ok){await setOutcome(env,call.call_id,'swml_pin',check.code,row.id);return hangup();}
-  if(!await claim(env,row,call.call_id,call.segment_id,check,now)){await setOutcome(env,call.call_id,'swml_pin','CLAIM_LOST',row.id);return hangup();}
-  await setOutcome(env,call.call_id,'swml_pin','connect',row.id);
+  if(!check.ok){await denialOutcome(env,call.call_id,'swml_pin',check.code,row.id);return hangup();}
+  if(!await claim(env,row,call.call_id,call.segment_id,check,now,'swml_pin')){await denialOutcome(env,call.call_id,'swml_pin','CLAIM_LOST',row.id);return hangup();}
   return connectFor(env,row,check);
+}
+
+/** Carrier-facing safety boundary: transient D1 failures must never emit a connect
+ * or leave a signed callback without valid SWML denial. Authentication errors
+ * from readSigned retain their existing explicit 4xx responses.
+ * The only success path is a fully persisted, authorized inner handler result.
+ */
+export async function handleSignalWireRouting(request,env={}){
+  try{return await handleSignalWireRoutingInner(request,env);}
+  catch{return hangup();}
+}
+export async function handleSignalWirePin(request,env={}){
+  try{return await handleSignalWirePinInner(request,env);}
+  catch{return hangup();}
 }

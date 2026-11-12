@@ -62,7 +62,7 @@ test('DTMF PIN mode: prompt, then connect only for the right single-use PIN on t
   const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
   const b=await reserve(env,'pin-flow-0001');
   await approveReservation(env,b.id);
-  const first=await inbound(env,{call_id:CID(10),from_number:'+13125550199'});
+  const first=await inbound(env,{call_id:CID(10)});
   const main=first.doc.sections.main;
   assert.deepEqual(main[0],{answer:{max_duration:120}});
   assert.deepEqual(main[1].prompt,{play:'silence:1',max_digits:8,terminators:'#',digit_timeout:5,initial_timeout:15});
@@ -80,6 +80,30 @@ test('DTMF PIN mode: prompt, then connect only for the right single-use PIN on t
   await inbound(env,{call_id:CID(12)});
   assert.ok(isHangup((await pin(env,CID(12),b.dtmf_pin)).doc),'single use');
   assert.equal(DB.raw.prepare('SELECT pin_attempts FROM reservations WHERE id=?').get(b.id).pin_attempts,2);
+});
+
+test('signed PIN callbacks cannot switch segment or caller identity',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const b=await reserve(env,'pin-carrier-identity-bound');
+  await approveReservation(env,b.id);
+  const id=CID(960);
+  const initial=await inbound(env,{call_id:id});
+  assert.ok(initial.doc.sections.main.some(x=>x.prompt));
+  const event=DB.raw.prepare("SELECT challenge_segment_id,challenge_caller_sha256 FROM provider_events WHERE provider_call_id=? AND event_type='swml_inbound'").get(id);
+  assert.equal(event.challenge_segment_id,call({call_id:id}).segment_id);
+  assert.match(event.challenge_caller_sha256,/^[a-f0-9]{64}$/);
+  const changed=[{segment_id:CID(961)},{from_number:'+13125550199'}];
+  for(const overrides of changed){
+    const response=await worker.fetch(swml({call:call({call_id:id,...overrides}),params:{digits:b.dtmf_pin}},PIN_URL),env);
+    assert.equal(response.status,200);
+    assert.ok(isHangup(await response.json()),'identity drift hangs up');
+    assert.equal(DB.raw.prepare('SELECT pin_attempts FROM reservations WHERE id=?').get(b.id).pin_attempts,0);
+    assert.equal(DB.raw.prepare("SELECT COUNT(*) AS n FROM provider_events WHERE provider_call_id=? AND event_type='swml_pin'").get(id).n,0);
+    assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(b.id).n,0);
+  }
+  const good=await pin(env,id,b.dtmf_pin);
+  assert.equal(connectOf(good.doc)?.to,DEST,'original identity still works');
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(b.id).status,'connecting');
 });
 
 test('DTMF follow-up cannot switch to a later reservation after first one is cancelled',async t=>{
@@ -236,4 +260,235 @@ test('simultaneous valid PIN callbacks cannot produce two carrier connections',a
   assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'connecting');
   assert.ok(isHangup((await pin(env,firstId,reservation.dtmf_pin)).doc),'replayed first callback hangs up');
   assert.ok(isHangup((await pin(env,secondId,reservation.dtmf_pin)).doc),'replayed second callback hangs up');
+});
+
+
+for(const [kind,trigger] of [
+  ['ABORT',"SELECT RAISE(ABORT,'injected PIN outcome failure')"],
+  ['IGNORE',"SELECT RAISE(IGNORE)"]
+]){
+  test('PIN callback: provider-event connect UPDATE '+kind+' fails closed without consuming reservation',async t=>{
+    const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+    const b=await reserve(env,'pin-event-'+kind.toLowerCase()+'-1');
+    assert.equal((await approveReservation(env,b.id)).status,200);
+    const firstId=CID(kind==='ABORT'?310:320);
+    const retryId=CID(kind==='ABORT'?311:321);
+    const first=await inbound(env,{call_id:firstId});
+    assert.ok(first.doc.sections.main.some(x=>x.prompt),'original call received a PIN challenge');
+    DB.raw.exec("CREATE TRIGGER inject_pin_outcome BEFORE UPDATE OF outcome ON provider_events WHEN NEW.outcome='connect' AND NEW.event_type='swml_pin' BEGIN "+trigger+"; END");
+    const failed=await pin(env,firstId,b.dtmf_pin);
+    assert.equal(failed.status,200,'a failed DB transaction must return valid hangup SWML');
+    assert.ok(isHangup(failed.doc),'never emit connect on failed event persistence');
+    assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(b.id).status,'ready');
+    assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(b.id).n,0);
+    assert.notEqual(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_pin'").get(firstId)?.outcome,'connect');
+    DB.raw.exec('DROP TRIGGER inject_pin_outcome');
+    const next=await inbound(env,{call_id:retryId});
+    assert.ok(next.doc.sections.main.some(x=>x.prompt));
+    const success=await pin(env,retryId,b.dtmf_pin);
+    assert.equal(connectOf(success.doc)?.to,DEST,'fresh signed PIN attempt succeeds after transient failure');
+    assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(b.id).status,'connecting');
+    assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(b.id).n,1);
+    assert.equal(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_pin'").get(retryId).outcome,'connect');
+  });
+}
+
+
+test('PIN callback: compound silent event and reservation-reset failures roll back atomically',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const reservation=await reserve(env,'pin-compound-silent-1');
+  assert.equal((await approveReservation(env,reservation.id)).status,200);
+  const firstId=CID(330);
+  const retryId=CID(331);
+  const challenge=await inbound(env,{call_id:firstId});
+  assert.ok(challenge.doc.sections.main.some(x=>x.prompt),'initial signed call requests PIN');
+  DB.raw.exec("CREATE TRIGGER ignore_pin_connect_compound BEFORE UPDATE OF outcome ON provider_events WHEN NEW.outcome='connect' AND NEW.event_type='swml_pin' BEGIN SELECT RAISE(IGNORE); END");
+  DB.raw.exec("CREATE TRIGGER ignore_pin_reset_compound BEFORE UPDATE OF status ON reservations WHEN OLD.status='connecting' AND NEW.status='ready' BEGIN SELECT RAISE(IGNORE); END");
+  const failed=await pin(env,firstId,reservation.dtmf_pin);
+  assert.equal(failed.status,200,'failed transaction returns valid SWML');
+  assert.ok(isHangup(failed.doc),'never connect after two silent database faults');
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'ready','transaction must roll back claim');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,0,'no orphaned leg');
+  assert.notEqual(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_pin'").get(firstId)?.outcome,'connect','no false connect event');
+  DB.raw.exec('DROP TRIGGER ignore_pin_connect_compound');
+  DB.raw.exec('DROP TRIGGER ignore_pin_reset_compound');
+  const next=await inbound(env,{call_id:retryId});
+  assert.ok(next.doc.sections.main.some(x=>x.prompt),'new signed call can request PIN');
+  assert.equal(connectOf((await pin(env,retryId,reservation.dtmf_pin)).doc)?.to,DEST,'fresh PIN callback connects after recovery');
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,1);
+  assert.equal(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_pin'").get(retryId).outcome,'connect');
+});
+
+test('denied PIN claim remains hangup when CLAIM_LOST event update also aborts',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const reservation=await reserve(env,'pin-denial-outage-0001');
+  assert.equal((await approveReservation(env,reservation.id)).status,200);
+  const id=CID(340);
+  assert.ok((await inbound(env,{call_id:id})).doc.sections.main.some(x=>x.prompt));
+  DB.raw.exec("CREATE TRIGGER fail_pin_claim BEFORE INSERT ON reservation_carrier_legs BEGIN SELECT RAISE(ABORT,'claim unavailable'); END");
+  DB.raw.exec("CREATE TRIGGER fail_pin_denial BEFORE UPDATE OF outcome ON provider_events WHEN NEW.outcome='CLAIM_LOST' BEGIN SELECT RAISE(ABORT,'denial telemetry unavailable'); END");
+  const result=await pin(env,id,reservation.dtmf_pin);
+  assert.equal(result.status,200,'DB outage must not become a 500');
+  assert.ok(isHangup(result.doc),'no connection on failed claim or telemetry');
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'ready');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,0);
+  DB.raw.exec('DROP TRIGGER fail_pin_claim');
+  DB.raw.exec('DROP TRIGGER fail_pin_denial');
+  const retry=CID(341);
+  assert.ok((await inbound(env,{call_id:retry})).doc.sections.main.some(x=>x.prompt));
+  assert.equal(connectOf((await pin(env,retry,reservation.dtmf_pin)).doc)?.to,DEST);
+});
+
+test('inbound no-reservation denial survives provider-event outcome database failure',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  DB.raw.exec("CREATE TRIGGER fail_inbound_denial BEFORE UPDATE OF outcome ON provider_events WHEN NEW.outcome='no_approved_reservation' BEGIN SELECT RAISE(ABORT,'telemetry unavailable'); END");
+  const result=await inbound(env,{call_id:CID(342)});
+  assert.equal(result.status,200);
+  assert.ok(isHangup(result.doc));
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservations').get().n,0);
+  DB.raw.exec('DROP TRIGGER fail_inbound_denial');
+});
+
+test('PIN prompt requires a durable challenge binding, including ignored and aborted writes',async t=>{
+  for(const [kind,trigger] of [
+    ['abort',"SELECT RAISE(ABORT,'injected challenge persistence failure')"],
+    ['ignore','SELECT RAISE(IGNORE)']
+  ]){
+    const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+    const reservation=await reserve(env,'challenge-write-'+kind);
+    await approveReservation(env,reservation.id);
+    DB.raw.exec("CREATE TRIGGER fail_challenge BEFORE UPDATE OF outcome ON provider_events WHEN NEW.outcome='pin_requested' BEGIN "+trigger+"; END");
+    const callId=CID(kind==='abort'?350:351);
+    const result=await inbound(env,{call_id:callId});
+    assert.equal(result.status,200,kind+' must return valid SWML');
+    assert.ok(isHangup(result.doc),kind+' must never prompt without durable binding');
+    assert.equal(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_inbound'").get(callId)?.outcome,'received');
+    assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'ready');
+    assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,0);
+    DB.raw.exec('DROP TRIGGER fail_challenge');
+    const retry=await inbound(env,{call_id:CID(kind==='abort'?352:353)});
+    assert.ok(retry.doc.sections.main.some(x=>x.prompt),'fresh challenge works after recovery');
+  }
+});
+
+test('PIN attempt database ABORT returns safe hangup and preserves unclaimed route',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const reservation=await reserve(env,'pin-bump-outage-0001');
+  await approveReservation(env,reservation.id);
+  const id=CID(360);
+  assert.ok((await inbound(env,{call_id:id})).doc.sections.main.some(x=>x.prompt));
+  DB.raw.exec("CREATE TRIGGER abort_pin_bump BEFORE UPDATE OF pin_attempts ON reservations BEGIN SELECT RAISE(ABORT,'pin attempt DB outage'); END");
+  const result=await pin(env,id,reservation.dtmf_pin);
+  assert.equal(result.status,200);
+  assert.ok(isHangup(result.doc),'PIN write failure must never connect');
+  assert.deepEqual({...DB.raw.prepare('SELECT status,pin_attempts FROM reservations WHERE id=?').get(reservation.id)},{status:'ready',pin_attempts:0});
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,0);
+  DB.raw.exec('DROP TRIGGER abort_pin_bump');
+  const retry=CID(361);
+  assert.ok((await inbound(env,{call_id:retry})).doc.sections.main.some(x=>x.prompt));
+  assert.equal(connectOf((await pin(env,retry,reservation.dtmf_pin)).doc)?.to,DEST);
+});
+
+test('inbound reservation SELECT outage returns safe hangup without claiming',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const reservation=await reserve(env,'inbound-read-outage-1');
+  await approveReservation(env,reservation.id);
+  const original=env.DB;
+  env.DB={prepare(sql){
+    if(sql.includes('SELECT r.id,r.account_id,r.destination')&&sql.includes('ORDER BY r.created_at'))throw Error('injected D1 read outage');
+    return original.prepare(sql);
+  },batch:(...args)=>original.batch(...args)};
+  const result=await inbound(env,{call_id:CID(362)});
+  assert.equal(result.status,200);
+  assert.ok(isHangup(result.doc),'read outage must never prompt or connect');
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'ready');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,0);
+  env.DB=original;
+  const retry=await inbound(env,{call_id:CID(363)});
+  assert.ok(retry.doc.sections.main.some(x=>x.prompt),'recovery allows a new challenge');
+});
+
+
+test('post-commit missing D1 metadata never downgrades a durable connect event',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const reservation=await reserve(env,'ambiguous-claim-meta-1');
+  assert.equal((await approveReservation(env,reservation.id)).status,200);
+  const id=CID(370);
+  assert.ok((await inbound(env,{call_id:id})).doc.sections.main.some(x=>x.prompt));
+  const original=env.DB;
+  env.DB={prepare:(...args)=>original.prepare(...args),batch:async statements=>{
+    const results=await original.batch(statements);
+    return results.map(result=>({...result,meta:{}}));
+  }};
+  const result=await pin(env,id,reservation.dtmf_pin);
+  assert.equal(result.status,200);
+  assert.ok(isHangup(result.doc),'ambiguous post-commit response must not emit connect');
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,1);
+  assert.equal(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_pin'").get(id).outcome,'connect','denial telemetry must not overwrite committed connect');
+  env.DB=original;
+});
+
+
+test('silently ignored replay-event INSERT cannot authorize a PIN challenge',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const reservation=await reserve(env,'ignored-replay-event-1');
+  await approveReservation(env,reservation.id);
+  DB.raw.exec("CREATE TRIGGER ignore_inbound_event BEFORE INSERT ON provider_events WHEN NEW.event_type='swml_inbound' BEGIN SELECT RAISE(IGNORE); END");
+  const id=CID(380);
+  const result=await inbound(env,{call_id:id});
+  assert.equal(result.status,200);
+  assert.ok(isHangup(result.doc),'missing replay guard must not issue PIN prompt');
+  assert.equal(DB.raw.prepare("SELECT COUNT(*) AS n FROM provider_events WHERE provider_call_id=?").get(id).n,0);
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'ready');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,0);
+  DB.raw.exec('DROP TRIGGER ignore_inbound_event');
+  const retry=await inbound(env,{call_id:CID(381)});
+  assert.ok(retry.doc.sections.main.some(x=>x.prompt),'fresh durable event can prompt after recovery');
+});
+
+test('silently ignored PIN replay-event INSERT cannot claim a reservation',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const reservation=await reserve(env,'ignored-pin-event-1');
+  await approveReservation(env,reservation.id);
+  const id=CID(382);
+  assert.ok((await inbound(env,{call_id:id})).doc.sections.main.some(x=>x.prompt));
+  DB.raw.exec("CREATE TRIGGER ignore_pin_event BEFORE INSERT ON provider_events WHEN NEW.event_type='swml_pin' BEGIN SELECT RAISE(IGNORE); END");
+  const result=await pin(env,id,reservation.dtmf_pin);
+  assert.equal(result.status,200);
+  assert.ok(isHangup(result.doc),'missing PIN replay guard must not connect');
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'ready');
+  assert.equal(DB.raw.prepare('SELECT pin_attempts FROM reservations WHERE id=?').get(reservation.id).pin_attempts,0);
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,0);
+  DB.raw.exec('DROP TRIGGER ignore_pin_event');
+  const retryId=CID(383);
+  assert.ok((await inbound(env,{call_id:retryId})).doc.sections.main.some(x=>x.prompt));
+  assert.equal(connectOf((await pin(env,retryId,reservation.dtmf_pin)).doc)?.to,DEST);
+});
+
+
+test('post-commit D1 transport error preserves committed claim evidence and denies duplicate routing',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const reservation=await reserve(env,'ambiguous-claim-throw-1');
+  assert.equal((await approveReservation(env,reservation.id)).status,200);
+  const id=CID(390);
+  assert.ok((await inbound(env,{call_id:id})).doc.sections.main.some(x=>x.prompt));
+  const original=env.DB;
+  env.DB={prepare:(...args)=>original.prepare(...args),batch:async statements=>{
+    await original.batch(statements);
+    throw Error('injected D1 response lost after commit');
+  }};
+  const result=await pin(env,id,reservation.dtmf_pin);
+  assert.equal(result.status,200);
+  assert.ok(isHangup(result.doc),'unknown transaction outcome must never emit connect');
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,1);
+  assert.equal(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_pin'").get(id).outcome,'connect','committed evidence must remain monotonic');
+  env.DB=original;
+  const duplicate=await pin(env,id,reservation.dtmf_pin);
+  assert.ok(isHangup(duplicate.doc),'replayed PIN must never emit a second connect');
+  const fresh=await inbound(env,{call_id:CID(391)});
+  assert.ok(isHangup(fresh.doc),'stranded connecting reservation must not be reused');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,1);
 });
