@@ -279,6 +279,10 @@ test("working preview navigates real pages and keeps call state in the floating 
   assert.equal(document.querySelectorAll(".owned-number-card").length, 3);
   named(document, "Collapse navigation").click();
   await waitFor(() => document.querySelector(".rail-collapsed"));
+  assert.equal(
+    document.querySelector(".compact-call-card .direction-arrow"),
+    null,
+  );
   named(document, "Expand navigation").click();
   named(nav, "Open call and transcript").click();
   await waitFor(() => document.querySelector(".gb-call-layout"));
@@ -854,21 +858,26 @@ test("international call planning saves optional capture choices and join defaul
       .querySelector(".call-plan-list")
       ?.textContent.includes("Amsterdam viewing test"),
   );
-  const row = [...document.querySelectorAll(".call-plan-row")].find((r) =>
-    r.textContent.includes("Amsterdam viewing test"),
+  named(document, "Open Amsterdam viewing test").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Edit call plan"]'),
   );
-  assert.match(row.textContent, /Recording off/);
-  assert.match(row.textContent, /Transcript requested/);
-  [...row.querySelectorAll("button")]
-    .find((b) => b.textContent.includes("Review plan"))
-    .click();
-  await waitFor(() => document.querySelector(".plan-review"));
-  assert.match(
-    document.querySelector(".plan-review").textContent,
-    /Ask before capture/,
+  const editor = document.querySelector(
+    'dialog[open][aria-label="Edit call plan"]',
   );
-  named(document, "Explore the sample call", "a").click();
-  await waitFor(() => document.querySelector(".tools-live-card"));
+  await waitFor(
+    () => labelled(editor, "Call name").value === "Amsterdam viewing test",
+  );
+  assert.equal(labelled(editor, "Record the call").checked, false);
+  assert.equal(labelled(editor, "Create a transcript").checked, true);
+  assert.equal(
+    labelled(editor, "Recording and transcription permission").value,
+    "ask",
+  );
+  named(editor, "Close").click();
+  await waitFor(
+    () => !document.querySelector('dialog[open][aria-label="Edit call plan"]'),
+  );
   await navigate(document, "/studio/demo/memory/");
   fieldValue(window, labelled(document, "When I join a call"), "phone");
   await waitFor(() =>
@@ -1141,9 +1150,10 @@ test("studio search groups live calls, connections, numbers, countries and setti
     .click();
   await waitFor(() => document.title === "Connections | AgentBridge");
   assert.equal(
-    named(document, "Netherlands").getAttribute("aria-pressed"),
-    "true",
+    document.querySelector('select[aria-label="Filter by country"]').value,
+    "NL",
   );
+  assert.equal(document.querySelector(".connection-filters").hidden, false);
   input.focus();
   fieldValue(window, input, "no-such-entry-284");
   await waitFor(() => document.querySelector(".studio-search-empty"));
@@ -1188,7 +1198,7 @@ test("home connections default to a recent horizontal row, expand for search, an
   const main = document.querySelector("main");
   assert.ok(named(main, "Buy a number"));
   assert.ok(named(main, "Connect a destination"));
-  assert.ok(document.querySelector(".number-country-rail .country-card-flag"));
+  assert.equal(document.querySelector(".number-country-rail"), null);
   assert.ok(document.querySelector(".number-connection-list.is-horizontal"));
   assert.equal(
     main.querySelector('input[aria-label="Search connections"]'),
@@ -1230,7 +1240,17 @@ test("home connections default to a recent horizontal row, expand for search, an
     main.querySelector(".number-connection-card h3").textContent,
     /San Francisco/,
   );
-  named(main, "United Kingdom").click();
+  named(main, "Expand connections").click();
+  await waitFor(() =>
+    main.querySelector('input[aria-label="Search connections"]'),
+  );
+  named(main, "Filter connections").click();
+  await waitFor(() => !main.querySelector(".connection-filters").hidden);
+  fieldValue(
+    window,
+    main.querySelector('select[aria-label="Filter by country"]'),
+    "GB",
+  );
   await waitFor(
     () => main.querySelectorAll(".number-connection-card").length === 1,
   );
@@ -1389,6 +1409,218 @@ test("number acquisition has a visible exit, handles missing inventory, and cont
     );
   }
   assert.equal(document.querySelectorAll(".owned-number-card").length, 7);
+  assert.deepEqual(requests, []);
+  assert.deepEqual(
+    errors.map((error) => error.message),
+    [],
+  );
+});
+
+test("studio shortcuts form one five-item rail and the single circle arrow expands connections into search and filters", async (t) => {
+  const { dom, window, document, errors, requests } = setup(
+    "file:///AgentBridge-Working-Website.html#/studio/demo/",
+  );
+  t.after(() => dom.window.close());
+  await waitFor(() => document.title === "Your workspace | AgentBridge");
+  const rail = document.querySelector('nav[aria-label="Studio shortcuts"]');
+  assert.equal(rail.children.length, 5);
+  assert.ok(named(rail, "Buy a number"));
+  assert.ok(named(rail, "Connect a destination"));
+  for (const [label, route] of [
+    ["Calls", "calls"],
+    ["Transcripts", "memory"],
+    ["Your numbers", "numbers"],
+  ])
+    assert.equal(
+      named(rail, label, "a").getAttribute("href"),
+      `#/studio/demo/${route}/`,
+    );
+  for (const item of rail.children)
+    assert.equal(item.querySelectorAll(".direction-arrow").length, 1);
+  assert.equal(document.querySelector(".number-country-rail"), null);
+  const toggle = named(document, "Expand connections");
+  assert.equal(toggle.querySelectorAll("svg").length, 1);
+  assert.equal(
+    toggle.querySelector(".direction-arrow").dataset.expanded,
+    "false",
+  );
+  toggle.click();
+  await waitFor(() => toggle.getAttribute("aria-expanded") === "true");
+  assert.equal(
+    toggle.querySelector(".direction-arrow").dataset.expanded,
+    "true",
+  );
+  named(document.querySelector("main"), "Filter connections").click();
+  await waitFor(() => !document.querySelector(".connection-filters").hidden);
+  fieldValue(
+    window,
+    document.querySelector('select[aria-label="Filter by country"]'),
+    "GB",
+  );
+  await waitFor(
+    () => document.querySelectorAll(".number-connection-card").length === 1,
+  );
+  fieldValue(
+    window,
+    document.querySelector('select[aria-label="Filter by routing number"]'),
+    "example-number-2",
+  );
+  await waitFor(
+    () => document.querySelectorAll(".number-connection-card").length === 0,
+  );
+  named(document.querySelector("main"), "Clear filters").click();
+  await waitFor(
+    () => document.querySelectorAll(".number-connection-card").length === 3,
+  );
+  named(document, "Collapse connections").click();
+  await waitFor(() =>
+    document.querySelector(".number-connection-list.is-horizontal"),
+  );
+  assert.equal(document.querySelector(".connection-filters").hidden, true);
+  named(rail, "Calls", "a").click();
+  await waitFor(() => document.title === "Calls | AgentBridge");
+  assert.deepEqual(requests, []);
+  assert.deepEqual(
+    errors.map((error) => error.message),
+    [],
+  );
+});
+
+test("Calls shows live and idle saved cards, searches them, and edits call details and capture choices in place", async (t) => {
+  const { dom, window, document, errors, requests } = setup(
+    "file:///AgentBridge-Working-Website.html#/studio/demo/calls/",
+  );
+  t.after(() => dom.window.close());
+  await waitFor(() => document.title === "Calls | AgentBridge");
+  assert.ok(
+    document.querySelector(
+      'section[aria-label="Live calls"] .active-call-card',
+    ),
+  );
+  assert.equal(document.querySelector(".hub-transcript-card"), null);
+  assert.doesNotMatch(
+    document.querySelector("main").textContent,
+    /YOUR PREPARATION|Transcript off/i,
+  );
+  assert.equal(document.querySelectorAll(".saved-call-card").length, 3);
+  for (const card of document.querySelectorAll(".saved-call-card"))
+    assert.equal(card.querySelector(".bot-face").dataset.state, "idle");
+  const search = document.querySelector(
+    'input[aria-label="Search saved calls"]',
+  );
+  fieldValue(window, search, "San Francisco");
+  await waitFor(
+    () => document.querySelectorAll(".saved-call-card").length === 1,
+  );
+  fieldValue(window, search, "no matching saved call");
+  await waitFor(() =>
+    document.querySelector(".saved-calls-section .tools-empty-card"),
+  );
+  fieldValue(window, search, "");
+  await waitFor(
+    () => document.querySelectorAll(".saved-call-card").length === 3,
+  );
+  named(document, "Open London studio viewing").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Edit call plan"]'),
+  );
+  let editor = document.querySelector(
+    'dialog[open][aria-label="Edit call plan"]',
+  );
+  await waitFor(
+    () => labelled(editor, "Call name").value === "London studio viewing",
+  );
+  fieldValue(window, labelled(editor, "Call name"), "London follow-up");
+  fieldValue(
+    window,
+    labelled(editor, "What should your agent find out?"),
+    "Ask for an afternoon appointment.",
+  );
+  labelled(editor, "Create a transcript").click();
+  fieldValue(window, labelled(editor, "Transcript language"), "en");
+  named(editor, "Save changes").click();
+  await waitFor(
+    () => !document.querySelector('dialog[open][aria-label="Edit call plan"]'),
+  );
+  assert.equal(
+    document.querySelectorAll(".saved-call-card").length,
+    3,
+    "Editing must not duplicate a saved call",
+  );
+  named(document, "Open London follow-up").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Edit call plan"]'),
+  );
+  editor = document.querySelector('dialog[open][aria-label="Edit call plan"]');
+  await waitFor(
+    () => labelled(editor, "Call name").value === "London follow-up",
+  );
+  assert.equal(labelled(editor, "Create a transcript").checked, true);
+  assert.equal(labelled(editor, "Record the call").checked, false);
+  assert.equal(
+    labelled(editor, "What should your agent find out?").value,
+    "Ask for an afternoon appointment.",
+  );
+  fieldValue(window, labelled(editor, "International phone number"), "invalid");
+  editor
+    .querySelector("form")
+    .dispatchEvent(
+      new window.Event("submit", { bubbles: true, cancelable: true }),
+    );
+  await waitFor(() => editor.querySelector('[role="alert"]'));
+  named(editor, "Cancel").click();
+  await waitFor(
+    () => !document.querySelector('dialog[open][aria-label="Edit call plan"]'),
+  );
+  assert.deepEqual(requests, []);
+  assert.deepEqual(
+    errors.map((error) => error.message),
+    [],
+  );
+});
+
+test("an idle connection opens a prefilled call and saving it converts that card into an editable saved call", async (t) => {
+  const { dom, document, errors, requests } = setup(
+    "file:///AgentBridge-Working-Website.html#/studio/demo/calls/",
+  );
+  t.after(() => dom.window.close());
+  await waitFor(() => document.title === "Calls | AgentBridge");
+  named(document, "Open New York office").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="New call"]'),
+  );
+  let editor = document.querySelector('dialog[open][aria-label="New call"]');
+  await waitFor(
+    () => labelled(editor, "Call name").value === "New York office",
+  );
+  assert.equal(
+    labelled(editor, "International phone number").value,
+    "+12125550124",
+  );
+  named(editor, "Continue to options").click();
+  await waitFor(() => editor.querySelector('input[role="switch"]'));
+  labelled(editor, "Record the call").click();
+  named(editor, "Save call plan").click();
+  await waitFor(
+    () => !document.querySelector('dialog[open][aria-label="New call"]'),
+  );
+  assert.equal(document.querySelectorAll(".saved-call-card").length, 3);
+  named(document, "Open New York office").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Edit call plan"]'),
+  );
+  editor = document.querySelector('dialog[open][aria-label="Edit call plan"]');
+  await waitFor(() => labelled(editor, "Record the call").checked);
+  assert.equal(labelled(editor, "Create a transcript").checked, false);
+  named(editor, "Archive call plan").click();
+  await waitFor(
+    () => !document.querySelector('dialog[open][aria-label="Edit call plan"]'),
+  );
+  assert.equal(
+    document.querySelectorAll(".saved-call-card").length,
+    3,
+    "The saved connection remains available after its call plan is archived",
+  );
   assert.deepEqual(requests, []);
   assert.deepEqual(
     errors.map((error) => error.message),

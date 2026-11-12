@@ -27,6 +27,9 @@ The authenticated Node studio adds:
 - `POST /api/studio/call-plans`: validates a destination, country-code match,
   bounded name/brief, capture and join preferences, and `ask`/`confirmed` capture
   permission preference. The returned plan is always `draft`.
+- `PATCH /api/studio/call-plans/:id`: validates and replaces the editable fields
+  of an existing draft while preserving its identity and creation time. Archived
+  and missing plans return 404. Editing never starts a call, capture or callback.
 - `POST /api/studio/call-plans/:id/archive`: archives a saved plan.
 - `PATCH /api/studio/capture-preferences`: saves independent recording and
   transcription switches, a language preference, 7/30/90-day content retention

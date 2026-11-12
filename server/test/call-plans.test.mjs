@@ -58,3 +58,29 @@ test('call plans and privacy preferences survive database reopen and remain boun
   for(let i=1;i<200;i++)assert.ok(store.createCallPlan({...value,label:'Plan '+i}));assert.equal(store.createCallPlan(value),null);assert.equal(store.snapshot().call_plans.length,200);store.close();
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test('editing a saved call persists validated details without duplicating the plan or contacting a provider',async t=>{
+ const h=await harness(t),headers={Cookie:h.cookie};
+ const created=await (await h.request('call-plans',{method:'POST',headers,body:JSON.stringify(plan())})).json();
+ const endpoint='call-plans/'+created.plan.id;
+ const edited={...plan(),label:'Updated viewing',purpose:'Ask for a later time.',capture:{...DEFAULT_CAPTURE,transcription:true,language:'en'}};
+ assert.equal((await h.request(endpoint,{method:'PATCH',body:JSON.stringify(edited)})).status,401);
+ assert.equal((await h.request(endpoint,{method:'PATCH',headers:{...headers,Origin:'https://attacker.example'},body:JSON.stringify(edited)})).status,403);
+ for(const patch of [{status:'connected'},{country:'GB'},{capture:{...DEFAULT_CAPTURE,transcription:'yes'}}])assert.equal((await h.request(endpoint,{method:'PATCH',headers,body:JSON.stringify({...edited,...patch})})).status,422);
+ const response=await h.request(endpoint,{method:'PATCH',headers,body:JSON.stringify(edited)});assert.equal(response.status,200);
+ const result=await response.json();assert.equal(result.plan.id,created.plan.id);assert.equal(result.plan.created_at,created.plan.created_at);assert.equal(result.plan.label,'Updated viewing');assert.equal(result.plan.capture.recording,false);
+ for(const field of ['calling_enabled','recording_enabled','transcription_enabled','joining_enabled'])assert.equal(result[field],false);
+ const snapshot=h.store.snapshot();assert.equal(snapshot.call_plans.length,1);assert.equal(snapshot.call_plans[0].purpose,edited.purpose);assert.equal(snapshot.call_plans[0].capture.language,'en');assert.equal(snapshot.events[0].type,'call_plan.updated');assert.equal(h.fetched(),0);
+ await h.request(endpoint+'/archive',{method:'POST',headers,body:'{}'});
+ assert.equal((await h.request(endpoint,{method:'PATCH',headers,body:JSON.stringify(edited)})).status,404);
+ assert.equal((await h.request('call-plans/00000000-0000-0000-0000-000000000000',{method:'PATCH',headers,body:JSON.stringify(edited)})).status,404);
+ assert.equal(h.store.snapshot().call_plans[0].status,'archived');
+});
+
+test('edited call details survive database reopen',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'agentbridge-plan-edit-')),filename=join(dir,'studio.sqlite');
+ try{
+  let store=openStore(filename);const created=store.createCallPlan(validateCallPlan(plan()).value);const updated={...validateCallPlan(plan()).value,label:'New name',capture:{...DEFAULT_CAPTURE,transcription:true}};
+  store.updateCallPlan(created.id,updated);store.close();store=openStore(filename);const plans=store.snapshot().call_plans;assert.equal(plans.length,1);assert.equal(plans[0].label,'New name');assert.equal(plans[0].capture.transcription,true);store.close();
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});

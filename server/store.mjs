@@ -140,6 +140,18 @@ export function openStore(filename) {
       }catch(error){db.exec('ROLLBACK');throw error;}
       return plan;
     },
+    updateCallPlan(id,value) {
+      db.exec('BEGIN');
+      try {
+        const previous=db.prepare("SELECT created_at FROM studio_call_plans WHERE id=? AND status='draft'").get(id);
+        if(!previous){db.exec('ROLLBACK');return null;}
+        const now=new Date().toISOString();
+        db.prepare("UPDATE studio_call_plans SET label=?,destination=?,country=?,purpose=?,capture=?,permission=?,updated_at=? WHERE id=? AND status='draft'").run(value.label,value.destination,value.country,value.purpose,JSON.stringify(value.capture),value.permission,now,id);
+        event('call_plan.updated','Call details and preferences updated. No call, capture or join request made.');
+        db.exec('COMMIT');
+        return {id,...value,status:'draft',created_at:previous.created_at,updated_at:now};
+      }catch(error){db.exec('ROLLBACK');throw error;}
+    },
     archiveCallPlan(id) {
       const result=db.prepare("UPDATE studio_call_plans SET status='archived',updated_at=? WHERE id=? AND status='draft'").run(new Date().toISOString(),id);
       if(result.changes)event('call_plan.archived','Call plan archived.');
