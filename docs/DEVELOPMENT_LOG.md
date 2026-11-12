@@ -346,3 +346,7 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Changed the replay-event INSERT guard to require exactly one confirmed persisted row; a nonthrowing SQLite RAISE(IGNORE) or absent D1 write metadata now fails closed instead of treating a missing replay record as fresh.
 - Added offline trigger fault-injection regressions for both initial inbound and PIN callbacks, checking hangup, no carrier leg, unchanged ready reservation and fresh retry after recovery.
 - This does not resolve post-commit ambiguity or validate Cloudflare D1 production semantics. Changes remain unmerged; no paid routing, calls, provider purchases, secrets or deployment. Exact-head CI pending.
+
+## 2026-11-12 — Post-commit transport-loss regression (draft PR #40)
+- Added an offline SignalWire PIN fault-injection regression where the database batch commits and its transport response throws afterward. The callback must hang up, preserve the committed `connect` event and single carrier-leg row, and deny both replay of the same PIN event and a new attempt against the stranded `connecting` reservation.
+- This test establishes conservative denial behavior, **not** automatic reconciliation or proof of carrier connection. The ambiguous reservation remains locked pending verified provider-state evidence and owner-authorized recovery. Real Cloudflare D1 execution and exact-head CI remain required; no routing flags, carrier resources, calls or deployments were changed.
