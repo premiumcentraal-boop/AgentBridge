@@ -116,7 +116,7 @@ export function RoutingReview({
       <DialogHeader
         className="tools-dialog-heading"
         title="Route call"
-        onClose={onClose}
+        onOpenChange={onClose}
       />
       <form
         className="tools-dialog-body"

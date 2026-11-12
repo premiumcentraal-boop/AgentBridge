@@ -1,7 +1,8 @@
-import React, { useEffect, useId, useState } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { A } from "./context.jsx";
 import { Btn, Icon, IconBtn } from "./ui.jsx";
+import { flagDefinitions } from "./flags.js";
 import { ActiveCallCard } from "./studio-navigation.jsx";
 import { CALL_COUNTRIES } from "../../shared/call-plans.mjs";
 import {
@@ -37,22 +38,57 @@ const requestId = () =>
     return (c === "x" ? n : (n & 3) | 8).toString(16);
   });
 
+function CountryArtwork({ code }) {
+  const id = useId().replaceAll(":", "");
+  const vector = useMemo(
+    () => flagDefinitions("country-" + id).find((flag) => flag.code === code),
+    [code, id],
+  );
+  return vector ? (
+    <svg
+      aria-hidden="true"
+      className="country-card-flag"
+      viewBox={vector.viewBox}
+      preserveAspectRatio="xMidYMid slice"
+      dangerouslySetInnerHTML={{ __html: vector.body }}
+    />
+  ) : (
+    <span className="country-card-emoji" aria-hidden="true">
+      {COUNTRY_FLAGS[code] || "🌐"}
+    </span>
+  );
+}
+
 export function NumberWorkspace({
   page,
   snapshot,
   call,
   navTo,
   onOpenCall,
-  onJump,
   onBuy,
   onAdd,
   onEdit,
   onArchive,
   onLegacy,
   onLegacyRemove,
+  transcript = [],
+  recentConnections = {},
+  initialSearch = "",
+  initialCountry = "all",
 }) {
-  const [country, setCountry] = useState("all"),
-    [query, setQuery] = useState("");
+  const [country, setCountry] = useState(initialCountry),
+    [query, setQuery] = useState(initialSearch);
+  const [expanded, setExpanded] = useState(page !== "overview");
+  const search = useRef(null),
+    listId = useId();
+  const callStarted = useRef(Date.now() - (call.elapsed || 0) * 1000);
+  useEffect(() => {
+    setQuery(initialSearch);
+    if (initialSearch) setExpanded(true);
+  }, [initialSearch]);
+  useEffect(() => {
+    setCountry(initialCountry);
+  }, [initialCountry]);
   const numbers = (snapshot.routing_numbers || []).filter(
     (item) => item.status === "owned",
   );
@@ -70,63 +106,95 @@ export function NumberWorkspace({
       ),
   );
   const countries = [
-    ...new Set((numberPage ? numbers : links).map((item) => item.country)),
+    ...new Set([
+      ...(numberPage ? numbers : links).map((item) => item.country),
+      ...(country !== "all" ? [country] : []),
+    ]),
   ];
   const needle = query.trim().toLowerCase();
-  const filtered = links.filter(
-    (item) =>
-      (country === "all" || item.country === country) &&
-      `${item.label} ${item.destination} ${countryName(item.country)} ${numbers.find((number) => number.id === item.routing_number_id)?.e164 || ""}`
+  const lastUse = (item) =>
+    Math.max(
+      recentConnections[item.id] || 0,
+      Date.parse(item.last_used_at || item.updated_at || item.created_at) || 0,
+      item.destination === call.destination ? callStarted.current : 0,
+    );
+  const filtered = links
+    .filter(
+      (item) =>
+        (country === "all" || item.country === country) &&
+        `${item.label} ${item.destination} ${countryName(item.country)} ${numbers.find((number) => number.id === item.routing_number_id)?.e164 || ""}`
+          .toLowerCase()
+          .includes(needle),
+    )
+    .sort((a, b) => lastUse(b) - lastUse(a));
+  const owned = numbers.filter(
+    (number) =>
+      (country === "all" || number.country === country) &&
+      `${number.e164} ${number.label} ${countryName(number.country)}`
         .toLowerCase()
         .includes(needle),
   );
+  const changeLayout = () => {
+    if (expanded) setQuery("");
+    else requestAnimationFrame(() => search.current?.focus());
+    setExpanded((value) => !value);
+  };
   return (
     <div className="number-workspace">
       <h1 className={page === "overview" ? "sr-only" : "number-page-title"}>
         {page === "overview"
           ? "Studio"
-          : page === "numbers"
+          : numberPage
             ? "Your numbers"
             : page === "routes"
               ? "Routing"
               : "Connections"}
       </h1>
       {page === "overview" && call.active && (
-        <ActiveCallCard call={call} onOpen={onOpenCall} onJump={onJump} />
+        <ActiveCallCard
+          call={call}
+          onOpen={onOpenCall}
+          expandable
+          transcript={transcript}
+        />
       )}
-      <div className="number-toolbar">
-        <div>
-          <h2>
-            {page === "overview"
-              ? "Connections"
-              : numberPage
-                ? "Routing numbers"
-                : "Destinations"}
-          </h2>
-          <span>
-            {numberPage
-              ? `${numbers.length} owned`
-              : `${links.length} connections`}
+      <div
+        className="workspace-primary-actions"
+        aria-label="Manage numbers and destinations"
+      >
+        <button
+          type="button"
+          className="workspace-primary-action buy-action"
+          aria-label="Buy a number"
+          onClick={onBuy}
+        >
+          <span className="workspace-action-icon">
+            <Icon name="phone" size={26} />
+            <i>
+              <Icon name="plus" size={11} />
+            </i>
           </span>
-        </div>
-        <div className="number-toolbar-actions">
-          <Btn
-            label="Add number"
-            icon="plus"
-            end={null}
-            onClick={onBuy}
-            primary={numberPage || !numbers.length}
-          />
-          {!numberPage && (
-            <Btn
-              label="Add connection"
-              icon="connection"
-              end={null}
-              primary={Boolean(numbers.length)}
-              onClick={numbers.length ? () => onAdd() : onBuy}
-            />
-          )}
-        </div>
+          <span>
+            <strong>Buy a number</strong>
+            <small>A dedicated AgentBridge line</small>
+          </span>
+          <Icon name="diagonal" size={20} />
+        </button>
+        <button
+          type="button"
+          className="workspace-primary-action"
+          aria-label="Connect a destination"
+          onClick={() => onAdd("", country === "all" ? "GB" : country)}
+        >
+          <span className="workspace-action-icon">
+            <Icon name="connection" size={29} />
+          </span>
+          <span>
+            <strong>Connect a destination</strong>
+            <small>Link an outside phone number</small>
+          </span>
+          <Icon name="arrow" size={20} />
+        </button>
       </div>
       <div
         className="number-country-rail"
@@ -135,81 +203,138 @@ export function NumberWorkspace({
       >
         <button
           type="button"
+          className="country-filter-card all-countries-card"
           aria-pressed={country === "all"}
           onClick={() => setCountry("all")}
         >
-          <Icon name="globe" size={18} />
-          All countries
+          <span className="country-card-all">
+            <Icon name="globe" size={32} />
+          </span>
+          <span className="country-card-copy">
+            <strong>All countries</strong>
+            <small>
+              {numberPage ? numbers.length : links.length}{" "}
+              {numberPage ? "numbers" : "connections"}
+            </small>
+          </span>
         </button>
         {countries.map((code) => (
           <button
             key={code}
             type="button"
+            className="country-filter-card"
+            aria-label={countryName(code)}
             aria-pressed={country === code}
             onClick={() => setCountry(code)}
           >
-            <span>{COUNTRY_FLAGS[code] || "🌐"}</span>
-            {countryName(code)}
+            <span className="country-card-art">
+              <CountryArtwork code={code} />
+            </span>
+            <span className="country-card-copy">
+              <strong>{countryName(code)}</strong>
+              <small>
+                {
+                  (numberPage ? numbers : links).filter(
+                    (item) => item.country === code,
+                  ).length
+                }{" "}
+                {numberPage ? "numbers" : "connections"}
+              </small>
+            </span>
           </button>
         ))}
       </div>
-      <label className="number-search">
-        <Icon name="search" size={18} />
-        <input
-          type="search"
-          aria-label={numberPage ? "Search your numbers" : "Search connections"}
-          placeholder={
-            numberPage ? "Search numbers" : "Search names, countries or numbers"
-          }
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-      </label>
+      <div className="connections-section-heading">
+        <div>
+          <h2>{numberPage ? "Routing numbers" : "Connections"}</h2>
+          <span>
+            {numberPage ? `${numbers.length} owned` : "Most recently used"}
+          </span>
+        </div>
+        {!numberPage && (
+          <button
+            type="button"
+            className="connections-layout-toggle"
+            aria-label={
+              expanded ? "Collapse connections" : "Expand connections"
+            }
+            aria-expanded={expanded}
+            aria-controls={listId}
+            onClick={changeLayout}
+            title={
+              expanded
+                ? "Show recent connections in a row"
+                : "Expand and search connections"
+            }
+          >
+            <Icon name="arrow" size={18} />
+            <Icon name="arrow-down" size={18} />
+          </button>
+        )}
+      </div>
+      {(numberPage || expanded) && (
+        <label className="number-search">
+          <Icon name="search" size={18} />
+          <input
+            ref={search}
+            type="search"
+            aria-label={
+              numberPage ? "Search your numbers" : "Search connections"
+            }
+            placeholder={
+              numberPage
+                ? "Search numbers"
+                : "Search names, countries or numbers"
+            }
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+      )}
       {numberPage ? (
-        <div className="owned-number-list">
-          {numbers
-            .filter(
-              (number) =>
-                (country === "all" || number.country === country) &&
-                `${number.e164} ${number.label} ${countryName(number.country)}`
-                  .toLowerCase()
-                  .includes(needle),
-            )
-            .map((number) => {
-              const connection = links.find(
-                (link) => link.routing_number_id === number.id,
-              );
-              return (
-                <article className="owned-number-card" key={number.id}>
-                  <span className="number-country-icon">
-                    {COUNTRY_FLAGS[number.country]}
+        <div className="owned-number-list" id={listId}>
+          {owned.map((number) => {
+            const connection = links.find(
+              (link) => link.routing_number_id === number.id,
+            );
+            return (
+              <article className="owned-number-card" key={number.id}>
+                <span className="number-country-icon">
+                  {COUNTRY_FLAGS[number.country]}
+                </span>
+                <div>
+                  <strong>{number.e164}</strong>
+                  <span>
+                    {number.label} · {providerName(number.provider)}
                   </span>
-                  <div>
-                    <strong>{number.e164}</strong>
-                    <span>
-                      {number.label} · {providerName(number.provider)}
-                    </span>
-                    <small>
-                      {connection
-                        ? `→ ${connection.label} · ${connection.destination}`
-                        : "No destination connected"}
-                    </small>
-                  </div>
-                  <Btn
-                    label={
-                      connection ? "Edit connection" : "Connect destination"
-                    }
-                    end={null}
-                    onClick={() =>
-                      connection ? onEdit(connection) : onAdd(number.id)
-                    }
-                  />
-                </article>
-              );
-            })}
+                  <small>
+                    {connection
+                      ? `→ ${connection.label} · ${connection.destination}`
+                      : "No destination connected"}
+                  </small>
+                </div>
+                <Btn
+                  label={connection ? "Edit connection" : "Connect destination"}
+                  end={null}
+                  onClick={() =>
+                    connection ? onEdit(connection) : onAdd(number.id)
+                  }
+                />
+              </article>
+            );
+          })}
         </div>
       ) : (
-        <div className="number-connection-list">
+        <div
+          className={
+            "number-connection-list " +
+            (expanded ? "is-expanded" : "is-horizontal")
+          }
+          id={listId}
+          role="region"
+          aria-label={expanded ? "All connections" : "Recent connections"}
+          tabIndex={expanded ? undefined : 0}
+        >
           {filtered.map((link) => {
             const number = numbers.find(
               (item) => item.id === link.routing_number_id,
@@ -224,7 +349,11 @@ export function NumberWorkspace({
                     <h3>{link.label}</h3>
                     <span>{countryName(link.country)}</span>
                   </div>
-                  <span className="number-saved-state">Saved</span>
+                  {call.active && call.destination === link.destination ? (
+                    <span className="connection-live-state">In call</span>
+                  ) : (
+                    <span className="number-saved-state">Saved</span>
+                  )}
                 </div>
                 <div className="connection-number-pair">
                   <div>
@@ -241,26 +370,28 @@ export function NumberWorkspace({
                 </div>
                 <div className="connection-record-actions">
                   <Btn
-                    label={"Edit " + link.label}
-                    icon="routes"
-                    end={null}
+                    label="Open connection"
+                    aria-label={"Edit " + link.label}
+                    icon="connection"
+                    end="arrow"
                     onClick={() => onEdit(link)}
                   />
-                  <button
-                    type="button"
-                    className="number-text-action"
-                    onClick={() => onArchive(link)}
-                  >
-                    Remove
-                  </button>
+                  {expanded && (
+                    <button
+                      type="button"
+                      className="number-text-action"
+                      onClick={() => onArchive(link)}
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
               </article>
             );
           })}
         </div>
       )}
-      {((!numberPage && !filtered.length) ||
-        (numberPage && !numbers.length)) && (
+      {((!numberPage && !filtered.length) || (numberPage && !owned.length)) && (
         <div className="number-empty">
           <Icon name={numbers.length ? "connection" : "phone"} size={28} />
           <h2>
@@ -268,7 +399,9 @@ export function NumberWorkspace({
               ? "Get your first routing number"
               : query
                 ? "No matches"
-                : "Add a destination"}
+                : country !== "all"
+                  ? `No connections in ${countryName(country)}`
+                  : "Add a destination"}
           </h2>
           <p>
             {!numbers.length
@@ -276,10 +409,14 @@ export function NumberWorkspace({
               : "Choose a country, enter the number and select your routing number."}
           </p>
           <Btn
-            label={numbers.length ? "Add connection" : "Get a number"}
+            label={numbers.length ? "Connect a destination" : "Buy a number"}
             primary
             icon="plus"
-            onClick={numbers.length ? () => onAdd() : onBuy}
+            onClick={
+              numbers.length
+                ? () => onAdd("", country === "all" ? "GB" : country)
+                : onBuy
+            }
           />
         </div>
       )}
@@ -374,6 +511,9 @@ export function ConnectionEditor({
   const links = (snapshot.connections || []).filter(
     (item) => item.status === "saved" && item.id !== initial?.id,
   );
+  const availableNumbers = numbers.filter(
+    (number) => !links.some((link) => link.routing_number_id === number.id),
+  );
   useEffect(() => {
     if (open) {
       const free = numbers.find(
@@ -391,7 +531,11 @@ export function ConnectionEditor({
               label: "",
               country: "GB",
               destination: "+44",
-              routing_number_id: selectedNumber || free?.id || "",
+              routing_number_id: availableNumbers.some(
+                (number) => number.id === selectedNumber,
+              )
+                ? selectedNumber
+                : free?.id || "",
             },
       );
       setQuery("");
@@ -415,7 +559,7 @@ export function ConnectionEditor({
       <DialogHeader
         className="tools-dialog-heading"
         title={initial?.id ? "Edit connection" : "Add connection"}
-        onClose={onClose}
+        onOpenChange={onClose}
       />
       <form
         className="tools-dialog-body"
@@ -530,6 +674,12 @@ export function ConnectionEditor({
             ))}
           </select>
         </label>
+        {!availableNumbers.length && (
+          <p className="number-checkout-note" role="status">
+            No unassigned routing numbers. Buy another number to connect this
+            destination.
+          </p>
+        )}
         <button
           type="button"
           className="number-text-action"
@@ -552,7 +702,12 @@ export function ConnectionEditor({
             label={saving ? "Saving…" : "Save connection"}
             primary
             type="submit"
-            disabled={saving || !numbers.length}
+            disabled={
+              saving ||
+              !availableNumbers.some(
+                (number) => number.id === value.routing_number_id,
+              )
+            }
           />
         </div>
       </form>
@@ -578,9 +733,28 @@ export function BuyNumberDialog({
     [error, setError] = useState(""),
     [saving, setSaving] = useState(false),
     [candidate, setCandidate] = useState("+12025550130");
-  const candidates = ["+12025550130", "+12025550131", "+12025550132"].filter(
-    (candidate) => !numbers.some((number) => number.e164 === candidate),
-  );
+  const candidates =
+    /^[2-9][0-9]{2}$/.test(value.area_code) && numbers.length < 100
+      ? Array.from(
+          { length: 100 },
+          (_, index) =>
+            `+1${value.area_code}555${String(100 + ((index + 30) % 100)).padStart(4, "0")}`,
+        )
+          .filter(
+            (candidate) => !numbers.some((number) => number.e164 === candidate),
+          )
+          .slice(0, 3)
+      : [];
+  const effectiveCandidate = candidates.includes(candidate)
+    ? candidate
+    : candidates[0] || "";
+  const validCandidate = candidates.includes(effectiveCandidate);
+  useEffect(() => {
+    if (open)
+      setCandidate((current) =>
+        candidates.includes(current) ? current : candidates[0] || "",
+      );
+  }, [open, value.area_code, numbers]);
   useEffect(() => {
     if (open) {
       setCandidate(candidates[0] || "");
@@ -605,12 +779,16 @@ export function BuyNumberDialog({
       <DialogHeader
         className="tools-dialog-heading"
         title="Get a routing number"
-        onClose={onClose}
+        onOpenChange={onClose}
       />
       <form
         className="tools-dialog-body"
         onSubmit={async (event) => {
           event.preventDefault();
+          if (isDemo && !validCandidate) {
+            setError("Choose an available number before continuing.");
+            return;
+          }
           const result = validateNumberOrder(value);
           if (result.error) {
             setError(result.error);
@@ -618,7 +796,7 @@ export function BuyNumberDialog({
           }
           setSaving(true);
           try {
-            await onSave(result.value, isDemo ? candidate : null);
+            await onSave(result.value, isDemo ? effectiveCandidate : null);
             onClose();
           } catch (e) {
             setError(e.message);
@@ -649,7 +827,6 @@ export function BuyNumberDialog({
           <input
             id={id + "-area"}
             value={value.area_code}
-            readOnly={isDemo}
             inputMode="numeric"
             pattern="[2-9][0-9]{2}"
             maxLength={3}
@@ -673,26 +850,56 @@ export function BuyNumberDialog({
         </label>
         {isDemo ? (
           <>
-            <fieldset className="number-candidates">
-              <legend>Choose a number</legend>
-              {candidates.map((number) => (
-                <label
-                  key={number}
-                  htmlFor={id + "-candidate-" + number.slice(-4)}
-                >
-                  <input
-                    id={id + "-candidate-" + number.slice(-4)}
-                    type="radio"
-                    name={id + "-candidate"}
-                    value={number}
-                    checked={candidate === number}
-                    onChange={() => setCandidate(number)}
-                  />
-                  <span>{number}</span>
-                  <span>Voice</span>
-                </label>
-              ))}
-            </fieldset>
+            {candidates.length ? (
+              <fieldset className="number-candidates">
+                <legend>Choose a number</legend>
+                {candidates.map((number) => (
+                  <label
+                    key={number}
+                    htmlFor={id + "-candidate-" + number.slice(-4)}
+                  >
+                    <input
+                      id={id + "-candidate-" + number.slice(-4)}
+                      type="radio"
+                      name={id + "-candidate"}
+                      value={number}
+                      checked={effectiveCandidate === number}
+                      onChange={() => setCandidate(number)}
+                    />
+                    <span>{number}</span>
+                    <span>Voice</span>
+                  </label>
+                ))}
+              </fieldset>
+            ) : (
+              <div className="number-inventory-empty" role="status">
+                <Icon name="phone" size={27} />
+                <h3>
+                  {numbers.length >= 100
+                    ? "Number limit reached"
+                    : "No numbers available"}
+                </h3>
+                <p>
+                  {numbers.length >= 100
+                    ? "Use one of your existing numbers, or close this window."
+                    : "Try a different area code to see available numbers."}
+                </p>
+                {numbers.length < 100 && (
+                  <button
+                    type="button"
+                    className="number-text-action"
+                    onClick={() =>
+                      setValue((current) => ({
+                        ...current,
+                        area_code: current.area_code === "415" ? "212" : "415",
+                      }))
+                    }
+                  >
+                    Try another area code <Icon name="arrow" size={15} />
+                  </button>
+                )}
+              </div>
+            )}
             <p className="number-checkout-note">
               Example inventory · No charge
             </p>
@@ -720,7 +927,7 @@ export function BuyNumberDialog({
             }
             primary
             type="submit"
-            disabled={saving || (isDemo && !candidate)}
+            disabled={saving || (isDemo && !validCandidate)}
           />
         </div>
       </form>

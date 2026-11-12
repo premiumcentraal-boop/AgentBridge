@@ -207,7 +207,7 @@ function PlanDialog({ open, onClose, onSave, preferences, isDemo }) {
       <DialogHeader
         className="tools-dialog-heading"
         title="New call"
-        onClose={onClose}
+        onOpenChange={onClose}
       />
       <form onSubmit={save} className="tools-dialog-body">
         <div className="plan-steps">
@@ -401,7 +401,7 @@ export function JoinDialog({ open, onClose, onJoin, preferences }) {
       <DialogHeader
         className="tools-dialog-heading"
         title="Jump in"
-        onClose={onClose}
+        onOpenChange={onClose}
       />
       <form className="tools-dialog-body" onSubmit={join}>
         <div className="join-constellation">
@@ -477,7 +477,8 @@ export function JoinDialog({ open, onClose, onJoin, preferences }) {
           </p>
         )}
         <div className="tools-dialog-actions">
-          <Btn label="Join call" primary type="submit" icon="join" />
+          <Btn label="Cancel" end={null} onClick={onClose} />
+          <Btn label="Join call" primary type="submit" icon="join" end={null} />
         </div>
       </form>
     </Dialog>
@@ -497,7 +498,7 @@ function CapturePermission({ kind, onClose, onConfirm }) {
       <DialogHeader
         className="tools-dialog-heading"
         title="Your conversation. Your choice."
-        onClose={onClose}
+        onOpenChange={onClose}
       />
       <div className="tools-dialog-body">
         <p>
@@ -1310,7 +1311,7 @@ export function CallExtensions({
         <DialogHeader
           className="tools-dialog-heading"
           title="End this call?"
-          onClose={() => setEndConfirm(false)}
+          onOpenChange={() => setEndConfirm(false)}
         />
         <div className="tools-dialog-body">
           <p>Ends the call for everyone.</p>
@@ -1363,7 +1364,7 @@ export function CallExtensions({
         <DialogHeader
           className="tools-dialog-heading"
           title={selected?.label || "Call plan"}
-          onClose={() => setSelected(null)}
+          onOpenChange={() => setSelected(null)}
         />
         {selected && (
           <div className="tools-dialog-body">
