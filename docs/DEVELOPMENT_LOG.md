@@ -550,3 +550,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - GitHub Actions Quality gate run 43300486040 on c9ecf435 failed 1 of 178 Node tests: `backend/test/owner-force-unlock.test.mjs` expected successful read-only carrier reconciliation (HTTP 200) but its synthetic outbound child Voice Log omitted `from`; the stricter identity guard correctly returned a locked 409. The secret-scan job passed.
 - Updated only that successful owner-reconciliation test fixture to include `from:DID`, matching the same configured bridge number required by the reconciler. Existing negative cases for absent/mismatched outbound origin remain unchanged, preserving fail-closed behavior.
 - Source routing logic, paid-routing flags and manual unlock policy are unchanged. Re-run exact-head CI before claiming success; real SignalWire Voice Logs semantics and D1 behavior remain unverified. No calls, purchases, payments, merges or deployments.
+
+## 2026-11-12 — Fail-closed Voice Logs pagination completeness (draft PR #42)
+- Identified that absent or malformed `links` metadata was treated as a complete list, permitting a truncated carrier response with one expected child to unlock despite unknown additional billable legs.
+- Require documented nonempty `links.self` and `links.first` fields before trusting a Voice Logs list; continue denying any `links.next` pagination. Added offline missing/malformed metadata regressions and complete-link defaults for synthetic fixtures.
+- Conservative availability tradeoff: undocumented provider response shapes stay locked for owner investigation. Exact-head CI and real SignalWire response validation required. No calls, routing activation, provider resources, merges or deployment.
