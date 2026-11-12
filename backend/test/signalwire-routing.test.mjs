@@ -62,7 +62,7 @@ test('DTMF PIN mode: prompt, then connect only for the right single-use PIN on t
   const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
   const b=await reserve(env,'pin-flow-0001');
   await approveReservation(env,b.id);
-  const first=await inbound(env,{call_id:CID(10),from_number:'+13125550199'});
+  const first=await inbound(env,{call_id:CID(10)});
   const main=first.doc.sections.main;
   assert.deepEqual(main[0],{answer:{max_duration:120}});
   assert.deepEqual(main[1].prompt,{play:'silence:1',max_digits:8,terminators:'#',digit_timeout:5,initial_timeout:15});
