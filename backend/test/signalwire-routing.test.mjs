@@ -358,7 +358,7 @@ test('PIN attempt database ABORT returns safe hangup and preserves unclaimed rou
   const result=await pin(env,id,reservation.dtmf_pin);
   assert.equal(result.status,200);
   assert.ok(isHangup(result.doc),'PIN write failure must never connect');
-  assert.deepEqual(DB.raw.prepare('SELECT status,pin_attempts FROM reservations WHERE id=?').get(reservation.id),{status:'ready',pin_attempts:0});
+  assert.deepEqual({...DB.raw.prepare('SELECT status,pin_attempts FROM reservations WHERE id=?').get(reservation.id)},{status:'ready',pin_attempts:0});
   assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,0);
   DB.raw.exec('DROP TRIGGER abort_pin_bump');
   const retry=CID(361);
