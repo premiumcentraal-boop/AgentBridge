@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.1.0 — 2026-11-10
+
+AgentBridge v1.1.0 adds the redesigned product site and the two-number calling studio, and hardens SignalWire callback handling. It is still a private, owner-operated US pilot. Routing and calling remain **off by default**, and no new path can place a call, buy a number, or charge anyone.
+
+### Added
+- **Product site and studio redesign (#39).** This adds:
+  - A signup-led product site with International Calling, Recording & Transcription and Let me join pages.
+  - A left-side mobile drawer, and a studio home with an informative call card.
+  - Call controls that stay in the call view. Ending a call asks for confirmation, and joining starts muted.
+- **Two-number studio (#39).** The studio now has:
+  - A Numbers page with country filtering and search.
+  - A connection editor that pairs an owned routing number with a country-validated outside destination.
+  - Additive SQLite tables for routing numbers, connections, number requests, call plans and capture preferences.
+  - Authenticated, origin-protected endpoints that reject unowned or disabled numbers, duplicate assignments, loops and forged activation fields.
+- **Number requests (#39).** Requests are idempotent and stay pending. They never charge a provider. The operator-only `scripts/import-studio-number.mjs` can import a number you already bought, using a bounded, read-only SignalWire check.
+
+### Security
+- **Atomic SignalWire claims (#37, #40).** The reservation claim, the carrier-leg insert and the provider-event outcome are written in a single D1 batch, so a fault can't leave a half-written claim.
+- **PIN challenge binding (#40).** PIN challenges are bound to the original SignalWire call segment and to a SHA-256 digest of the caller. This uses D1 migration `0005_pin_challenge_identity.sql`.
+- **Fail-closed callbacks (#40).** Unexpected database errors now produce hangup SWML, and denial paths stay hangup-only when telemetry writes fail.
+- **Replay and outcomes (#40).** A replay-event INSERT counts only if exactly one row was written. A committed `connect` outcome can't be overwritten.
+- **Caller-proof modes are unchanged.** `dtmf_pin` is the default. `capped_caller_id` and `any_caller` remain owner opt-ins behind their risk-accepted flags.
+
+### Upgrade notes
+- Apply D1 migration `0005` before the next Worker deploy. Without it, the Worker fails closed and hangs up on signed callbacks.
+- The Railway studio's SQLite tables are created additively at startup on the existing `/data` volume.
+
 ## v1.0.0 — 2026-11-10
 
 AgentBridge v1.0.0 is the first stable release. It is a private, owner-operated US pilot bridge: a Cloudflare Worker + D1 backend behind a SignalWire number, a private read-only MCP connector, and the AgentBridge product website with a control studio. It is **not** a public calling service.
