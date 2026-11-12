@@ -17,7 +17,7 @@ import {NUMBER_CARD_URI,NUMBER_CARD_MIME,numberCardResource,readNumberCardResour
 import {previewChatCallFlow} from '../../backend/src/chat-experience.mjs';
 
 export const SERVER_NAME='agentbridge-local';
-export const SERVER_VERSION='1.0.0';
+export const SERVER_VERSION='1.1.0';
 /** Exact env var names read by this server. */
 export const ENV_NAMES=Object.freeze({
   space:'SIGNALWIRE_SPACE',projectId:'SIGNALWIRE_PROJECT_ID',
