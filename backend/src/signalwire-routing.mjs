@@ -57,10 +57,15 @@ function callMatches(call,env){
     E164.test(call.from_number||'')&&call.from_number!==call.to_number;
 }
 /** Durable replay guard: one row per (call_id, event_type). Returns false on replay. */
-async function recordEvent(env,callId,eventType,now){
+async function callerDigest(number){
+  const bytes=new TextEncoder().encode(number);
+  const hash=await crypto.subtle.digest('SHA-256',bytes);
+  return Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function recordEvent(env,callId,eventType,now,segmentId=null,callerHash=null){
   try{
-    const inserted=await env.DB.prepare("INSERT INTO provider_events (provider,provider_call_id,event_type,received_at,outcome) VALUES ('signalwire',?,?,?,'received')")
-      .bind(callId,eventType,now).run();
+    const inserted=await env.DB.prepare("INSERT INTO provider_events (provider,provider_call_id,event_type,received_at,outcome,challenge_segment_id,challenge_caller_sha256) VALUES ('signalwire',?,?,?,'received',?,?)")
+      .bind(callId,eventType,now,segmentId,callerHash).run();
     // A successful D1 response does not prove INSERT persisted: a trigger may
     // silently suppress it. Never treat missing metadata or zero rows as a
     // fresh, replay-protected event.
@@ -146,7 +151,7 @@ async function handleSignalWireRoutingInner(request,env={}){
   await logInboundCall(env,call,'swml_routing','mode_'+mode);
   if(mode==='none')return hangup();
   const now=Math.floor(Date.now()/1000);
-  if(!await recordEvent(env,call.call_id,'swml_inbound',now))return hangup();
+  if(!await recordEvent(env,call.call_id,'swml_inbound',now,call.segment_id,await callerDigest(call.from_number)))return hangup();
   const row=await findRoutable(env,now);
   if(!row){await denialOutcome(env,call.call_id,'swml_inbound','no_approved_reservation');return hangup();}
   const check=await policyCheck(env,row,mode,now);
@@ -187,9 +192,13 @@ async function handleSignalWirePinInner(request,env={}){
   // A PIN must authenticate the reservation chosen by THIS call's first webhook.
   // Selecting the newest ready reservation here would allow a delayed call from A
   // to consume B after A is cancelled/expired and B becomes ready.
-  const started=await env.DB.prepare("SELECT reservation_id,received_at FROM provider_events WHERE provider='signalwire' AND provider_call_id=? AND event_type='swml_inbound' AND outcome='pin_requested'")
+  const started=await env.DB.prepare("SELECT reservation_id,received_at,challenge_segment_id,challenge_caller_sha256 FROM provider_events WHERE provider='signalwire' AND provider_call_id=? AND event_type='swml_inbound' AND outcome='pin_requested'")
     .bind(call.call_id).first();
   if(!started?.reservation_id||!UUID.test(started.reservation_id))return hangup();
+  // A signed PIN payload is not proof that it belongs to the initial carrier
+  // segment. Reject identity drift before consuming a replay event or PIN try.
+  if(started.challenge_segment_id!==call.segment_id||
+     started.challenge_caller_sha256!==await callerDigest(call.from_number))return hangup();
   // Carrier prompt timeouts are not an authorization boundary. Validate the
   // persisted challenge start against server time, including clock anomalies.
   if(!Number.isSafeInteger(started.received_at)||started.received_at>now||
