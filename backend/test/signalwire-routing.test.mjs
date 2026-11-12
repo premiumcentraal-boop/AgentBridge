@@ -442,3 +442,29 @@ test('silently ignored PIN replay-event INSERT cannot claim a reservation',async
   assert.ok((await inbound(env,{call_id:retryId})).doc.sections.main.some(x=>x.prompt));
   assert.equal(connectOf((await pin(env,retryId,reservation.dtmf_pin)).doc)?.to,DEST);
 });
+
+
+test('post-commit D1 transport error preserves committed claim evidence and denies duplicate routing',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const reservation=await reserve(env,'ambiguous-claim-throw-1');
+  assert.equal((await approveReservation(env,reservation.id)).status,200);
+  const id=CID(390);
+  assert.ok((await inbound(env,{call_id:id})).doc.sections.main.some(x=>x.prompt));
+  const original=env.DB;
+  env.DB={prepare:(...args)=>original.prepare(...args),batch:async statements=>{
+    await original.batch(statements);
+    throw Error('injected D1 response lost after commit');
+  }};
+  const result=await pin(env,id,reservation.dtmf_pin);
+  assert.equal(result.status,200);
+  assert.ok(isHangup(result.doc),'unknown transaction outcome must never emit connect');
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,1);
+  assert.equal(DB.raw.prepare("SELECT outcome FROM provider_events WHERE provider_call_id=? AND event_type='swml_pin'").get(id).outcome,'connect','committed evidence must remain monotonic');
+  env.DB=original;
+  const duplicate=await pin(env,id,reservation.dtmf_pin);
+  assert.ok(isHangup(duplicate.doc),'replayed PIN must never emit a second connect');
+  const fresh=await inbound(env,{call_id:CID(391)});
+  assert.ok(isHangup(fresh.doc),'stranded connecting reservation must not be reused');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,1);
+});
