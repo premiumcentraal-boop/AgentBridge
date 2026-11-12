@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { BotFace, StateTag } from "./grok-ui.jsx";
-import { Btn, Icon, Wave } from "./ui.jsx";
+import { Btn, DirectionArrow, Icon, Wave } from "./ui.jsx";
 
 export const callDuration = (seconds) =>
   `${Math.floor((seconds || 0) / 60)
@@ -51,12 +51,8 @@ export function ActiveCallCard({
           <time>{callDuration(call.elapsed)}</time>
         </div>
       )}
-      {(expandable || onOpen) && (
-        <span
-          className={"active-call-chevron " + (expanded ? "is-expanded" : "")}
-        >
-          <Icon name={expandable ? "arrow-down" : "chevron"} size={15} />
-        </span>
+      {!compact && (expandable || onOpen) && (
+        <DirectionArrow expanded={expandable && expanded} />
       )}
     </>
   );
@@ -150,6 +146,30 @@ export function ActiveCallCard({
         </>
       )}
     </section>
+  );
+}
+
+export function SavedCallCard({ label, destination, country, onOpen, isPlan }) {
+  return (
+    <article className="active-call-card saved-call-card">
+      <button
+        type="button"
+        className="active-call-open"
+        aria-label={"Open " + label}
+        onClick={onOpen}
+      >
+        <BotFace size={56} state="idle" tone="neutral" />
+        <span className="active-call-identity">
+          <strong>{label}</strong>
+          <span>{destination}</span>
+          <small>
+            {country} · {isPlan ? "Saved call" : "Connection"}
+          </small>
+        </span>
+        <StateTag state="idle">Ready</StateTag>
+        <DirectionArrow />
+      </button>
+    </article>
   );
 }
 

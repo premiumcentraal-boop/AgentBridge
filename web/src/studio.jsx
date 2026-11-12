@@ -359,30 +359,47 @@ export function Studio({ mode, setMode, isDemo }) {
       notify("Number request saved. Purchase pending.");
     }
   };
-  const saveCallPlan = async (value) => {
+  const saveCallPlan = async (value, id) => {
     if (isDemo) {
-      if ((snapshot.call_plans || []).length >= 200)
+      if (!id && (snapshot.call_plans || []).length >= 200)
         throw new Error("This workspace can hold up to 200 call plans.");
+      if (
+        id &&
+        !snapshot.call_plans.some(
+          (plan) => plan.id === id && plan.status === "draft",
+        )
+      )
+        throw new Error("This call has been archived or removed.");
       const now = new Date().toISOString();
       setSnapshot((s) => ({
         ...s,
-        call_plans: [
-          {
-            ...value,
-            id: uuid(),
-            status: "draft",
-            created_at: now,
-            updated_at: now,
-          },
-          ...(s.call_plans || []),
-        ],
+        call_plans: id
+          ? s.call_plans.map((plan) =>
+              plan.id === id ? { ...plan, ...value, updated_at: now } : plan,
+            )
+          : [
+              {
+                ...value,
+                id: uuid(),
+                status: "draft",
+                created_at: now,
+                updated_at: now,
+              },
+              ...(s.call_plans || []),
+            ],
         events: [
-          event("call_plan.created", "Sample call plan saved. No call placed."),
+          event(
+            id ? "call_plan.updated" : "call_plan.created",
+            "Call details saved. No call placed.",
+          ),
           ...s.events,
         ],
       }));
     } else {
-      await api("call-plans", { method: "POST", body: JSON.stringify(value) });
+      await api(id ? "call-plans/" + id : "call-plans", {
+        method: id ? "PATCH" : "POST",
+        body: JSON.stringify(value),
+      });
       await refresh();
     }
     notify(

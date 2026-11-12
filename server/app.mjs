@@ -110,6 +110,13 @@ export function createApp({ env = process.env, store = openStore(env.STUDIO_DATA
           const plan=store.createCallPlan(validated.value);
           return plan?json(201,{plan,calling_enabled:false,recording_enabled:false,joining_enabled:false}):fail(409,'PLAN_LIMIT','This studio can store up to 200 call plans.');
         }
+        const editPlanMatch=pathname.match(/^\/api\/studio\/call-plans\/([a-f0-9-]{36})$/);
+        if(editPlanMatch&&req.method==='PATCH') {
+          const validated=validateCallPlan(await body());
+          if(validated.error)return fail(422,'INVALID_CALL_PLAN',validated.error);
+          const plan=store.updateCallPlan(editPlanMatch[1],validated.value);
+          return plan?json(200,{plan,calling_enabled:false,recording_enabled:false,transcription_enabled:false,joining_enabled:false}):fail(404,'NOT_FOUND','Plan not found or already archived.');
+        }
         const planMatch=pathname.match(/^\/api\/studio\/call-plans\/([a-f0-9-]{36})\/archive$/);
         if(planMatch&&req.method==='POST')return store.archiveCallPlan(planMatch[1])?json(200,{ok:true}):fail(404,'NOT_FOUND','Plan not found or already archived.');
         if (pathname === '/api/studio/capture-preferences' && req.method === 'PATCH') {

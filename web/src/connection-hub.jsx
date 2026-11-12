@@ -107,6 +107,7 @@ export function RoutingReview({
     number = numbers.find((number) => number.id === route?.routing_number_id);
   return (
     <Dialog
+      maxHeight="calc(100dvh - 32px)"
       isOpen={open}
       onOpenChange={(value) => !value && onClose()}
       width={550}

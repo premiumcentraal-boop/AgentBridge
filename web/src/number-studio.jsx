@@ -1,8 +1,7 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { A } from "./context.jsx";
-import { Btn, Icon, IconBtn } from "./ui.jsx";
-import { flagDefinitions } from "./flags.js";
+import { Btn, DirectionArrow, Icon } from "./ui.jsx";
 import { ActiveCallCard } from "./studio-navigation.jsx";
 import { CALL_COUNTRIES } from "../../shared/call-plans.mjs";
 import {
@@ -38,27 +37,6 @@ const requestId = () =>
     return (c === "x" ? n : (n & 3) | 8).toString(16);
   });
 
-function CountryArtwork({ code }) {
-  const id = useId().replaceAll(":", "");
-  const vector = useMemo(
-    () => flagDefinitions("country-" + id).find((flag) => flag.code === code),
-    [code, id],
-  );
-  return vector ? (
-    <svg
-      aria-hidden="true"
-      className="country-card-flag"
-      viewBox={vector.viewBox}
-      preserveAspectRatio="xMidYMid slice"
-      dangerouslySetInnerHTML={{ __html: vector.body }}
-    />
-  ) : (
-    <span className="country-card-emoji" aria-hidden="true">
-      {COUNTRY_FLAGS[code] || "🌐"}
-    </span>
-  );
-}
-
 export function NumberWorkspace({
   page,
   snapshot,
@@ -79,6 +57,8 @@ export function NumberWorkspace({
   const [country, setCountry] = useState(initialCountry),
     [query, setQuery] = useState(initialSearch);
   const [expanded, setExpanded] = useState(page !== "overview");
+  const [filtersOpen, setFiltersOpen] = useState(initialCountry !== "all");
+  const [routingFilter, setRoutingFilter] = useState("all");
   const search = useRef(null),
     listId = useId();
   const callStarted = useRef(Date.now() - (call.elapsed || 0) * 1000);
@@ -88,6 +68,10 @@ export function NumberWorkspace({
   }, [initialSearch]);
   useEffect(() => {
     setCountry(initialCountry);
+    if (initialCountry !== "all") {
+      setFiltersOpen(true);
+      setExpanded(true);
+    }
   }, [initialCountry]);
   const numbers = (snapshot.routing_numbers || []).filter(
     (item) => item.status === "owned",
@@ -122,6 +106,7 @@ export function NumberWorkspace({
     .filter(
       (item) =>
         (country === "all" || item.country === country) &&
+        (routingFilter === "all" || item.routing_number_id === routingFilter) &&
         `${item.label} ${item.destination} ${countryName(item.country)} ${numbers.find((number) => number.id === item.routing_number_id)?.e164 || ""}`
           .toLowerCase()
           .includes(needle),
@@ -135,8 +120,12 @@ export function NumberWorkspace({
         .includes(needle),
   );
   const changeLayout = () => {
-    if (expanded) setQuery("");
-    else requestAnimationFrame(() => search.current?.focus());
+    if (expanded) {
+      setQuery("");
+      setCountry("all");
+      setRoutingFilter("all");
+      setFiltersOpen(false);
+    } else requestAnimationFrame(() => search.current?.focus());
     setExpanded((value) => !value);
   };
   return (
@@ -158,9 +147,10 @@ export function NumberWorkspace({
           transcript={transcript}
         />
       )}
-      <div
+      <nav
         className="workspace-primary-actions"
-        aria-label="Manage numbers and destinations"
+        aria-label="Studio shortcuts"
+        tabIndex={0}
       >
         <button
           type="button"
@@ -178,7 +168,7 @@ export function NumberWorkspace({
             <strong>Buy a number</strong>
             <small>A dedicated AgentBridge line</small>
           </span>
-          <Icon name="diagonal" size={20} />
+          <DirectionArrow />
         </button>
         <button
           type="button"
@@ -193,57 +183,40 @@ export function NumberWorkspace({
             <strong>Connect a destination</strong>
             <small>Link an outside phone number</small>
           </span>
-          <Icon name="arrow" size={20} />
+          <DirectionArrow />
         </button>
-      </div>
-      <div
-        className="number-country-rail"
-        role="group"
-        aria-label="Filter by country"
-      >
-        <button
-          type="button"
-          className="country-filter-card all-countries-card"
-          aria-pressed={country === "all"}
-          onClick={() => setCountry("all")}
-        >
-          <span className="country-card-all">
-            <Icon name="globe" size={32} />
-          </span>
-          <span className="country-card-copy">
-            <strong>All countries</strong>
-            <small>
-              {numberPage ? numbers.length : links.length}{" "}
-              {numberPage ? "numbers" : "connections"}
-            </small>
-          </span>
-        </button>
-        {countries.map((code) => (
-          <button
-            key={code}
-            type="button"
-            className="country-filter-card"
-            aria-label={countryName(code)}
-            aria-pressed={country === code}
-            onClick={() => setCountry(code)}
+        {[
+          ["calls", "Calls", "Live and saved calls", "calls"],
+          [
+            "memory",
+            "Transcripts",
+            "Words, recordings and notes",
+            "transcript",
+          ],
+          [
+            "numbers",
+            "Your numbers",
+            "Manage your AgentBridge lines",
+            "numbers",
+          ],
+        ].map(([pageId, title, detail, icon]) => (
+          <A
+            key={pageId}
+            to={navTo(pageId)}
+            className="workspace-primary-action"
+            aria-label={title}
           >
-            <span className="country-card-art">
-              <CountryArtwork code={code} />
+            <span className="workspace-action-icon">
+              <Icon name={icon} size={28} />
             </span>
-            <span className="country-card-copy">
-              <strong>{countryName(code)}</strong>
-              <small>
-                {
-                  (numberPage ? numbers : links).filter(
-                    (item) => item.country === code,
-                  ).length
-                }{" "}
-                {numberPage ? "numbers" : "connections"}
-              </small>
+            <span>
+              <strong>{title}</strong>
+              <small>{detail}</small>
             </span>
-          </button>
+            <DirectionArrow />
+          </A>
         ))}
-      </div>
+      </nav>
       <div className="connections-section-heading">
         <div>
           <h2>{numberPage ? "Routing numbers" : "Connections"}</h2>
@@ -267,30 +240,91 @@ export function NumberWorkspace({
                 : "Expand and search connections"
             }
           >
-            <Icon name="arrow" size={18} />
-            <Icon name="arrow-down" size={18} />
+            <DirectionArrow expanded={expanded} />
           </button>
         )}
       </div>
       {(numberPage || expanded) && (
-        <label className="number-search">
-          <Icon name="search" size={18} />
-          <input
-            ref={search}
-            type="search"
-            aria-label={
-              numberPage ? "Search your numbers" : "Search connections"
-            }
-            placeholder={
-              numberPage
-                ? "Search numbers"
-                : "Search names, countries or numbers"
-            }
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
+        <div className="connection-search-tools">
+          <label className="number-search">
+            <Icon name="search" size={18} />
+            <input
+              ref={search}
+              type="search"
+              aria-label={
+                numberPage ? "Search your numbers" : "Search connections"
+              }
+              placeholder={
+                numberPage
+                  ? "Search numbers"
+                  : "Search names, countries or numbers"
+              }
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className="connection-filter-toggle"
+            aria-label={numberPage ? "Filter numbers" : "Filter connections"}
+            aria-expanded={filtersOpen}
+            aria-controls={listId + "filters"}
+            onClick={() => setFiltersOpen((value) => !value)}
+          >
+            <Icon name="filter" size={18} />
+            <span>Filters</span>
+            {(country !== "all" || routingFilter !== "all") && <i />}
+          </button>
+        </div>
       )}
+      <div
+        id={listId + "filters"}
+        className="connection-filters"
+        hidden={!(numberPage || expanded) || !filtersOpen}
+      >
+        <label>
+          Country
+          <select
+            aria-label="Filter by country"
+            value={country}
+            onChange={(event) => setCountry(event.target.value)}
+          >
+            <option value="all">All countries</option>
+            {countries.map((code) => (
+              <option value={code} key={code}>
+                {COUNTRY_FLAGS[code]} {countryName(code)}
+              </option>
+            ))}
+          </select>
+        </label>
+        {!numberPage && (
+          <label>
+            Routing number
+            <select
+              aria-label="Filter by routing number"
+              value={routingFilter}
+              onChange={(event) => setRoutingFilter(event.target.value)}
+            >
+              <option value="all">All routing numbers</option>
+              {numbers.map((number) => (
+                <option value={number.id} key={number.id}>
+                  {number.label} · {number.e164}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <button
+          type="button"
+          className="number-text-action"
+          onClick={() => {
+            setCountry("all");
+            setRoutingFilter("all");
+          }}
+        >
+          Clear filters
+        </button>
+      </div>
       {numberPage ? (
         <div className="owned-number-list" id={listId}>
           {owned.map((number) => {
@@ -463,25 +497,6 @@ export function NumberWorkspace({
           ))}
         </section>
       )}
-      {page === "overview" && (
-        <nav className="studio-quick-links" aria-label="Call tools">
-          <A to={navTo("calls")}>
-            <Icon name="calls" />
-            Calls
-            <Icon name="chevron" size={15} />
-          </A>
-          <A to={navTo("memory")}>
-            <Icon name="transcript" />
-            Transcripts
-            <Icon name="chevron" size={15} />
-          </A>
-          <A to={navTo("numbers")}>
-            <Icon name="phone" />
-            Your numbers
-            <Icon name="chevron" size={15} />
-          </A>
-        </nav>
-      )}
     </div>
   );
 }
@@ -550,6 +565,7 @@ export function ConnectionEditor({
   const set = (key, v) => setValue((current) => ({ ...current, [key]: v }));
   return (
     <Dialog
+      maxHeight="calc(100dvh - 32px)"
       isOpen={open}
       onOpenChange={(v) => !v && onClose()}
       width={590}
@@ -770,6 +786,7 @@ export function BuyNumberDialog({
   }, [open]);
   return (
     <Dialog
+      maxHeight="calc(100dvh - 32px)"
       isOpen={open}
       onOpenChange={(v) => !v && onClose()}
       width={520}

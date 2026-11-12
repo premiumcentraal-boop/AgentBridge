@@ -230,82 +230,6 @@
   top: 25px;
   opacity: 0.7;
 }
-.number-country-rail {
-  align-items: stretch;
-  gap: 12px;
-  margin: 0 0 29px;
-  padding: 3px 2px 13px;
-  scroll-snap-type: x proximity;
-}
-.number-country-rail > .country-filter-card {
-  position: relative;
-  display: block;
-  width: 174px;
-  min-height: 137px;
-  padding: 0;
-  overflow: hidden;
-  border-radius: 20px;
-  color: var(--fg);
-  border: 1px solid var(--line-strong);
-  background: var(--panel);
-  text-align: left;
-  scroll-snap-align: start;
-}
-.number-country-rail > .country-filter-card[aria-pressed="true"] {
-  border-color: var(--fg);
-  outline: 1px solid var(--fg);
-  outline-offset: 2px;
-  background: var(--panel-raised);
-}
-.number-country-rail > .country-filter-card:hover {
-  border-color: var(--quiet);
-}
-.country-card-art,
-.country-card-all {
-  position: relative;
-  display: block;
-  height: 76px;
-  width: 100%;
-  overflow: hidden;
-  background: var(--panel-raised);
-}
-.country-card-flag {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-.country-card-emoji {
-  display: grid;
-  height: 100%;
-  place-items: center;
-  font-size: 48px;
-}
-.country-card-all {
-  display: grid;
-  place-items: center;
-  color: var(--muted);
-  background: radial-gradient(
-    ellipse at center,
-    color-mix(in srgb, var(--blue) 17%, var(--panel)),
-    var(--panel)
-  );
-}
-.number-country-rail .country-card-copy {
-  display: block;
-  padding: 12px 14px 13px;
-  font-size: inherit;
-}
-.country-card-copy strong {
-  display: block;
-  font-size: 12px;
-  font-weight: 500;
-}
-.country-card-copy small {
-  display: block;
-  margin-top: 4px;
-  color: var(--quiet);
-  font-size: 10px;
-}
 .connections-section-heading {
   display: flex;
   align-items: center;
@@ -324,28 +248,6 @@
   color: var(--quiet);
   font-size: 11px;
   margin-top: 7px;
-}
-.connections-layout-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  width: 70px;
-  height: 43px;
-  flex-shrink: 0;
-  color: var(--muted);
-  background: var(--panel);
-  border: 1px solid var(--line-strong);
-  border-radius: 14px;
-  cursor: pointer;
-}
-.connections-layout-toggle[aria-expanded="false"] > svg:last-child,
-.connections-layout-toggle[aria-expanded="true"] > svg:first-child {
-  opacity: 0.35;
-}
-.connections-layout-toggle:hover {
-  background: var(--panel-raised);
-  color: var(--fg);
 }
 .number-connection-list.is-horizontal {
   display: flex;
@@ -392,16 +294,6 @@
   height: 5px;
   background: currentColor;
   border-radius: 50%;
-}
-.active-call-chevron {
-  display: grid;
-  place-items: center;
-  margin-left: auto;
-  color: var(--quiet);
-  transition: transform 0.2s;
-}
-.active-call-chevron.is-expanded {
-  transform: rotate(180deg);
 }
 .expandable-call-card .active-call-actions {
   display: flex;
@@ -570,12 +462,6 @@
   .workspace-primary-action > span:nth-child(2) {
     min-height: 62px;
   }
-  .number-country-rail > .country-filter-card {
-    width: 156px;
-  }
-  .number-country-rail {
-    margin-bottom: 24px;
-  }
   .number-connection-list.is-horizontal > article {
     flex-basis: 88%;
     min-width: 258px;
@@ -623,8 +509,301 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .active-call-chevron,
-  .workspace-primary-action {
+}
+
+/* Navigation has a single arrow shape and one expansion motion. */
+.direction-arrow {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: 50%;
+  vertical-align: middle;
+}
+.direction-arrow > svg {
+  flex: none;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.direction-arrow[data-expanded="true"] > svg {
+  transform: rotate(90deg);
+}
+.direction-arrow.is-compact {
+  width: 24px;
+  height: 24px;
+  flex-basis: 24px;
+}
+.active-call-open > .direction-arrow {
+  margin-left: 2px;
+  color: var(--muted);
+}
+.workspace-primary-actions {
+  display: grid;
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: calc((100% - 16px) / 2);
+  gap: 16px;
+  overflow-x: auto;
+  padding: 3px 2px 15px;
+  margin-bottom: 25px;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 2px;
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+}
+.workspace-primary-action {
+  min-height: 171px;
+  scroll-snap-align: start;
+}
+.workspace-primary-action > .direction-arrow {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+}
+.connections-layout-toggle {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--fg);
+  border-radius: 50%;
+  cursor: pointer;
+}
+.connections-layout-toggle:hover .direction-arrow {
+  background: var(--panel-raised);
+  border-color: var(--quiet);
+}
+.connection-search-tools {
+  display: flex;
+  align-items: stretch;
+  gap: 11px;
+  margin-bottom: 17px;
+}
+.connection-search-tools .number-search {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.connection-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+  min-height: 46px;
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  font-size: 12px;
+}
+.connection-filter-toggle > i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--blue);
+}
+.connection-filters:not([hidden]) {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 15px;
+  padding: 18px;
+  margin-bottom: 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: var(--panel);
+}
+.connection-filters > label {
+  display: flex;
+  flex: 1 1 170px;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.connection-filters select {
+  width: 100%;
+  min-width: 0;
+  min-height: 43px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 11px;
+  background: var(--page-soft);
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+}
+.connection-filters .number-text-action {
+  min-height: 43px;
+}
+.calls-live-section > h2,
+.saved-calls-heading h2 {
+  font-size: 25px;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+.calls-live-section > h2 {
+  margin-bottom: 17px;
+}
+.calls-live-section .active-call-card {
+  margin-bottom: 0;
+}
+.saved-calls-section {
+  margin-top: 34px;
+}
+.saved-calls-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  margin-bottom: 20px;
+}
+.saved-calls-heading h2 {
+  flex-shrink: 0;
+}
+.saved-calls-heading h2 small {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--quiet);
+}
+.saved-calls-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(360px, 100%);
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--quiet);
+}
+.saved-calls-search > svg {
+  flex-shrink: 0;
+}
+.saved-calls-search input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+}
+.saved-calls-search:focus-within {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.saved-call-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 13px;
+}
+.saved-call-card {
+  margin: 0;
+}
+.saved-call-card .active-call-identity small {
+  font-size: 10px;
+  color: var(--quiet);
+}
+.saved-call-card .active-call-open > .bot-state-tag {
+  flex-shrink: 0;
+}
+.saved-call-card .active-call-open:hover > .direction-arrow {
+  background: var(--panel-raised);
+}
+.dialog-section-heading {
+  font-size: 18px;
+  font-weight: 500;
+  padding-top: 19px;
+  border-top: 1px solid var(--line);
+}
+.plan-archive-action {
+  align-self: flex-start;
+  margin-top: 5px;
+}
+/* Astryx's inner modal container clips by default; this is the scroll surface. */
+.foundation-app .tools-dialog {
+  overflow: hidden;
+}
+.foundation-app .tools-dialog > div {
+  min-height: 0;
+  max-height: inherit;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 0;
+}
+.foundation-app .tools-dialog-heading {
+  flex: 0 0 auto;
+}
+.foundation-app .tools-dialog-body {
+  flex: 0 0 auto;
+  min-height: auto;
+}
+.foundation-app .tools-dialog-actions {
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .workspace-primary-actions {
+    grid-auto-columns: minmax(156px, calc((100% - 12px) / 2));
+    gap: 12px;
+  }
+  .workspace-primary-action > .direction-arrow {
+    top: 17px;
+    right: 14px;
+  }
+  .active-call-card:not(.nav-call-card) .active-call-open > .bot-face {
+    width: 43px;
+    height: 43px;
+    flex: 0 0 43px;
+    aspect-ratio: 1;
+  }
+  .saved-call-card .active-call-open {
+    gap: 9px;
+  }
+  .saved-call-card .active-call-identity > strong {
+    font-size: 16px;
+  }
+  .saved-calls-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 15px;
+  }
+  .saved-calls-search {
+    width: 100%;
+  }
+  .saved-calls-search input,
+  .connection-filters select {
+    font-size: 16px;
+  }
+  .connection-filter-toggle {
+    padding-inline: 12px;
+  }
+  .connection-filter-toggle > span {
+    display: none;
+  }
+  .foundation-app
+    .tools-dialog
+    :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    font-size: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .direction-arrow > svg {
     transition: none;
   }
 }
