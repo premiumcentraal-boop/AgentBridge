@@ -133,7 +133,7 @@ function connectFor(env,row,check){
 }
 
 /** Initial inbound SWML fetch for the bridge DID. */
-export async function handleSignalWireRouting(request,env={}){
+async function handleSignalWireRoutingInner(request,env={}){
   if(!configured(env))return text('Not configured',503);
   const read=await readSigned(request,env,env.SIGNALWIRE_SWML_WEBHOOK_URL,SIGNALWIRE_SWML_PATH);
   if(read.res)return read.res;
@@ -173,7 +173,7 @@ export async function handleSignalWireRouting(request,env={}){
 }
 
 /** Signed follow-up fetch carrying the DTMF digits (dtmf_pin mode only). */
-export async function handleSignalWirePin(request,env={}){
+async function handleSignalWirePinInner(request,env={}){
   if(!configured(env))return text('Not configured',503);
   if(callerProofMode(env)!=='dtmf_pin')return hangup();
   const read=await readSigned(request,env,pinUrl(env),SIGNALWIRE_PIN_PATH);
@@ -210,4 +210,18 @@ export async function handleSignalWirePin(request,env={}){
   if(!check.ok){await denialOutcome(env,call.call_id,'swml_pin',check.code,row.id);return hangup();}
   if(!await claim(env,row,call.call_id,call.segment_id,check,now,'swml_pin')){await denialOutcome(env,call.call_id,'swml_pin','CLAIM_LOST',row.id);return hangup();}
   return connectFor(env,row,check);
+}
+
+/** Carrier-facing safety boundary: transient D1 failures must never emit a connect
+ * or leave a signed callback without valid SWML denial. Authentication errors
+ * from readSigned retain their existing explicit 4xx responses.
+ * The only success path is a fully persisted, authorized inner handler result.
+ */
+export async function handleSignalWireRouting(request,env={}){
+  try{return await handleSignalWireRoutingInner(request,env);}
+  catch{return hangup();}
+}
+export async function handleSignalWirePin(request,env={}){
+  try{return await handleSignalWirePinInner(request,env);}
+  catch{return hangup();}
 }
