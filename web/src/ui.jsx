@@ -140,16 +140,28 @@ export function IconBtn({ label, name, className = "", ...props }) {
     />
   );
 }
-export function Wave({ muted = false }) {
+export function Wave({ muted = false, animated = false }) {
   return (
     <span
-      className={"voice-wave " + (muted ? "is-muted" : "")}
+      className={
+        "voice-wave " +
+        (muted ? "is-muted " : "") +
+        (animated ? "is-animated" : "")
+      }
       aria-hidden="true"
     >
       {Array.from({ length: 21 }, (_, i) => (
         <i
           key={i}
-          style={{ "--wave-h": 4 + (Math.sin(i * 1.3) + 1) * 6 + "px" }}
+          style={{
+            "--wave-h": 4 + (Math.sin(i * 1.3) + 1) * 6 + "px",
+            ...(animated
+              ? {
+                  "--wave-delay": (i % 7) * -0.16 + "s",
+                  "--wave-duration": 1.1 + (i % 5) * 0.12 + "s",
+                }
+              : {}),
+          }}
         />
       ))}
     </span>

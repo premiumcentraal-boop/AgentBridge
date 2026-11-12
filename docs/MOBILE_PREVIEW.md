@@ -66,3 +66,16 @@ opens a destination review and saves only an in-tab proposal; no transfer occurs
 The product page and studio use the owner's Grokbot-inspired monochrome system,
 original expressive status avatars, rounded controls and system typography.
 See [design and behavior](GROKBOT_REDESIGN.md).
+
+## Homepage review updates
+
+Sign me up is now the main public action, with Open studio as the secondary
+option. The hero starts directly with connect agents worldwide. The sample
+shows a back-and-forth agent/business exchange and moving decorative waveform.
+Copy is more direct, including Agentic calling / Made easy and Same agent /
+Bigger reach. The homepage preview warning and quiet-connection footer copy
+are removed; Grok/xAI independence remains.
+
+The early-access signup page is a design preview. Its notice and confirmation
+say details are not submitted and no account is created. No real-call audio or
+live signup service is added in this review pass.

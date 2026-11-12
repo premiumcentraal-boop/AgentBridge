@@ -114,7 +114,9 @@ test("working preview navigates real pages and keeps call state in the floating 
   // The portable file already contains rendered HTML. Wait for the React
   // mount effect before interacting, rather than clicking the inert SSR copy.
   await waitFor(() => document.title.includes("connect agents worldwide"));
-  await waitFor(() => document.querySelector('a[href="#/studio/demo/"]'));
+  await waitFor(() =>
+    document.querySelector('.gb-hero-actions a[href="#/studio/"]'),
+  );
   assert.match(
     document.querySelector("h1").textContent,
     /connect agents\s+worldwide/,
@@ -365,7 +367,7 @@ test("public navigation keeps a native top-level studio link across the CSP boun
   );
   t.after(() => dom.window.close());
   await pause(150);
-  const studio = document.querySelector('a[href="/studio/demo/"]');
+  const studio = document.querySelector('.gb-hero-actions a[href="/studio/"]');
   assert.equal(studio.target, "_top");
   let prevented;
   const cancelDefault = (event) => {
@@ -392,6 +394,57 @@ test("public navigation keeps a native top-level studio link across the CSP boun
   assert.deepEqual(requests, []);
   assert.deepEqual(
     errors.map((e) => e.message),
+    [],
+  );
+});
+
+test("homepage leads to a separate signup page while its form preview keeps personal details off the network", async (t) => {
+  const { dom, window, document, errors, requests } = setup(
+    "https://agentbridge-preview.test/",
+  );
+  t.after(() => dom.window.close());
+  await waitFor(() => document.title.includes("connect agents worldwide"));
+  const primary = document.querySelector(
+    '.gb-hero-actions a[href="#/signup/"]',
+  );
+  assert.ok(primary, "Primary action must open signup");
+  assert.match(primary.textContent, /Sign me up/);
+  assert.ok(document.querySelector('.gb-hero-actions a[href="#/studio/"]'));
+  assert.equal(document.querySelectorAll(".landing-conversation li").length, 3);
+  assert.match(
+    document.querySelector(".landing-conversation").textContent,
+    /Your agent.*London studio.*Your agent/s,
+  );
+  primary.click();
+  await waitFor(() => document.querySelector(".signup-card form"));
+  const form = document.querySelector(".signup-card form");
+  const name = form.querySelector('input[name="name"]');
+  const email = form.querySelector('input[name="email"]');
+  assert.equal(form.checkValidity(), false);
+  change(window, name, "Review user");
+  change(window, email, "review@example.test");
+  await waitFor(() => form.checkValidity());
+  form.dispatchEvent(
+    new window.Event("submit", { bubbles: true, cancelable: true }),
+  );
+  await waitFor(() => document.querySelector(".signup-confirmation"));
+  assert.match(
+    document.querySelector(".signup-confirmation").textContent,
+    /No request has been sent and no account has been created/,
+  );
+  named(document, "Edit signup details").click();
+  await waitFor(() =>
+    document.querySelector('.signup-card input[name="email"]'),
+  );
+  assert.equal(
+    document.querySelector('.signup-card input[name="email"]').value,
+    "review@example.test",
+  );
+  assert.equal(window.location.hash, "#/signup/");
+  assert.equal(window.localStorage.length, 0);
+  assert.deepEqual(requests, []);
+  assert.deepEqual(
+    errors.map((error) => error.message),
     [],
   );
 });

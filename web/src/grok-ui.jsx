@@ -85,6 +85,23 @@ const examples = [
 export function LandingActivity() {
   const [selected, setSelected] = useState(0);
   const bot = examples[selected];
+  const conversation = [
+    {
+      speaker: "Your agent",
+      text: "Could we arrange a studio viewing for Tuesday morning?",
+      agent: true,
+    },
+    {
+      speaker: "London studio",
+      text: "Of course. We have 10:30 on Tuesday morning.",
+      agent: false,
+    },
+    {
+      speaker: "Your agent",
+      text: "10:30 London time works. May I have a reference for the viewing?",
+      agent: true,
+    },
+  ];
   return (
     <div className="landing-activity" aria-label="Interactive sample workspace">
       <div className="landing-activity-top">
@@ -121,12 +138,41 @@ export function LandingActivity() {
           </span>
         </div>
         <h3>{bot.task}</h3>
-        <div className="landing-dialogue">
-          <BotFace size={30} tone={bot.tone} />
-          <p>{bot.text}</p>
-        </div>
+        {selected === 0 ? (
+          <ol
+            className="landing-conversation"
+            aria-label="Fictional sample conversation"
+          >
+            {conversation.map((line, index) => (
+              <li
+                className={
+                  "landing-dialogue " +
+                  (line.agent ? "from-agent" : "from-business")
+                }
+                key={index}
+              >
+                {line.agent ? (
+                  <BotFace size={28} tone={bot.tone} />
+                ) : (
+                  <span className="landing-business-avatar" aria-hidden="true">
+                    LD
+                  </span>
+                )}
+                <div>
+                  <strong>{line.speaker}</strong>
+                  <p>{line.text}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <div className="landing-dialogue">
+            <BotFace size={30} tone={bot.tone} />
+            <p>{bot.text}</p>
+          </div>
+        )}
         <div className="landing-listen">
-          <Wave muted={selected !== 0} />
+          <Wave muted={selected !== 0} animated={selected === 0} />
           <A
             to={
               selected === 0

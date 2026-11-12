@@ -67,13 +67,15 @@ export function PublicShell({ children, mode, setMode }) {
             name={mode === "dark" ? "sun" : "moon"}
             onClick={() => setMode(mode === "dark" ? "light" : "dark")}
           />
+          <A to="/studio/" className="header-studio-link">
+            Open studio
+          </A>
           <Btn
-            label="Open studio"
-            target="_top"
+            label="Sign me up"
             primary
-            href={href("/studio/demo/")}
-            onClick={(e) => link(e, "/studio/demo/")}
-            end="diagonal"
+            href={href("/signup/")}
+            onClick={(e) => link(e, "/signup/")}
+            end="arrow"
           />
           <IconBtn
             className="mobile-nav-toggle"
@@ -92,7 +94,6 @@ export function PublicShell({ children, mode, setMode }) {
             <Mark />
             <span>AgentBridge</span>
           </A>
-          <p>A quiet connection. An independent Victor project.</p>
         </div>
         <nav aria-label="Footer navigation">
           <A to="/features/">Calling extensions</A>
@@ -109,7 +110,7 @@ export function PublicShell({ children, mode, setMode }) {
         </nav>
         <div className="footer-line">
           <span>© 2026 AgentBridge</span>
-          <span>Independent of Grok / xAI. Development preview.</span>
+          <span>Independent of Grok / xAI.</span>
           <a href="https://victor.ceo" target="_top">
             A product by VICTOR ↗
           </a>

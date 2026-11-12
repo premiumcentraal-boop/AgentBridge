@@ -56,9 +56,27 @@ DOM journeys cover adding/searching connections, reviewing routing without a
 transfer, muted sample listening, playback persistence across pages, transcript
 alignment, leaving, playback rejection and ending while playback is pending.
 JSDOM media methods are stubbed; these checks do not establish browser playback.
-The complete build contains 30 React/Astryx pages plus the original gallery.
+The complete build contains 31 React/Astryx pages plus the original gallery.
 Existing authentication, carrier policy and animation checks remain in CI.
 
 Browser layout, touch, audio and screen-reader QA are unverified because the
 supported Sites browser helper is unavailable. The Sites workflow prohibits
 substituting an improvised preview server or browser installation.
+
+## Homepage review pass
+
+The owner requested a signup-first advertising page: no kicker above the main
+tagline, no working-preview notice in the hero, a primary Sign me up action and
+secondary Open studio link. The worldwide section now says Same agent / Bigger
+reach, and the task section says Agentic calling / Made easy. The footer keeps
+Grok/xAI independence and drops the quiet-connection/Victor-project sentence.
+
+The hero sample shows three labelled agent/business messages. Its decorative
+waveform animates only for the sample call, stops for other sample agents and
+respects reduced motion. No new audio, real customer call or testimonial was
+added. A verified, willing real-call participant is a future content task.
+
+The new signup destination previews name/email entry and validation, with an
+explicit form notice that details are not submitted. Confirmation never claims
+mailing-list enrollment or account creation. It is UI only; the single-operator
+studio authentication, storage and public CSP remain unchanged.

@@ -37,10 +37,11 @@ A premium website and developer-first international telecom bridge for AI agents
 The public site and control studio share an Astryx/React 19 foundation. The
 interface uses actual Astryx navigation, buttons, cards, segmented controls,
 dialogs and inputs, with monochrome surfaces, original status avatars and SVG connection art.
-Build output contains 30 rendered HTML pages, so direct links and public content
+Build output contains 31 rendered HTML pages, so direct links and public content
 work before JavaScript starts. The original `/design/` gallery remains available.
 
 - `/` — Product overview
+- `/signup/` — Early-access signup design preview; details stay in the tab and no account/request is created
 - `/features/` — Calling extensions overview
 - `/international-calling/` — International call planning walkthrough
 - `/call-memory/` — Optional recording/transcription and playable sample
@@ -55,7 +56,7 @@ work before JavaScript starts. The original `/design/` gallery remains available
 - `/studio/demo/{connections,routes,calls,memory,connection,activity,settings,call,design}/` — Matching demo pages
 - `/app/` — Compatibility link to the sample studio
 
-The main hero says **connect agents worldwide**, alongside an interactive sample-agent widget. A separate worldwide section preserves pairs of bold coloured country
+The main hero says **connect agents worldwide**, with a signup-first action, secondary studio entry and an interactive sample-agent widget showing a three-message agent/business exchange. The sample waveform animates with reduced-motion support. A separate worldwide section preserves pairs of bold coloured country
 lines enter from opposite edges, glide, then accelerate into the exact centre.
 Their flags travel with the advancing line heads, then dissolve before the
 circles overlap. Contact triggers a green pulse, a phone that pops into place
@@ -132,7 +133,7 @@ private API, and route drafts reset when reloaded. This is an actual working UI,
 not a screenshot or replacement for a production deployment.
 
 `npm run test:web` exercises real bundled React interactions in a DOM harness;
-`npm run test:site` checks all 31 pages for landmarks, labels, links and assets.
+`npm run test:site` checks all 32 pages for landmarks, labels, links and assets.
 These checks do not replace browser layout and accessibility testing. For a
 project site, build and audit with `BASE_PATH=/AgentBridge`.
 

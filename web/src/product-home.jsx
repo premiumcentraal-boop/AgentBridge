@@ -4,15 +4,14 @@ import { Btn, Icon } from "./ui.jsx";
 import { BotFace, LandingActivity } from "./grok-ui.jsx";
 import { WorldNetwork } from "./world-network.jsx";
 
-function StudioEntry({ label = "Open studio" }) {
+function SignupEntry({ label = "Sign me up" }) {
   const { href, link } = useRoute();
   return (
     <Btn
       label={label}
       primary
-      target="_top"
-      href={href("/studio/demo/")}
-      onClick={(event) => link(event, "/studio/demo/")}
+      href={href("/signup/")}
+      onClick={(event) => link(event, "/signup/")}
       end="arrow"
     />
   );
@@ -23,27 +22,21 @@ export function ProductHome() {
     <main id="main" tabIndex={-1} className="gb-product-home">
       <section className="gb-product-hero frame">
         <div className="gb-hero-copy">
-          <span className="gb-hero-kicker">
-            <span /> YOUR AGENTS. ONE CONNECTED WORLD.
-          </span>
           <h1 aria-label="connect agents worldwide">
             connect agents
             <br /> <span>worldwide</span>
           </h1>
           <p>
-            Bring your agent to the conversation.
+            Bring your agents to the conversation.
             <br />
             See the call. Follow the words. Listen in.
           </p>
           <div className="gb-hero-actions">
-            <StudioEntry />
-            <A to="/features/">
-              Take a look around <Icon name="arrow" size={16} />
+            <SignupEntry />
+            <A to="/studio/">
+              Open studio <Icon name="arrow" size={16} />
             </A>
           </div>
-          <small className="gb-preview-note">
-            Working product preview. Live calling requires integration.
-          </small>
         </div>
         <LandingActivity />
       </section>
@@ -52,16 +45,14 @@ export function ProductHome() {
         aria-label="Connection, made simple"
       >
         <div className="gb-section-heading">
-          <span>LESS BETWEEN YOU</span>
           <h2>
-            A little closer.
+            Agentic calling.
             <br />
-            <span>A lot simpler.</span>
+            <span>Made easy.</span>
           </h2>
           <p>
-            From a new connection to the next conversation.
-            <br />
-            Everything you need, right where you expect it.
+            Connect your agents to people and businesses worldwide. Start a
+            call, follow the conversation and jump in when it needs you.
           </p>
         </div>
         <div className="gb-workflow-grid">
@@ -129,15 +120,15 @@ export function ProductHome() {
       </section>
       <section className="gb-world-section frame">
         <div className="gb-world-copy">
-          <span className="gb-hero-kicker">A WORLD OF POSSIBILITIES</span>
+          <span className="gb-hero-kicker">INTERNATIONAL CALLING</span>
           <h2>
-            Different countries.
+            Same agent.
             <br />
-            <span>One familiar agent.</span>
+            <span>Bigger reach.</span>
           </h2>
           <p>
-            Prepare international connections without losing the thread. Your
-            agent stays with the conversation, wherever it needs to go.
+            Connect your agent to people and businesses in other countries. Keep
+            the same agent, voice and conversation.
           </p>
           <A className="gb-card-action" to="/international-calling/">
             Explore international calling <Icon name="arrow" size={17} />
@@ -159,19 +150,18 @@ export function ProductHome() {
           </span>
         </div>
         <div>
-          <span className="gb-hero-kicker">
-            ONE AGENT IN FOCUS. EVERYTHING IN REACH.
-          </span>
+          <span className="gb-hero-kicker">CALLS, TRANSCRIPTS & ROUTING</span>
           <h2>
-            Close to the call.
+            Your agent.
             <br />
-            <span>Clear on what’s next.</span>
+            <span>Connected to the world.</span>
           </h2>
           <p>
-            A focused workspace for connections, calls and the details you
-            choose to keep. Recording and transcription stay optional.
+            See who’s on the line, follow the transcript and choose when to
+            listen or join. Keep calls, connections and routing in one
+            workspace.
           </p>
-          <StudioEntry label="Explore your workspace" />
+          <SignupEntry />
           <A to="/call-memory/" className="gb-secondary-link">
             See recording & transcripts <Icon name="arrow" size={15} />
           </A>

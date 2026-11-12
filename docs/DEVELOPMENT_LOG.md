@@ -433,3 +433,12 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added routing review from calls/connections. It saves an in-tab proposal without transferring or changing a carrier route. Private mode is review-only.
 - Added DOM journeys for connection creation/search, routing review, cross-page playback, transcript timing and playback failures/cancellation. Browser QA remains unverified because the supported Sites browser helper is unavailable.
 - Validation: `npm run ci` passes 151 backend/security checks, seven structural checks across 31 pages and 15 geometry/DOM journeys (173 total).
+
+
+## 2026-11-12 — Homepage live-review feedback
+
+- Removed the hero kicker/working-preview notice; kept connect agents worldwide and the direct conversation copy.
+- Promoted Sign me up in the hero/header and added a secondary Open studio link. Added a dedicated early-access signup design preview without network collection or account-creation claims.
+- Added labelled agent/business/agent dialogue to the sample and animated its waveform with reduced-motion support. Verified real-call audio remains future work.
+- Replaced vague section copy with Agentic calling / Made easy, Same agent / Bigger reach and Your agent / Connected to the world. Removed the quiet-connection/Victor-project sentence; kept Grok/xAI independence.
+- Validation: 151 backend/security tests, seven structural checks over 32 pages and 16 geometry/DOM journeys pass (174 total).
