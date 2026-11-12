@@ -274,3 +274,90 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Mobile hero: the "01 / A single conversation" caption now has a backdrop so it stays legible over the cable art.
 - Known limitation: studio login throttling is keyed on the socket address, so behind Railway's proxy all clients share one 10-attempts/15-minutes bucket (a lockout nuisance, not a bypass; keys are 256-bit).
 - 2026-11-11: Dockerfile no longer uses a BuildKit secret mount (Railway rejects non-cache mounts); first Railway deploy at agentbridge.up.railway.app.
+
+## 2026-11-11 — Transactional SignalWire claim and carrier-leg write (PR pending)
+- Corrected the two-step reservation claim: the reservation update and Voice Logs segment insertion now execute inside one D1 batch transaction, with a conditional segment insert tied to the claimed reservation and call ID.
+- A failed carrier-leg insert rolls back the reservation state instead of leaving an unconnected call in `connecting` and blocking the account.
+- Added an offline SQLite trigger fault-injection regression proving rollback, successful retry after removing the fault, and single-use behavior after a successful claim.
+- No carrier calls, routing activation, paid resources or deployment. Local Node tests and GitHub Actions remain to be verified on the exact PR head. This change does not address caller authentication, pricing verification or callback reconciliation.
+
+## 2026-11-11 — Guard silent carrier-leg INSERT suppression (PR #37 pending)
+- Extended transactional claim to insert the carrier leg first, then condition the reservation transition on a matching persisted leg. This prevents a zero-row INSERT (e.g. SQLite RAISE(IGNORE)) from leaving a reservation in connecting.
+- Added deterministic offline trigger regression for silent INSERT suppression, fail-closed hangup and subsequent retry. Existing ABORT-trigger rollback regression retained.
+- Pending exact-head CI and independent review; no routing flags, calls, paid resources or deployment changed.
+
+## 2026-11-11 — Silent reservation UPDATE cleanup (PR #37 pending)
+- Added a third statement to the same D1 claim batch to delete a newly inserted carrier leg when the reservation transition does not persist (including a nonthrowing SQLite RAISE(IGNORE) trigger). This avoids orphan leg rows blocking retries.
+- Added an offline fault-injection regression for ignored UPDATE, hangup, no orphan leg, successful retry and single-use after retry.
+- This remains a reviewable private-test reliability patch, not authorization to route paid calls. Exact-head CI and independent review pending at commit time; no calls, provider purchases, secrets, flag changes, merges or deployments.
+
+## 2026-11-11 — Concurrent signed-callback regression (PR #37 pending)
+- Added an offline 12-way Promise.all signed inbound callback regression for the transactional SignalWire reservation claim. It asserts exactly one SWML connect, all losing callbacks hang up, one persisted carrier leg, and no subsequent reuse.
+- This tests the existing SQLite-backed mock's concurrent scheduling, not real distributed D1 worker contention or provider delivery ordering. Exact-head GitHub CI and independent review required; no provider calls, paid routing, purchases, merges or deployments.
+
+## 2026-11-11 — Reservation UPDATE ABORT rollback regression (PR #37 pending)
+- Added a deterministic SQLite BEFORE UPDATE RAISE(ABORT) fault-injection test for the second statement of the D1 batch: verifies hangup, unchanged ready reservation, rollback of the earlier inserted carrier leg, successful authorized retry and single-use after retry.
+- The previous PR head df6070bb passed GitHub Actions quality gate run 43003476766. This new commit needs its own exact-head CI; the test was not executed locally. Distributed D1 transaction semantics and carrier behavior remain unverified. No merge, deployment, calls or routing activation.
+
+## 2026-11-11 — Atomic SignalWire provider-event connect outcome (PR #37 pending)
+- Extended the existing D1 claim batch: carrier-leg INSERT, conditional reservation UPDATE, conditional provider-event connect UPDATE, reservation reset on silently ignored event UPDATE, and orphan-leg cleanup are executed transactionally. A connect response now requires exactly one leg, reservation transition, and event transition, and no compensating reset.
+- Removed the separate post-claim connect outcome writes in initial and PIN callbacks. Added offline SQLite RAISE(ABORT) and RAISE(IGNORE) fault-injection regressions for provider-event connect persistence and retry behavior on the initial callback.
+- Exact-head CI, PIN-path event fault coverage, and distributed D1 semantics require verification. No merges, deployments, paid calls, routing flags or provider resources changed.
+
+## 2026-11-11 — PIN provider-event rollback regressions (draft PR #37; not merged/deployed)
+- Added two offline signed DTMF PIN callback regressions to `backend/test/signalwire-routing.test.mjs`: SQLite `RAISE(ABORT)` and `RAISE(IGNORE)` on the final `provider_events` connect outcome. Both assert hangup, ready reservation, no carrier leg, no false connect event, and successful fresh PIN challenge/retry after removing the trigger.
+- These tests complement the earlier initial-inbound event fault tests. No production routing flags, provider settings, paid calls or deployment changed. Exact-commit CI and independent Cloudflare D1 transaction review remain required before merge.
+
+## 2026-11-11 — Compound silent-write rollback guard (draft PR #37; unmerged)
+- Added a final conditional SQL constraint-failure guard inside the SignalWire claim D1 batch. If the provider-event outcome is not persisted while a claimed reservation or carrier leg remains, the guard intentionally violates the reservations NOT NULL constraint, forcing transaction rollback rather than relying on an ignored compensating UPDATE.
+- Added a deterministic SQLite dual-trigger regression: suppress the event connect UPDATE and the reservation reset with RAISE(IGNORE); assert hangup, reservation ready, no orphan carrier leg, no false connect outcome, and successful authorized retry after triggers are removed.
+- Local test execution blocked because this environment could not resolve github.com for git clone. Exact-head CI and independent Cloudflare D1 transaction semantics remain unverified; keep draft PR unmerged and all paid routing flags off. No calls, purchases, secrets, merges or deployments.
+
+## 2026-11-11 — PIN compound silent-write rollback regression (draft PR #37)
+- Added a PIN-authenticated callback fault-injection regression with simultaneous SQLite `RAISE(IGNORE)` triggers on provider-event `connect` persistence and reservation reset. The test requires a hangup, complete transaction rollback (ready reservation, zero carrier legs, no false connect event), and successful fresh signed PIN retry after removing both triggers.
+- This complements the existing initial-inbound compound-failure regression and single-fault PIN tests; it does not prove distributed Cloudflare D1 behavior.
+- Commit persisted via GitHub connector; local clone/tests blocked by `Could not resolve host: github.com`. Exact-head GitHub Actions result and independent review remain outstanding. No routing flags, calls, purchases, merges or deployments.
+
+## 2026-11-11 — Isolated PR #37 integration with current main (unverified)
+- Prepared a non-merged integration tree combining main's Railway Dockerfile and append-only deployment record with PR #37's transactional SignalWire source, regressions and all prior append-only entries. Both parents retained for review; this does not merge into main or enable routing.
+- CI, Cloudflare D1 batch semantics and independent security review remain required. No calls, secrets, paid resources or deployment performed.
+
+## 2026-11-11 — SignalWire denial telemetry outage hardening (draft PR #40)
+- Made denial-only provider-event outcome writes best effort: a secondary database failure while recording a rejected inbound or PIN callback must not turn a safe hangup into a 500. The `pin_requested` authorization-binding event remains a required write; successful `connect` persistence still occurs atomically in `claim()`.
+- Added offline SQLite ABORT-trigger regressions for initial inbound no-reservation denial and PIN claim failure combined with denial-outcome failure, including a fresh successful PIN retry after recovery.
+- Committed on the isolated PR #40 branch only. Exact-head CI and independent Cloudflare D1 validation pending; no carrier calls, routing activation, purchases, payments, merges or deployments.
+
+## 2026-11-11 — PIN challenge persistence fail-closed (draft PR #40)
+- Require the initial SignalWire PIN challenge event to transition from `received` to `pin_requested` with exactly one durable database row update before emitting a prompt. Previously a thrown write could produce HTTP 500 and a silently ignored update could issue an unusable PIN prompt.
+- A thrown or zero-row challenge update now emits safe SWML hangup; no reservation claim or paid route is attempted. Added offline SQLite ABORT and IGNORE trigger regression cases, verifying no prompt, unchanged ready reservation, no carrier leg, and successful fresh challenge after recovery.
+- Existing claim transaction, connection event persistence, approval gates, provider flags and default-deny routing are unchanged. Exact-head CI and independent D1 validation pending at commit time; no calls, deployments or merges.
+
+## 2026-11-11 — SignalWire callback DB outage boundary (draft PR #40)
+- Added a carrier-facing fail-closed exception boundary around both signed SignalWire callback handlers. Unexpected D1 read/write exceptions now return hangup SWML rather than an unhandled HTTP 500; existing explicit signature/body rejection responses remain unchanged. A connect still requires successful authorization and atomic claim persistence.
+- Added offline regression tests for a PIN attempt counter UPDATE ABORT and an inbound approved-reservation SELECT outage. Tests assert valid hangup, unchanged ready reservation, zero carrier legs and successful fresh challenge after recovery.
+- Changes are on the unmerged integration branch only. Exact-head CI and independent Cloudflare D1 verification pending at commit time. No calls, paid routing, flags, provider resources, merges or deployments.
+
+## 2026-11-12 — PR #40: monotonic SignalWire event outcome on ambiguous commit
+- Restricted denial event updates to rows still marked `received`, so a post-commit missing-metadata result cannot rewrite a durable `connect` event as `CLAIM_LOST`.
+- Added an offline fault-injection regression that executes the real batch, strips response metadata, asserts safe hangup, and checks the committed `connect` event remains intact. The reservation can still remain `connecting` after an ambiguous commit; reconciliation is a separate unresolved P0 gate.
+- Changes remain on draft PR #40 only. No paid routing, deployment, calls, merges, or carrier changes. Exact-head CI pending.
+
+## 2026-11-12 — SignalWire replay-event durability (draft PR #40)
+- Changed the replay-event INSERT guard to require exactly one confirmed persisted row; a nonthrowing SQLite RAISE(IGNORE) or absent D1 write metadata now fails closed instead of treating a missing replay record as fresh.
+- Added offline trigger fault-injection regressions for both initial inbound and PIN callbacks, checking hangup, no carrier leg, unchanged ready reservation and fresh retry after recovery.
+- This does not resolve post-commit ambiguity or validate Cloudflare D1 production semantics. Changes remain unmerged; no paid routing, calls, provider purchases, secrets or deployment. Exact-head CI pending.
+
+## 2026-11-12 — Post-commit transport-loss regression (draft PR #40)
+- Added an offline SignalWire PIN fault-injection regression where the database batch commits and its transport response throws afterward. The callback must hang up, preserve the committed `connect` event and single carrier-leg row, and deny both replay of the same PIN event and a new attempt against the stranded `connecting` reservation.
+- This test establishes conservative denial behavior, **not** automatic reconciliation or proof of carrier connection. The ambiguous reservation remains locked pending verified provider-state evidence and owner-authorized recovery. Real Cloudflare D1 execution and exact-head CI remain required; no routing flags, carrier resources, calls or deployments were changed.
+
+## 2026-11-12 — PIN carrier identity binding (draft PR #40; pending review)
+- Added migration 0005 with original challenge segment ID and SHA-256 caller digest columns on the SignalWire provider-event ledger. Existing NULL challenges fail closed; do not infer identity from untrusted callbacks. No plaintext caller number is added to the event ledger.
+- The initial signed inbound callback persists both identity fields before issuing a PIN challenge. Signed PIN callbacks must match the original segment and caller digest before writing a PIN replay event or consuming a PIN attempt; mismatches hang up.
+- Added offline signed cross-segment/caller-drift regression with successful original-identity continuation. Actual SignalWire segment-transition semantics and Cloudflare D1 migration/transaction behavior remain unverified; do not enable paid routing or merge before review and exact-head CI.
+- No calls, purchases, secrets, deployments, routing flag changes or merges.
+
+## 2026-11-12 — PIN identity regression CI follow-up (draft PR #40)
+- Exact-head Actions run 43269796633 failed 1/168 tests: the original PIN flow fixture deliberately changed the inbound caller number but the helper-generated PIN callback used the default caller. New strict carrier-identity binding correctly rejected that callback, so the expected second PIN attempt did not occur (1 vs 2 at line 82).
+- Corrected the ordinary successful-flow fixture to use the same caller on both signed callbacks. The dedicated identity-drift regression still asserts mismatched caller/segment hang up before consuming attempts or creating legs.
+- This is a test-only correction; no routing flags, provider configuration, paid calls or deployment changes. Recheck exact-head CI; SignalWire segment semantics and real D1 behavior remain unverified.
