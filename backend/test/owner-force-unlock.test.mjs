@@ -77,7 +77,7 @@ test('explicit forced unlock is audited, releases the lock and still counts towa
 test('force-unlock tries carrier reconciliation first and completes normally when it succeeds',async t=>{
   const {env,DB,id}=await stuck(t);
   const inbound={id:SEG,parent_id:null,direction:'inbound',status:'completed',to:DID,charge:0.01};
-  const child={id:CHILD,parent_id:SEG,direction:'outbound',status:'completed',to:DEST,charge:0.02};
+  const child={id:CHILD,parent_id:SEG,direction:'outbound',status:'completed',from:DID,to:DEST,charge:0.02};
   const seen=[];
   t.mock.method(globalThis,'fetch',async(url,o)=>{
     seen.push(o.method);
