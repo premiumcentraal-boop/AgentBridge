@@ -331,3 +331,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Require the initial SignalWire PIN challenge event to transition from `received` to `pin_requested` with exactly one durable database row update before emitting a prompt. Previously a thrown write could produce HTTP 500 and a silently ignored update could issue an unusable PIN prompt.
 - A thrown or zero-row challenge update now emits safe SWML hangup; no reservation claim or paid route is attempted. Added offline SQLite ABORT and IGNORE trigger regression cases, verifying no prompt, unchanged ready reservation, no carrier leg, and successful fresh challenge after recovery.
 - Existing claim transaction, connection event persistence, approval gates, provider flags and default-deny routing are unchanged. Exact-head CI and independent D1 validation pending at commit time; no calls, deployments or merges.
+
+## 2026-11-11 — SignalWire callback DB outage boundary (draft PR #40)
+- Added a carrier-facing fail-closed exception boundary around both signed SignalWire callback handlers. Unexpected D1 read/write exceptions now return hangup SWML rather than an unhandled HTTP 500; existing explicit signature/body rejection responses remain unchanged. A connect still requires successful authorization and atomic claim persistence.
+- Added offline regression tests for a PIN attempt counter UPDATE ABORT and an inbound approved-reservation SELECT outage. Tests assert valid hangup, unchanged ready reservation, zero carrier legs and successful fresh challenge after recovery.
+- Changes are on the unmerged integration branch only. Exact-head CI and independent Cloudflare D1 verification pending at commit time. No calls, paid routing, flags, provider resources, merges or deployments.
