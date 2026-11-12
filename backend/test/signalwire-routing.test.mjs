@@ -347,3 +347,40 @@ test('PIN prompt requires a durable challenge binding, including ignored and abo
     assert.ok(retry.doc.sections.main.some(x=>x.prompt),'fresh challenge works after recovery');
   }
 });
+
+test('PIN attempt database ABORT returns safe hangup and preserves unclaimed route',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const reservation=await reserve(env,'pin-bump-outage-0001');
+  await approveReservation(env,reservation.id);
+  const id=CID(360);
+  assert.ok((await inbound(env,{call_id:id})).doc.sections.main.some(x=>x.prompt));
+  DB.raw.exec("CREATE TRIGGER abort_pin_bump BEFORE UPDATE OF pin_attempts ON reservations BEGIN SELECT RAISE(ABORT,'pin attempt DB outage'); END");
+  const result=await pin(env,id,reservation.dtmf_pin);
+  assert.equal(result.status,200);
+  assert.ok(isHangup(result.doc),'PIN write failure must never connect');
+  assert.deepEqual(DB.raw.prepare('SELECT status,pin_attempts FROM reservations WHERE id=?').get(reservation.id),{status:'ready',pin_attempts:0});
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,0);
+  DB.raw.exec('DROP TRIGGER abort_pin_bump');
+  const retry=CID(361);
+  assert.ok((await inbound(env,{call_id:retry})).doc.sections.main.some(x=>x.prompt));
+  assert.equal(connectOf((await pin(env,retry,reservation.dtmf_pin)).doc)?.to,DEST);
+});
+
+test('inbound reservation SELECT outage returns safe hangup without claiming',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  const reservation=await reserve(env,'inbound-read-outage-1');
+  await approveReservation(env,reservation.id);
+  const original=env.DB;
+  env.DB={prepare(sql){
+    if(sql.includes('SELECT r.id,r.account_id,r.destination')&&sql.includes('ORDER BY r.created_at'))throw Error('injected D1 read outage');
+    return original.prepare(sql);
+  },batch:(...args)=>original.batch(...args)};
+  const result=await inbound(env,{call_id:CID(362)});
+  assert.equal(result.status,200);
+  assert.ok(isHangup(result.doc),'read outage must never prompt or connect');
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(reservation.id).status,'ready');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(reservation.id).n,0);
+  env.DB=original;
+  const retry=await inbound(env,{call_id:CID(363)});
+  assert.ok(retry.doc.sections.main.some(x=>x.prompt),'recovery allows a new challenge');
+});
