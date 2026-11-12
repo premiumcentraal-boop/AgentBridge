@@ -1,9 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import {
-  SideNav,
-  SideNavSection,
-  SideNavItem,
-} from "@astryxdesign/core/SideNav";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { A, useRoute } from "./context.jsx";
@@ -12,6 +7,8 @@ import {
   SAMPLE_ROUTES,
   SAMPLE_EVENTS,
   SAMPLE_CALL_PLANS,
+  SAMPLE_ROUTING_NUMBERS,
+  SAMPLE_NUMBER_CONNECTIONS,
 } from "./data.js";
 import {
   Button,
@@ -27,15 +24,21 @@ import {
   Loop,
 } from "./ui.jsx";
 import { CallExtensions } from "./call-tools.jsx";
-import { DEFAULT_CAPTURE } from "../../shared/call-plans.mjs";
+import { DEFAULT_CAPTURE, CALL_COUNTRIES } from "../../shared/call-plans.mjs";
 import { BotFace } from "./grok-ui.jsx";
-import {
-  ConnectionDashboard,
-  ConnectionsPage,
-  RoutingReview,
-} from "./connection-hub.jsx";
+import { RoutingReview } from "./connection-hub.jsx";
 import sampleAudio from "./samples/sample-call.mp3";
+import { ActiveCallCard, StudioDrawer } from "./studio-navigation.jsx";
+import {
+  NumberWorkspace,
+  ConnectionEditor,
+  BuyNumberDialog,
+} from "./number-studio.jsx";
+import { validateNumberConnection } from "../../shared/numbers.mjs";
 const empty = () => ({
+  routing_numbers: [],
+  connections: [],
+  number_orders: [],
   call_plans: [],
   capture_preferences: { ...DEFAULT_CAPTURE },
   routes: [],
@@ -50,22 +53,6 @@ const time = (value) =>
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
-const initials = (route) =>
-  route.initials ||
-  route.label
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((s) => s[0])
-    .join("")
-    .toUpperCase();
-const country = (route) =>
-  route.country ||
-  (route.destination.startsWith("+44")
-    ? "United Kingdom"
-    : route.destination.startsWith("+1")
-      ? "United States"
-      : "International");
 const uuid = () =>
   typeof crypto !== "undefined" && crypto.randomUUID
     ? crypto.randomUUID()
@@ -82,6 +69,13 @@ export function Studio({ mode, setMode, isDemo }) {
   const [snapshot, setSnapshot] = useState(() =>
     isDemo
       ? {
+          routing_numbers: SAMPLE_ROUTING_NUMBERS.map((number) => ({
+            ...number,
+          })),
+          connections: SAMPLE_NUMBER_CONNECTIONS.map((connection) => ({
+            ...connection,
+          })),
+          number_orders: [],
           call_plans: SAMPLE_CALL_PLANS.map((p) => ({
             ...p,
             capture: { ...p.capture },
@@ -101,15 +95,16 @@ export function Studio({ mode, setMode, isDemo }) {
   });
   const [compact, setCompact] = useState(false),
     [mobileOpen, setMobileOpen] = useState(false),
-    [newDraft, setNewDraft] = useState(false),
-    [detail, setDetail] = useState(null),
-    [search, setSearch] = useState(""),
-    [filter, setFilter] = useState("all"),
     [joinOpen, setJoinOpen] = useState(false);
   const [routingOpen, setRoutingOpen] = useState(false);
+  const [numberEditorOpen, setNumberEditorOpen] = useState(false);
+  const [numberConnection, setNumberConnection] = useState(null);
+  const [selectedRoutingNumber, setSelectedRoutingNumber] = useState("");
+  const [buyNumberOpen, setBuyNumberOpen] = useState(false);
   const [routingDestination, setRoutingDestination] = useState("");
   const sampleAudioRef = useRef(null);
   const samplePlayAttempt = useRef(0);
+  const jumpTimer = useRef();
   const [call, setCall] = useState({
       active: isDemo,
       muted: false,
@@ -119,6 +114,9 @@ export function Studio({ mode, setMode, isDemo }) {
       recording: false,
       transcription: false,
       recordingPaused: false,
+      label: "London studio",
+      routing_number: "+12025550110",
+      destination: "+442079460123",
     }),
     [message, setMessage] = useState(""),
     [integration, setIntegration] = useState({
@@ -143,8 +141,9 @@ export function Studio({ mode, setMode, isDemo }) {
       if (response.status === 401 && endpoint !== "session") {
         setSession((s) => ({ ...s, authenticated: false }));
         setSnapshot(empty());
-        setNewDraft(false);
-        setDetail(null);
+        setNumberEditorOpen(false);
+        setNumberConnection(null);
+        setBuyNumberOpen(false);
       }
       throw new Error(
         data.error?.message || "The request could not be completed.",
@@ -187,13 +186,17 @@ export function Studio({ mode, setMode, isDemo }) {
     );
     return () => clearInterval(timer);
   }, [isDemo, call.active]);
-  useEffect(() => () => clearTimeout(toastTimer.current), []);
+  useEffect(
+    () => () => {
+      clearTimeout(toastTimer.current);
+      clearTimeout(jumpTimer.current);
+    },
+    [],
+  );
   const previousPath = useRef(path);
   useEffect(() => {
     if (previousPath.current !== path) {
       setMobileOpen(false);
-      setNewDraft(false);
-      setDetail(null);
       previousPath.current = path;
     }
     document.title =
@@ -207,6 +210,144 @@ export function Studio({ mode, setMode, isDemo }) {
     message: text,
     created_at: new Date().toISOString(),
   });
+  const beginConnection = (numberId = "") => {
+    const owned = (snapshot.routing_numbers || []).filter(
+      (number) => number.status === "owned",
+    );
+    const free = owned.find(
+      (number) =>
+        !(snapshot.connections || []).some(
+          (connection) =>
+            connection.status === "saved" &&
+            connection.routing_number_id === number.id,
+        ),
+    );
+    if (!numberId && !free) {
+      setBuyNumberOpen(true);
+      return;
+    }
+    setNumberConnection(null);
+    setSelectedRoutingNumber(numberId || free.id);
+    setNumberEditorOpen(true);
+  };
+  const saveNumberConnection = async (value, id) => {
+    const validated = validateNumberConnection(value);
+    if (validated.error) throw new Error(validated.error);
+    if (isDemo) {
+      if (
+        !(snapshot.routing_numbers || []).some(
+          (number) =>
+            number.id === value.routing_number_id && number.status === "owned",
+        )
+      )
+        throw new Error("Choose an owned routing number.");
+      if (
+        snapshot.routing_numbers.some(
+          (number) => number.e164 === value.destination,
+        )
+      )
+        throw new Error("Choose an outside destination.");
+      if (
+        snapshot.connections.some(
+          (connection) =>
+            connection.status === "saved" &&
+            connection.id !== id &&
+            connection.routing_number_id === value.routing_number_id,
+        )
+      )
+        throw new Error("This routing number already has a destination.");
+      if (!id && snapshot.connections.length >= 200)
+        throw new Error("The connection limit has been reached.");
+      const now = new Date().toISOString();
+      setSnapshot((state) => ({
+        ...state,
+        connections: id
+          ? state.connections.map((connection) =>
+              connection.id === id
+                ? { ...connection, ...value, updated_at: now }
+                : connection,
+            )
+          : [
+              {
+                id: uuid(),
+                ...value,
+                status: "saved",
+                created_at: now,
+                updated_at: now,
+              },
+              ...state.connections,
+            ],
+      }));
+    } else {
+      await api(id ? "connections/" + id : "connections", {
+        method: id ? "PATCH" : "POST",
+        body: JSON.stringify(value),
+      });
+      await refresh();
+    }
+    notify("Connection saved.");
+  };
+  const archiveNumberConnection = async (connection) => {
+    try {
+      if (isDemo)
+        setSnapshot((state) => ({
+          ...state,
+          connections: state.connections.map((item) =>
+            item.id === connection.id ? { ...item, status: "archived" } : item,
+          ),
+        }));
+      else {
+        await api("connections/" + connection.id, { method: "DELETE" });
+        await refresh();
+      }
+      notify("Connection removed.");
+    } catch (error) {
+      notify(error.message);
+    }
+  };
+  const saveNumberOrder = async (value, candidate) => {
+    if (isDemo) {
+      if (snapshot.routing_numbers.some((number) => number.e164 === candidate))
+        throw new Error("This number has already been added.");
+      if (snapshot.routing_numbers.length >= 100)
+        throw new Error("The number limit has been reached.");
+      const id = uuid(),
+        now = new Date().toISOString();
+      setSnapshot((state) => ({
+        ...state,
+        routing_numbers: [
+          {
+            id,
+            provider: value.provider,
+            provider_number_id: "example-" + id,
+            e164: candidate,
+            country: value.country,
+            label: value.label,
+            status: "owned",
+            ownership_source: "example",
+            created_at: now,
+            updated_at: now,
+          },
+          ...state.routing_numbers,
+        ],
+      }));
+      setNumberConnection(
+        numberConnection && !numberConnection.id
+          ? { ...numberConnection, routing_number_id: id }
+          : null,
+      );
+      setSelectedRoutingNumber(id);
+      setNumberEditorOpen(true);
+      notify("Number added. Connect a destination.");
+    } else {
+      await api("number-orders", {
+        method: "POST",
+        body: JSON.stringify(value),
+      });
+      await refresh();
+      notify("Number request saved. Purchase pending.");
+    }
+  };
   const saveCallPlan = async (value) => {
     if (isDemo) {
       if ((snapshot.call_plans || []).length >= 200)
@@ -278,51 +419,6 @@ export function Studio({ mode, setMode, isDemo }) {
       await refresh();
     }
   };
-  const saveRoute = async ({ label, destination }) => {
-    const clean = {
-      label: label.trim(),
-      destination: destination.replace(/[\s().-]/g, ""),
-    };
-    if (
-      !clean.label ||
-      clean.label.length > 80 ||
-      /[\u0000-\u001f\u007f]/.test(clean.label)
-    )
-      throw new Error("Give this draft a name of up to 80 characters.");
-    if (!/^\+[1-9]\d{7,14}$/.test(clean.destination))
-      throw new Error(
-        "Use international format, starting with + and a country code.",
-      );
-    if (isDemo) {
-      if (snapshot.routes.length >= 200)
-        throw new Error("This workspace can hold up to 200 drafts.");
-      setSnapshot((s) => ({
-        ...s,
-        routes: [
-          {
-            ...clean,
-            id: uuid(),
-            status: "draft",
-            created_at: new Date().toISOString(),
-          },
-          ...s.routes,
-        ],
-        events: [
-          event("route.created", "Route draft saved. No call placed."),
-          ...s.events,
-        ],
-      }));
-    } else {
-      await api("routes", { method: "POST", body: JSON.stringify(clean) });
-      await refresh();
-    }
-    setNewDraft(false);
-    notify(
-      isDemo
-        ? "Draft saved in this preview. No call placed."
-        : "Route draft saved.",
-    );
-  };
   const archive = async (route) => {
     try {
       if (isDemo)
@@ -340,7 +436,6 @@ export function Studio({ mode, setMode, isDemo }) {
         await api(`routes/${route.id}/archive`, { method: "POST", body: "{}" });
         await refresh();
       }
-      setDetail(null);
       notify("Draft archived.");
     } catch (e) {
       notify(e.message);
@@ -412,6 +507,9 @@ export function Studio({ mode, setMode, isDemo }) {
       setSession((s) => ({ ...s, authenticated: false }));
       setSnapshot(empty());
       setCall({ active: false, muted: false, elapsed: 0 });
+      setNumberEditorOpen(false);
+      setNumberConnection(null);
+      setBuyNumberOpen(false);
     } catch (error) {
       notify(error.message);
     }
@@ -435,12 +533,9 @@ export function Studio({ mode, setMode, isDemo }) {
       setJoinOpen(false);
       setSnapshot((s) => ({
         ...s,
-        events: [
-          event("preview.call_ended", "Simulated call ended."),
-          ...s.events,
-        ],
+        events: [event("preview.call_ended", "Call ended."), ...s.events],
       }));
-      notify("Simulated call ended. No real call was made.");
+      notify("Call ended.");
     }
   };
   const returnCall = () => go(studioBase + "call/");
@@ -448,7 +543,7 @@ export function Studio({ mode, setMode, isDemo }) {
     setRoutingDestination(destinationId);
     setRoutingOpen(true);
   };
-  const listenToSample = async () => {
+  const listenToSample = async (options = {}) => {
     if (!isDemo || !call.active || !sampleAudioRef.current) return;
     const audio = sampleAudioRef.current;
     const attempt = ++samplePlayAttempt.current;
@@ -464,11 +559,11 @@ export function Studio({ mode, setMode, isDemo }) {
         playbackPaused: false,
         samplePosition: audio.currentTime,
         joined: true,
-        userMuted: true,
+        userMuted:
+          typeof options.userMuted === "boolean" ? options.userMuted : true,
+        joinMethod: options.joinMethod || c.joinMethod || "browser",
       }));
-      notify(
-        "Listening to fictional sample audio. No microphone or live call.",
-      );
+      notify("Listening.");
     } catch {
       if (attempt === samplePlayAttempt.current)
         notify("Playback could not start. Try the sample audio controls.");
@@ -478,7 +573,7 @@ export function Studio({ mode, setMode, isDemo }) {
     samplePlayAttempt.current++;
     sampleAudioRef.current?.pause();
     setCall((c) => ({ ...c, listening: false, joined: false }));
-    notify("You left sample playback. The agent continues the simulated call.");
+    notify("Left call. The agent continues.");
   };
   useEffect(() => {
     if (sampleAudioRef.current) sampleAudioRef.current.muted = call.muted;
@@ -527,134 +622,136 @@ export function Studio({ mode, setMode, isDemo }) {
     );
   const navTo = (id) =>
     id === "overview" ? studioBase : studioBase + id + "/";
-  const count = snapshot.routes.filter((r) => r.status === "draft").length;
-  const collapsed = {
-    isCollapsed: compact,
-    onCollapsedChange: setCompact,
-    hasButton: false,
+  const openCall = () => {
+    setMobileOpen(false);
+    returnCall();
   };
+  const jumpIntoCall = () => {
+    setMobileOpen(false);
+    returnCall();
+    clearTimeout(jumpTimer.current);
+    if (mobileOpen)
+      jumpTimer.current = setTimeout(() => setJoinOpen(true), 230);
+    else setJoinOpen(true);
+  };
+  const primaryIds = [
+    "overview",
+    "numbers",
+    "connections",
+    "calls",
+    "routes",
+    "memory",
+  ];
   const renderNav = (mobile = false) => (
-    <SideNav
-      className="real-side-nav"
-      style={{ width: mobile ? 236 : compact ? 76 : 236 }}
-      collapsible={mobile ? false : collapsed}
-      header={
-        <div className="rail-brand">
-          <A to="/" className="rail-wordmark" aria-label="AgentBridge home">
-            <Mark />
-            {(!compact || mobile) && <span>AgentBridge</span>}
-          </A>
-          <IconBtn
-            label={
-              mobile
-                ? "Close navigation"
-                : compact
-                  ? "Expand navigation"
-                  : "Collapse navigation"
-            }
-            name={mobile ? "close" : compact ? "expand" : "collapse"}
-            onClick={() =>
-              mobile ? setMobileOpen(false) : setCompact(!compact)
-            }
-          />
-        </div>
+    <nav
+      className={
+        "studio-nav " +
+        (mobile ? "is-mobile" : "") +
+        (compact && !mobile ? " is-compact" : "")
       }
-      topContent={
-        <CallCard
-          call={call}
-          compact={!mobile && compact}
-          isDemo={isDemo}
-          onMute={toggleMute}
-          onEnd={endCall}
-          onReturn={returnCall}
-          onRestart={restartCall}
-          onJoin={() => {
-            returnCall();
-            setJoinOpen(true);
-          }}
-        />
-      }
-      footer={
-        <div className="rail-footer">
-          <SegmentedControl
-            label="Studio colour theme"
-            value={mode}
-            onChange={setMode}
-            layout="fill"
-            size="sm"
-            className="theme-segments"
-          >
-            <SegmentedControlItem
-              value="dark"
-              label="Dark"
-              icon={<Icon name="moon" size={12} />}
-              isLabelHidden={compact && !mobile}
-            />
-            <SegmentedControlItem
-              value="light"
-              label="Light"
-              icon={<Icon name="sun" size={12} />}
-              isLabelHidden={compact && !mobile}
-            />
-          </SegmentedControl>
-          <A to={navTo("settings")} className="rail-owner">
-            <span>V</span>
-            {(!compact || mobile) && (
-              <>
-                <div>
-                  <strong>Victor</strong>
-                  <small>
-                    {isDemo ? "Preview workspace" : "Workspace owner"}
-                  </small>
-                </div>
-                <Icon name="more" size={16} />
-              </>
-            )}
-          </A>
-        </div>
-      }
+      aria-label="Studio navigation"
     >
-      <SideNavSection title="Workspace" isHeaderHidden={compact && !mobile}>
-        {NAV.filter(([id]) =>
-          ["overview", "connections", "calls", "routes", "memory"].includes(id),
-        ).map(([id, label]) => (
-          <SideNavItem
+      <div className="studio-nav-brand">
+        <A to="/" aria-label="AgentBridge home">
+          <Mark />
+          {(!compact || mobile) && <span>AgentBridge</span>}
+        </A>
+        <IconBtn
+          label={
+            mobile
+              ? "Close navigation"
+              : compact
+                ? "Expand navigation"
+                : "Collapse navigation"
+          }
+          name={mobile ? "close" : compact ? "expand" : "collapse"}
+          onClick={() => (mobile ? setMobileOpen(false) : setCompact(!compact))}
+        />
+      </div>
+      <ActiveCallCard
+        call={call}
+        compact={compact && !mobile}
+        navigation
+        onOpen={openCall}
+        onJump={jumpIntoCall}
+      />
+      <div className="studio-nav-primary">
+        {NAV.filter(([id]) => primaryIds.includes(id)).map(([id, label]) => (
+          <a
             key={id}
-            label={label}
-            icon={<Icon name={id} size={17} />}
-            isSelected={page === id || (page === "call" && id === "calls")}
             href={href(navTo(id))}
-            onClick={(e) => link(e, navTo(id))}
-            endContent={
-              id === "routes" && count ? (
-                <span className="nav-count">{count}</span>
-              ) : undefined
+            aria-label={label}
+            aria-current={
+              page === id || (page === "call" && id === "calls")
+                ? "page"
+                : undefined
             }
-            className="real-nav-item"
-          />
+            onClick={(event) => {
+              link(event, navTo(id));
+              if (mobile) setMobileOpen(false);
+            }}
+          >
+            <Icon name={id} size={19} />
+            <span className="studio-nav-text">{label}</span>
+            {id === "connections" &&
+              snapshot.connections?.filter(
+                (connection) => connection.status === "saved",
+              ).length > 0 && (
+                <small>
+                  {
+                    snapshot.connections.filter(
+                      (connection) => connection.status === "saved",
+                    ).length
+                  }
+                </small>
+              )}
+          </a>
         ))}
-      </SideNavSection>
-      <SideNavSection title="Manage" isHeaderHidden={compact && !mobile}>
-        {NAV.filter(
-          ([id]) =>
-            !["overview", "connections", "calls", "routes", "memory"].includes(
-              id,
-            ),
-        ).map(([id, label]) => (
-          <SideNavItem
+      </div>
+      <div className="studio-nav-secondary">
+        {NAV.filter(([id]) => !primaryIds.includes(id)).map(([id, label]) => (
+          <a
             key={id}
-            label={label}
-            icon={<Icon name={id} size={17} />}
-            isSelected={page === id}
             href={href(navTo(id))}
-            onClick={(e) => link(e, navTo(id))}
-            className="real-nav-item"
-          />
+            aria-label={label}
+            aria-current={page === id ? "page" : undefined}
+            onClick={(event) => {
+              link(event, navTo(id));
+              if (mobile) setMobileOpen(false);
+            }}
+          >
+            <Icon name={id} size={17} />
+            <span className="studio-nav-text">{label}</span>
+          </a>
         ))}
-      </SideNavSection>
-    </SideNav>
+      </div>
+      <div className="studio-nav-footer">
+        <button
+          type="button"
+          aria-label={
+            mode === "dark" ? "Switch to light theme" : "Switch to dark theme"
+          }
+          onClick={() => setMode(mode === "dark" ? "light" : "dark")}
+        >
+          <Icon name={mode === "dark" ? "sun" : "moon"} size={17} />
+          <span className="studio-nav-text">
+            {mode === "dark" ? "Light mode" : "Dark mode"}
+          </span>
+        </button>
+        <A
+          to={navTo("settings")}
+          aria-label="Account settings"
+          onClick={(event) => {
+            link(event, navTo("settings"));
+            if (mobile) setMobileOpen(false);
+          }}
+        >
+          <span className="studio-account-avatar">V</span>
+          <span className="studio-nav-text">Account</span>
+        </A>
+      </div>
+    </nav>
   );
-  const shared = { snapshot, isDemo, navTo, setNewDraft, setDetail };
   return (
     <div className={"workspace-shell " + (compact ? "rail-collapsed" : "")}>
       <a className="skip-link" href="#main">
@@ -681,41 +778,22 @@ export function Studio({ mode, setMode, isDemo }) {
             </strong>
           </div>
           <div className="workspace-top-actions">
-            <Pill dot tone={isDemo ? "sage" : "muted"}>
-              {isDemo ? "Preview workspace" : "Private workspace"}
-            </Pill>
             <A to="/" className="text-action">
               Product page <Icon name="diagonal" size={13} />
             </A>
             <span className="owner-dot">V</span>
           </div>
         </header>
-        {isDemo && (
-          <div className="workspace-demo-note">
-            <span>
-              <i className="tiny-dot" />
-              You’re exploring a sample workspace. Drafts stay in this tab.
-            </span>
-            <A to="/studio/">
-              Open your studio <Icon name="diagonal" size={12} />
-            </A>
+        {call.active && !["overview", "call", "calls"].includes(page) && (
+          <div className="mobile-current-call">
+            <ActiveCallCard
+              call={call}
+              navigation
+              onOpen={openCall}
+              onJump={jumpIntoCall}
+            />
           </div>
         )}
-        <div className="mobile-call-bar">
-          {call.active ? (
-            <button type="button" onClick={returnCall}>
-              <i />
-              <span>London studio</span>
-              <time>{formatDuration(call.elapsed)}</time>
-              <small>Demo</small>
-            </button>
-          ) : (
-            <span>
-              <Icon name="phone" size={13} />
-              No active call
-            </span>
-          )}
-        </div>
         <main className="workspace-main" id="main" tabIndex={-1}>
           {["calls", "memory", "call"].includes(page) ? (
             <CallExtensions
@@ -737,28 +815,50 @@ export function Studio({ mode, setMode, isDemo }) {
               onListen={listenToSample}
               onRoute={reviewRouting}
             />
-          ) : page === "overview" ? (
-            <ConnectionDashboard
-              {...shared}
+          ) : ["overview", "numbers", "connections", "routes"].includes(
+              page,
+            ) ? (
+            <NumberWorkspace
+              key={page}
+              page={page}
+              snapshot={snapshot}
               call={call}
-              onNew={() => setNewDraft(true)}
-              onListen={listenToSample}
-              onRoute={reviewRouting}
-              onRestart={restartCall}
-            />
-          ) : page === "connections" ? (
-            <ConnectionsPage
-              {...shared}
-              onNew={() => setNewDraft(true)}
-              onRoute={reviewRouting}
-            />
-          ) : page === "routes" ? (
-            <Routes
-              {...shared}
-              search={search}
-              setSearch={setSearch}
-              filter={filter}
-              setFilter={setFilter}
+              navTo={navTo}
+              onOpenCall={openCall}
+              onJump={jumpIntoCall}
+              onBuy={() => setBuyNumberOpen(true)}
+              onAdd={beginConnection}
+              onEdit={(connection) => {
+                setNumberConnection(connection);
+                setSelectedRoutingNumber(connection.routing_number_id);
+                setNumberEditorOpen(true);
+              }}
+              onArchive={archiveNumberConnection}
+              onLegacy={(route) => {
+                const free = snapshot.routing_numbers.find(
+                  (number) =>
+                    number.status === "owned" &&
+                    !snapshot.connections.some(
+                      (connection) =>
+                        connection.status === "saved" &&
+                        connection.routing_number_id === number.id,
+                    ),
+                );
+                const country =
+                  CALL_COUNTRIES.find((country) =>
+                    route.destination.startsWith("+" + country.prefix),
+                  )?.code || "US";
+                setNumberConnection({
+                  label: route.label,
+                  destination: route.destination,
+                  country,
+                  routing_number_id: free?.id || "",
+                });
+                setSelectedRoutingNumber(free?.id || "");
+                if (free) setNumberEditorOpen(true);
+                else setBuyNumberOpen(true);
+              }}
+              onLegacyRemove={archive}
             />
           ) : page === "connection" ? (
             <Connection
@@ -784,37 +884,33 @@ export function Studio({ mode, setMode, isDemo }) {
           )}
         </main>
         <footer className="workspace-footer">
-          <span>
-            <i className="tiny-dot" />
-            Development preview · Live call controls require setup
-          </span>
-          <span>AGENTBRIDGE / VICTOR</span>
+          <span>AgentBridge</span>
         </footer>
       </div>
-      <Dialog
-        isOpen={mobileOpen}
-        onOpenChange={setMobileOpen}
-        width={260}
-        padding={0}
-        className="mobile-navigation-dialog"
-        aria-label="Workspace navigation"
-      >
+      <StudioDrawer open={mobileOpen} onClose={() => setMobileOpen(false)}>
         {renderNav(true)}
-      </Dialog>
-      <NewDraft
-        isOpen={newDraft}
-        onClose={() => setNewDraft(false)}
-        save={saveRoute}
+      </StudioDrawer>
+      <ConnectionEditor
+        open={numberEditorOpen}
+        initial={numberConnection}
+        selectedNumber={selectedRoutingNumber}
+        snapshot={snapshot}
+        onClose={() => setNumberEditorOpen(false)}
+        onSave={saveNumberConnection}
+        onBuy={() => setBuyNumberOpen(true)}
       />
-      <DraftDetail
-        route={detail}
-        onClose={() => setDetail(null)}
-        archive={archive}
+      <BuyNumberDialog
+        open={buyNumberOpen}
+        isDemo={isDemo}
+        onClose={() => setBuyNumberOpen(false)}
+        onSave={saveNumberOrder}
+        numbers={snapshot.routing_numbers || []}
       />
       <RoutingReview
         open={routingOpen}
         destinationId={routingDestination}
-        routes={snapshot.routes}
+        connections={snapshot.connections}
+        numbers={snapshot.routing_numbers}
         call={call}
         isDemo={isDemo}
         onClose={() => setRoutingOpen(false)}
@@ -826,13 +922,10 @@ export function Studio({ mode, setMode, isDemo }) {
                 id: route.id,
                 label: route.label,
                 destination: route.destination,
+                routing_number_id: route.routing_number_id,
               },
             }));
-          notify(
-            isDemo
-              ? "Routing preview saved. No call transferred."
-              : "Destination reviewed. No routing activated.",
-          );
+          notify(isDemo ? "Routing choice saved." : "Routing choice reviewed.");
         }}
       />
       {isDemo && (
@@ -844,18 +937,16 @@ export function Studio({ mode, setMode, isDemo }) {
           />
           <div className="sample-listen-title">
             <strong>
-              {call.playbackPaused
-                ? "Sample playback paused"
-                : "Listening to the sample"}
+              {call.playbackPaused ? "Playback paused" : "Listening"}
             </strong>
-            <small>Fictional audio · Your microphone is off</small>
+            <small>Example audio · Microphone off</small>
           </div>
           <audio
             ref={sampleAudioRef}
             src={sampleAudio}
             controls
             preload="none"
-            aria-label="Fictional sample call playback"
+            aria-label="Example call audio"
             onTimeUpdate={(event) => {
               const position = event.currentTarget.currentTime;
               setCall((c) => ({ ...c, samplePosition: position }));
@@ -867,7 +958,7 @@ export function Studio({ mode, setMode, isDemo }) {
             }
           />
           <IconBtn
-            label="Leave sample listening"
+            label="Leave listening"
             name="close"
             onClick={leaveListening}
           />
@@ -887,112 +978,11 @@ const formatDuration = (s) =>
   `${Math.floor(s / 60)
     .toString()
     .padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
-function CallCard({
-  call,
-  compact,
-  isDemo,
-  onMute,
-  onEnd,
-  onReturn,
-  onRestart,
-  onJoin,
-}) {
-  return (
-    <div className={"rail-call-card " + (!call.active ? "call-idle" : "")}>
-      {call.active ? (
-        <>
-          <div className="call-card-label">
-            <i />
-            {!compact && (
-              <>
-                <span>ACTIVE CALL</span>
-                <small>DEMO</small>
-              </>
-            )}
-          </div>
-          <button
-            type="button"
-            className="call-recipient"
-            onClick={onReturn}
-            aria-label="Return to the simulated London studio call"
-          >
-            <BotFace size={compact ? 34 : 42} state="working" tone="teal" />
-            {!compact && (
-              <span>
-                <strong>London studio</strong>
-                <small>Grok Bot · United Kingdom</small>
-              </span>
-            )}
-          </button>
-          <div className="call-wave-row">
-            {!compact && <Wave muted={call.muted} />}
-            <time>{formatDuration(call.elapsed)}</time>
-          </div>
-          <div className="call-control-row">
-            <IconBtn
-              label={
-                call.muted ? "Unmute simulated call" : "Mute simulated call"
-              }
-              name={call.muted ? "muted" : "mute"}
-              aria-pressed={call.muted}
-              onClick={onMute}
-            />
-            {!compact && (
-              <IconBtn
-                label="Return to simulated call"
-                name="arrow"
-                onClick={onReturn}
-              />
-            )}
-            {!compact && (
-              <IconBtn
-                label={
-                  call.joined
-                    ? "Return to joined sample call"
-                    : "Let me join sample call"
-                }
-                name="join"
-                onClick={call.joined ? onReturn : onJoin}
-              />
-            )}
-            <IconBtn
-              label="End simulated call"
-              name="end"
-              className="end-call-control"
-              onClick={onEnd}
-            />
-          </div>
-        </>
-      ) : (
-        <>
-          <Icon name="phone" size={compact ? 18 : 23} />
-          {!compact && (
-            <>
-              <strong>No active call</strong>
-              <p>
-                A little quiet.
-                <br />
-                Ready for what’s next.
-              </p>
-            </>
-          )}
-          {isDemo && (
-            <IconBtn
-              label="Restart the simulated call"
-              name="arrow"
-              onClick={onRestart}
-            />
-          )}
-        </>
-      )}
-    </div>
-  );
-}
 function PageHead({ eyebrow, title, description, action }) {
   return (
     <div className="workspace-page-heading">
       <div>
-        <span className="eyebrow">{eyebrow}</span>
+        {eyebrow && <span className="eyebrow">{eyebrow}</span>}
         <h1>{title}</h1>
         {description && <p>{description}</p>}
       </div>
@@ -1000,179 +990,13 @@ function PageHead({ eyebrow, title, description, action }) {
     </div>
   );
 }
-function RouteRows({ routes, setDetail, emptyAction }) {
-  if (!routes.length)
-    return (
-      <div className="empty-workspace">
-        <span className="empty-symbol">
-          <Icon name="routes" size={26} />
-        </span>
-        <h3>Every connection starts somewhere.</h3>
-        <p>Save a destination draft, ready for a little consideration.</p>
-        {emptyAction && (
-          <Btn
-            label="Create a route draft"
-            icon="plus"
-            primary
-            end={null}
-            onClick={emptyAction}
-          />
-        )}
-      </div>
-    );
-  return (
-    <div className="routes-table-wrap">
-      <table className="routes-table">
-        <thead>
-          <tr>
-            <th>DESTINATION</th>
-            <th>PHONE NUMBER</th>
-            <th>STATUS</th>
-            <th>
-              <span className="sr-only">Open details</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {routes.map((route) => (
-            <tr key={route.id}>
-              <td>
-                <button
-                  type="button"
-                  className="route-record"
-                  onClick={() => setDetail(route)}
-                >
-                  <span
-                    className={
-                      "route-avatar " +
-                      (route.destination.startsWith("+44")
-                        ? "tone-blue"
-                        : "tone-sage")
-                    }
-                  >
-                    {initials(route)}
-                  </span>
-                  <span>
-                    <strong>{route.label}</strong>
-                    <small>{country(route)}</small>
-                  </span>
-                </button>
-              </td>
-              <td className="route-number">{route.destination}</td>
-              <td>
-                <Pill tone={route.status === "draft" ? "sage" : "muted"} dot>
-                  {route.status === "draft" ? "Draft" : "Archived"}
-                </Pill>
-              </td>
-              <td>
-                <IconBtn
-                  label={"View " + route.label + " details"}
-                  name="diagonal"
-                  onClick={() => setDetail(route)}
-                />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-function Routes({
-  snapshot,
-  setNewDraft,
-  setDetail,
-  search,
-  setSearch,
-  filter,
-  setFilter,
-}) {
-  const rows = snapshot.routes.filter(
-    (r) =>
-      (filter === "all" || r.status === filter) &&
-      `${r.label} ${r.destination}`
-        .toLowerCase()
-        .includes(search.toLowerCase()),
-  );
-  return (
-    <>
-      <PageHead
-        eyebrow="DESTINATIONS, CONSIDERED"
-        title="Routing."
-        description="Prepare a destination. Review every route before it connects."
-        action={
-          <Btn
-            label="New route draft"
-            icon="plus"
-            end={null}
-            primary
-            onClick={() => setNewDraft(true)}
-          />
-        }
-      />
-      <Card className="destinations-card" padding={0}>
-        <div className="routes-toolbar">
-          <TextInput
-            label="Search destinations"
-            isLabelHidden
-            startIcon={<Icon name="search" size={15} />}
-            placeholder="Search destinations…"
-            value={search}
-            onChange={setSearch}
-            className="search-input"
-          />
-          <SegmentedControl
-            label="Filter route drafts"
-            value={filter}
-            onChange={setFilter}
-            size="sm"
-            className="ab-segments"
-          >
-            <SegmentedControlItem value="all" label="All" />
-            <SegmentedControlItem value="draft" label="Active" />
-            <SegmentedControlItem value="archived" label="Archived" />
-          </SegmentedControl>
-        </div>
-        {rows.length ? (
-          <RouteRows routes={rows} setDetail={setDetail} />
-        ) : (
-          <div className="empty-workspace">
-            <Icon name="routes" size={27} />
-            <h3>
-              {snapshot.routes.length
-                ? "Nothing matches just yet."
-                : "A fresh start."}
-            </h3>
-            <p>
-              {snapshot.routes.length
-                ? "Try a different destination or filter."
-                : "A name and a number are all you need to save a draft."}
-            </p>
-            {!snapshot.routes.length && (
-              <Btn
-                label="Create your first draft"
-                primary
-                onClick={() => setNewDraft(true)}
-              />
-            )}
-          </div>
-        )}
-      </Card>
-      <div className="subtle-note">
-        <Icon name="shield" size={14} />
-        Drafts are saved destinations. Permission, caller proof and carrier
-        pricing are not verified by saving a number.
-      </div>
-    </>
-  );
-}
 function Connection({ integration, checking, check, isDemo }) {
   return (
     <>
       <PageHead
-        eyebrow="THE LAYER IN BETWEEN"
-        title="One considered connection."
-        description="A clear view of your private backend, whenever you’re ready."
+        eyebrow=""
+        title="Calling setup"
+        description="Provider connection and assigned numbers."
       />
       <div className="connection-page-grid">
         <Card className="backend-card" padding={0}>
@@ -1279,11 +1103,7 @@ function Connection({ integration, checking, check, isDemo }) {
 function Activity({ events }) {
   return (
     <>
-      <PageHead
-        eyebrow="A CLEAR RECORD"
-        title="The story so far."
-        description="Small workspace actions, thoughtfully kept."
-      />
+      <PageHead eyebrow="" title="Activity" description="" />
       <Card className="activity-card" padding={0}>
         <div className="section-title">
           <h2>Workspace activity</h2>
@@ -1316,7 +1136,7 @@ function Activity({ events }) {
         ) : (
           <div className="empty-workspace">
             <Icon name="activity" size={27} />
-            <h3>A quiet beginning.</h3>
+            <h3>No activity yet</h3>
             <p>
               Save a draft or change your guidance to start a workspace history.
             </p>
@@ -1345,11 +1165,11 @@ function Settings({
     [error, setError] = useState("");
   return (
     <>
-      <PageHead
-        eyebrow="MAKE THIS SPACE YOURS"
-        title="Your pace. Your preference."
-        description="A few small choices, for a workspace that feels right."
-      />
+      <PageHead eyebrow="" title="Settings" description="" />
+      <div className="studio-data-source">
+        <span>Data source</span>
+        <strong>{isDemo ? "Example data" : "Private workspace"}</strong>
+      </div>
       <Card className="settings-card" padding={0}>
         <div className="section-title">
           <h2>Conversation guidance</h2>
@@ -1442,7 +1262,7 @@ function Settings({
       </Card>
       <Card className="appearance-card" padding={0}>
         <div>
-          <h2>A little light, or a little quiet.</h2>
+          <h2>Appearance</h2>
           <p>Choose the studio appearance that feels comfortable.</p>
         </div>
         <SegmentedControl
@@ -1466,7 +1286,7 @@ function Settings({
       <div className="workspace-bottom-row">
         <Card className="data-card" padding={0}>
           <Icon name="download" size={22} />
-          <h2>Your workspace, to keep.</h2>
+          <h2>Export workspace</h2>
           <p>
             Export drafts, preferences and activity. The file includes
             destination numbers, so keep it private.
@@ -1475,7 +1295,7 @@ function Settings({
         </Card>
         <Card className="data-card" padding={0}>
           <Icon name="shield" size={22} />
-          <h2>A private place to prepare.</h2>
+          <h2>Access</h2>
           <p>
             Access keys stay out of URLs and browser storage. Sessions expire
             after eight hours.
@@ -1501,11 +1321,7 @@ function DesignArchive() {
       : base + "/assets/design-boards/" + file;
   return (
     <>
-      <PageHead
-        eyebrow="WHERE THE DESIGN BEGAN"
-        title="Three perspectives."
-        description="Original visual studies for the product and studio. The current interface is built from real components."
-      />
+      <PageHead eyebrow="" title="Design boards" description="" />
       <div className="design-archive">
         {[
           ["01", "Signal", "White, ink and a clear signal.", "01-signal.png"],
@@ -1541,160 +1357,6 @@ function DesignArchive() {
         ))}
       </div>
     </>
-  );
-}
-function NewDraft({ isOpen, onClose, save }) {
-  const [label, setLabel] = useState(""),
-    [destination, setDestination] = useState(""),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
-  useEffect(() => {
-    if (isOpen) {
-      setLabel("");
-      setDestination("");
-      setError("");
-    }
-  }, [isOpen]);
-  return (
-    <Dialog
-      isOpen={isOpen}
-      onOpenChange={(open) => !open && onClose()}
-      width={470}
-      padding={0}
-      className="foundation-dialog"
-      aria-label="Create a route draft"
-    >
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setBusy(true);
-          setError("");
-          try {
-            await save({ label, destination });
-          } catch (e) {
-            setError(e.message);
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <DialogHeader
-          className="dialog-heading"
-          title="A new connection."
-          subtitle="A little preparation starts here."
-          onOpenChange={(open) => !open && onClose()}
-        />
-        <div className="dialog-fields">
-          <TextInput
-            label="Give it a name"
-            value={label}
-            onChange={setLabel}
-            placeholder="e.g. London design studio"
-            isRequired
-            maxLength={80}
-            autoComplete="off"
-            hasAutoFocus
-          />
-          <TextInput
-            label="Destination number"
-            value={destination}
-            onChange={setDestination}
-            type="tel"
-            placeholder="+44 20 7946 0123"
-            isRequired
-            description="International format, starting with + and a country code."
-            autoComplete="off"
-          />
-          <div className="dialog-consideration">
-            <Icon name="shield" size={17} />
-            <p>
-              This saves a destination draft. It never places a call or creates
-              a carrier reservation.
-            </p>
-          </div>
-          {error && (
-            <p role="alert" className="form-error">
-              {error}
-            </p>
-          )}
-        </div>
-        <div className="dialog-actions">
-          <Btn label="Cancel" end={null} onClick={onClose} />
-          <Btn
-            label="Save route draft"
-            primary
-            type="submit"
-            isLoading={busy}
-          />
-        </div>
-      </form>
-    </Dialog>
-  );
-}
-function DraftDetail({ route, onClose, archive }) {
-  return (
-    <Dialog
-      isOpen={Boolean(route)}
-      onOpenChange={(open) => !open && onClose()}
-      width={460}
-      padding={0}
-      className="foundation-dialog"
-      aria-label="Destination draft details"
-    >
-      {route && (
-        <>
-          <DialogHeader
-            className="dialog-heading"
-            title={route.label}
-            subtitle="A destination, thoughtfully prepared."
-            onOpenChange={(open) => !open && onClose()}
-          />
-          <div className="dialog-fields">
-            <div className="detail-number">
-              <span className="route-avatar">{initials(route)}</span>
-              <div>
-                <strong>{route.destination}</strong>
-                <small>{country(route)}</small>
-              </div>
-              <Pill dot tone="sage">
-                {route.status === "draft" ? "Draft" : "Archived"}
-              </Pill>
-            </div>
-            <dl className="details-list">
-              {[
-                ["Created", time(route.created_at)],
-                ["Carrier reservation", "Not created"],
-                ["Destination permission", "Not verified"],
-                ["Caller proof", "Not verified"],
-                ["Carrier price", "Not quoted"],
-              ].map(([label, value]) => (
-                <div key={label}>
-                  <dt>{label}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-            </dl>
-            <div className="dialog-consideration">
-              <Icon name="shield" size={17} />
-              <p>
-                A saved draft is preparation. No access number, caller PIN or
-                live approval has been issued.
-              </p>
-            </div>
-          </div>
-          <div className="dialog-actions">
-            <Btn label="Close" end={null} onClick={onClose} />
-            {route.status === "draft" && (
-              <Btn
-                label="Archive draft"
-                end={null}
-                clickAction={() => archive(route)}
-              />
-            )}
-          </div>
-        </>
-      )}
-    </Dialog>
   );
 }
 function AccessPage({ session, onLogin, mode, setMode }) {

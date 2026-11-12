@@ -79,3 +79,18 @@ are removed; Grok/xAI independence remains.
 The early-access signup page is a design preview. Its notice and confirmation
 say details are not submitted and no account is created. No real-call audio or
 live signup service is added in this review pass.
+
+## Mobile studio navigation and number setup
+
+The hamburger opens a full-height drawer from the left, with the active call
+above all navigation. Click the card to open details/transcript, or choose Jump
+in. Mute and end controls stay in the call view; ending requires confirmation.
+The main studio starts with a call card and neutral gray operational surfaces.
+
+Open Numbers to add an example routing number, then choose a destination country,
+enter the outside number and pair them. Connections show both numbers and support
+country/name/number search, editing and removal. The example-data label is in
+Settings. The static review persists changes only while the tab stays open.
+Private Node deployments persist number references, connections and purchase
+requests in SQLite. Real purchases are not enabled; requests remain pending
+until provider confirmation. See [number setup](STUDIO_NUMBERS.md).

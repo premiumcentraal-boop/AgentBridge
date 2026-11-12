@@ -9,6 +9,11 @@
 !scripts/
 scripts/**
 !scripts/build-site.mjs
+!scripts/import-studio-number.mjs
+!shared/
+shared/**
+!shared/call-plans.mjs
+!shared/numbers.mjs
 !web/
 web/**
 !web/package.json

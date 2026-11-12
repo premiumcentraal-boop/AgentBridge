@@ -56,7 +56,7 @@ DOM journeys cover adding/searching connections, reviewing routing without a
 transfer, muted sample listening, playback persistence across pages, transcript
 alignment, leaving, playback rejection and ending while playback is pending.
 JSDOM media methods are stubbed; these checks do not establish browser playback.
-The complete build contains 31 React/Astryx pages plus the original gallery.
+The complete build contains 33 React/Astryx pages plus the original gallery.
 Existing authentication, carrier policy and animation checks remain in CI.
 
 Browser layout, touch, audio and screen-reader QA are unverified because the
@@ -80,3 +80,17 @@ The new signup destination previews name/email entry and validation, with an
 explicit form notice that details are not submitted. Confirmation never claims
 mailing-list enrollment or account creation. It is UI only; the single-operator
 studio authentication, storage and public CSP remain unchanged.
+
+## Studio review updates
+
+Mobile navigation is a full-height left drawer with a backdrop, Escape handling,
+scroll locking and focus restoration. Call cards are clickable and offer Jump in.
+Navigation has no mute/hang-up controls; those are labelled in the call view,
+with an end-call confirmation. The centered menu, long mobile call strip, sample
+workspace banner and promotional studio headings are removed.
+
+Studio surfaces use equal-channel neutral grays in both themes. Bot/call state
+keeps its small colour cues. A real call card leads the example workspace, followed
+by country filtering, Numbers and Connections. Each connection explicitly displays
+its routing number and outside destination. Backend persistence and ownership
+constraints are documented in [STUDIO_NUMBERS.md](STUDIO_NUMBERS.md).

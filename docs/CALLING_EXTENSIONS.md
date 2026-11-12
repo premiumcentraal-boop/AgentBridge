@@ -16,7 +16,7 @@ The audio-free bridge remains the default.
 | Active call | Feature illustration and studio entry points | Existing floating navigation retains the sample call across pages and adds a join shortcut. Optional recording/transcription need a sample permission acknowledgement; pause/resume and separate transcript controls update shared call state. |
 
 The four new public pages and four direct studio/demo pages are rendered HTML,
-not images. The complete build is 30 React/Astryx pages plus the existing design
+not images. The complete build is 33 React/Astryx pages plus the existing design
 gallery. Public links cross the studio's CSP boundary as ordinary top-level
 links. Offline/Sites review uses the portable hash router and in-memory samples.
 
@@ -96,7 +96,7 @@ invalid capture options and no provider calls. DOM integration tests cover the
 plan/review flow, defaults retained across pages, join-muted/mute/leave without
 ending, capture acknowledgement, recording pause/resume, separate transcription,
 search/speaker filters, audio seeking, sample outcomes and real page links.
-Static checks cover 31 pages, including all new routes. `ffprobe` verifies a
+Static checks cover 34 pages, including all new routes. `ffprobe` verifies a
 34.104-second MP3 with 24 kHz stereo audio. Browser layout/playback/touch QA
 remains pending when the supported browser-control tool is unavailable.
 
@@ -110,3 +110,12 @@ transcript clock. Leaving or ending stops playback; a failed or cancelled play
 attempt never creates a listening participant. Routing review keeps an in-tab
 proposed destination and never changes the active recipient. See
 [Grokbot-inspired redesign](GROKBOT_REDESIGN.md).
+
+## Operational studio and two-number connections
+
+The mobile menu now slides from the left. Its call card opens details and uses
+a labelled Jump in action; mute/end remain in the call view, and ending requires
+confirmation. The home screen starts with a call card and country/number controls,
+without promotional or sample-workspace banners. Settings identifies example data.
+Routing numbers, outside destinations and purchase requests have a persistent
+model; see [numbers and SignalWire handoff](STUDIO_NUMBERS.md).

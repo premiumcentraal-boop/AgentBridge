@@ -37,7 +37,7 @@ A premium website and developer-first international telecom bridge for AI agents
 The public site and control studio share an Astryx/React 19 foundation. The
 interface uses actual Astryx navigation, buttons, cards, segmented controls,
 dialogs and inputs, with monochrome surfaces, original status avatars and SVG connection art.
-Build output contains 31 rendered HTML pages, so direct links and public content
+Build output contains 33 rendered HTML pages, so direct links and public content
 work before JavaScript starts. The original `/design/` gallery remains available.
 
 - `/` — Product overview
@@ -52,8 +52,8 @@ work before JavaScript starts. The original `/design/` gallery remains available
 - `/docs/` — Developer and deployment notes
 - `/studio/` — Protected operator workspace
 - `/studio/demo/` — Sample workspace with persistent in-tab floating call preview
-- `/studio/{connections,routes,calls,memory,connection,activity,settings,call,design}/` — Direct studio pages
-- `/studio/demo/{connections,routes,calls,memory,connection,activity,settings,call,design}/` — Matching demo pages
+- `/studio/{numbers,connections,routes,calls,memory,connection,activity,settings,call,design}/` — Direct studio pages
+- `/studio/demo/{numbers,connections,routes,calls,memory,connection,activity,settings,call,design}/` — Matching demo pages
 - `/app/` — Compatibility link to the sample studio
 
 The main hero says **connect agents worldwide**, with a signup-first action, secondary studio entry and an interactive sample-agent widget showing a three-message agent/business exchange. The sample waveform animates with reduced-motion support. A separate worldwide section preserves pairs of bold coloured country
@@ -71,8 +71,7 @@ Flags are local SVG symbols from the
 MIT-licensed flag-icons project.
 
 The rail has an expanded/compact state, a simulated active call at the top,
-mute/return/join/end controls, five primary destinations, four management destinations and a dark/light switch. On small
-screens it becomes a modal drawer with a persistent call strip.
+a clickable call card and a labelled Jump in action, six primary destinations, four compact management destinations and a theme switch. On mobile it slides in from the left at full viewport height. Mute/end controls stay in the call view, with confirmation before ending.
 
 ### Grokbot-inspired redesign
 
@@ -81,12 +80,28 @@ surfaces, rounded controls and original state avatars. Colour communicates state
 or agent identity. AgentBridge keeps its own name and connection mark; no Grok,
 xAI or Novra artwork is included. [Design and interaction details](docs/GROKBOT_REDESIGN.md).
 
-The studio opens on a focused call beside its optional transcript. **Connections**
-adds searchable saved destinations; **Routing** keeps destination drafts and review.
+The studio starts with an active-call card and operational controls. **Numbers**
+shows dedicated routing numbers; **Connections** pairs each owned routing number
+with an outside destination. Country filters, country/name search, editing and
+removal are available. Legacy destination drafts remain under Unassigned destinations.
 **Listen in** plays the local fictional sample, enters muted and follows the user
 across studio pages. Its transcript follows the playback clock when enabled.
 Leaving listening keeps the simulated call going. Routing review saves an in-tab
 choice, with no transfer or carrier request. Production calling is unchanged.
+
+### Routing numbers and destinations
+
+A connection always has two numbers: a verified, owned routing number and an
+outside destination. New authenticated endpoints persist inventory references,
+connections and number-purchase requests. Each routing number has one current
+destination; unowned numbers, duplicate assignments and routing back to owned
+numbers are rejected. [Model, APIs and SignalWire import](docs/STUDIO_NUMBERS.md).
+
+Number purchase requests remain pending until confirmed provisioning; they do
+not charge a provider or create owned inventory. An operator can import an
+already purchased SignalWire voice number after a bounded, read-only inventory
+check. Live billing, customer provisioning and carrier-route application remain
+separate integrations. The static review uses example data, identified in Settings.
 
 ### Calling extensions
 
@@ -133,7 +148,7 @@ private API, and route drafts reset when reloaded. This is an actual working UI,
 not a screenshot or replacement for a production deployment.
 
 `npm run test:web` exercises real bundled React interactions in a DOM harness;
-`npm run test:site` checks all 32 pages for landmarks, labels, links and assets.
+`npm run test:site` checks all 34 pages for landmarks, labels, links and assets.
 These checks do not replace browser layout and accessibility testing. For a
 project site, build and audit with `BASE_PATH=/AgentBridge`.
 

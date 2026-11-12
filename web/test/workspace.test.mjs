@@ -72,6 +72,15 @@ function setup(
           this.removeAttribute("open");
           this.dispatchEvent(new window.Event("close"));
         };
+        // JSDOM does not decode media. UI events are checked against a stub;
+        // actual browser playback remains a separate verification step.
+        window.HTMLMediaElement.prototype.play = function () {
+          this.dispatchEvent(new window.Event("play"));
+          return Promise.resolve();
+        };
+        window.HTMLMediaElement.prototype.pause = function () {
+          this.dispatchEvent(new window.Event("pause"));
+        };
         window.fetch = (...args) => {
           requests.push(args);
           throw new Error("Offline preview must not request an API");
@@ -106,6 +115,34 @@ async function navigate(document, path) {
   assert.ok(link, `Missing page link ${path}`);
   link.click();
   await pause(100);
+}
+async function endFixtureCall(document) {
+  named(document.querySelector("main"), "End call").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="End call confirmation"]'),
+  );
+  named(
+    document.querySelector('dialog[open][aria-label="End call confirmation"]'),
+    "Cancel",
+  ).click();
+  await waitFor(
+    () =>
+      !document.querySelector(
+        'dialog[open][aria-label="End call confirmation"]',
+      ),
+  );
+  assert.ok(
+    document.querySelector("main .active-call-card"),
+    "Cancelling end must keep the call active",
+  );
+  named(document.querySelector("main"), "End call").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="End call confirmation"]'),
+  );
+  named(
+    document.querySelector('dialog[open][aria-label="End call confirmation"]'),
+    "End call",
+  ).click();
 }
 
 test("working preview navigates real pages and keeps call state in the floating rail", async (t) => {
@@ -222,37 +259,65 @@ test("working preview navigates real pages and keeps call state in the floating 
   );
   await navigate(document, "/studio/demo/");
   await waitFor(() => document.querySelector(".floating-rail"));
-  named(document, "Mute simulated call").click();
-  await pause(20);
+  assert.equal(document.querySelectorAll(".number-connection-card").length, 3);
+  const nav = document.querySelector(".floating-rail nav");
   assert.equal(
-    named(document, "Unmute simulated call").getAttribute("aria-pressed"),
+    [...nav.querySelectorAll("button")].some((button) =>
+      /Mute|End call/.test(
+        button.getAttribute("aria-label") || button.textContent,
+      ),
+    ),
+    false,
+  );
+  named(nav, "Open call and transcript").click();
+  await waitFor(() => document.querySelector(".gb-call-layout"));
+  named(document.querySelector("main"), "Mute call").click();
+  await waitFor(() =>
+    document.querySelector('main button[aria-pressed="true"]'),
+  );
+  await navigate(document, "/studio/demo/numbers/");
+  assert.equal(document.querySelectorAll(".owned-number-card").length, 3);
+  named(document, "Collapse navigation").click();
+  await waitFor(() => document.querySelector(".rail-collapsed"));
+  named(document, "Expand navigation").click();
+  named(nav, "Open call and transcript").click();
+  await waitFor(() => document.querySelector(".gb-call-layout"));
+  assert.equal(
+    named(document.querySelector("main"), "Unmute call").getAttribute(
+      "aria-pressed",
+    ),
     "true",
   );
-  await navigate(document, "/studio/demo/routes/");
-  assert.ok(named(document, "Unmute simulated call"));
-  assert.equal(document.querySelectorAll("tbody tr").length, 3);
-  named(document, "Collapse navigation").click();
-  await pause(30);
-  assert.ok(document.querySelector(".rail-collapsed"));
-  named(document, "Expand navigation").click();
-  await pause(30);
-  named(document, "Return to simulated call").click();
-  await pause(30);
-  assert.match(
-    document.querySelector("main h1").textContent,
-    /Your agent. And a place for you/,
+  named(document.querySelector("main"), "Route call").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Review call routing"]'),
   );
-  named(document, "End simulated call").click();
-  await pause(30);
-  assert.match(
-    document.querySelector("main h1").textContent,
-    /Ready when your connection is/,
+  const review = document.querySelector(
+    'dialog[open][aria-label="Review call routing"]',
   );
+  const connection = review.querySelector("select");
+  connection.value = "connection-demo-new-york";
+  connection.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+  await waitFor(() =>
+    review
+      .querySelector(".routing-review-pair")
+      .textContent.includes("+12025550111"),
+  );
+  assert.match(review.textContent, /\+12125550124/);
+  named(review, "Save routing choice").click();
+  await waitFor(() =>
+    document
+      .querySelector(".hub-routing-summary")
+      ?.textContent.includes("New York office"),
+  );
+  assert.match(
+    document.querySelector("main .active-call-card").textContent,
+    /\+442079460123/,
+  );
+  await endFixtureCall(document);
+  await waitFor(() => document.querySelector(".nav-call-empty"));
   await navigate(document, "/studio/demo/activity/");
-  assert.match(
-    document.querySelector("main").textContent,
-    /Simulated call ended/,
-  );
+  assert.match(document.querySelector("main").textContent, /Call ended/);
   assert.deepEqual(requests, []);
   assert.deepEqual(
     errors.map((e) => e.message),
@@ -260,87 +325,106 @@ test("working preview navigates real pages and keeps call state in the floating 
   );
 });
 
-test("draft dialog validates, saves, filters, archives and keeps guidance between pages", async (t) => {
+test("numbers are obtained before a new connection is paired; country search, edit, removal and settings persist across views", async (t) => {
   const { dom, window, document, errors, requests } = setup(
-    "file:///AgentBridge-Working-Website.html#/studio/demo/routes/",
+    "file:///AgentBridge-Working-Website.html#/studio/demo/connections/",
   );
   t.after(() => dom.window.close());
-  await waitFor(() => document.querySelector("main .routes-table"));
-  named(document, "New route draft").click();
-  await pause(100);
-  const dialog = document.querySelector(
-    'dialog[open][aria-label="Create a route draft"]',
+  await waitFor(() => document.title === "Connections | AgentBridge");
+  named(document, "Add connection").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Add routing number"]'),
   );
-  assert.ok(
-    dialog,
-    JSON.stringify({
-      errors: errors.map((e) => e.message),
-      dialogs: [...document.querySelectorAll("dialog")].map((d) =>
-        d.outerHTML.slice(0, 260),
-      ),
-    }),
-  );
-  const [label, number] = dialog.querySelectorAll("input");
-  change(window, label, "Amsterdam studio");
-  change(window, number, "invalid");
-  await pause(20);
-  dialog
-    .querySelector("form")
-    .dispatchEvent(
-      new window.Event("submit", { bubbles: true, cancelable: true }),
-    );
-  await pause(30);
-  assert.match(dialog.textContent, /Use international format/);
-  change(window, number, "+31 20 555 0123");
-  await pause(20);
-  dialog
-    .querySelector("form")
-    .dispatchEvent(
-      new window.Event("submit", { bubbles: true, cancelable: true }),
-    );
-  await waitFor(() => document.querySelectorAll("tbody tr").length === 4);
   assert.equal(
-    document.querySelector('dialog[open][aria-label="Create a route draft"]'),
+    document.querySelector('dialog[open][aria-label="Add connection"]'),
     null,
+    "All existing numbers are assigned, so obtaining a new number comes first",
   );
-  const search = document.querySelector(
-    'input[placeholder="Search destinations…"]',
+  named(document, "Add example number").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Add connection"]'),
   );
-  change(window, search, "Amsterdam");
-  await pause(30);
-  assert.equal(document.querySelectorAll("tbody tr").length, 1);
-  assert.match(document.querySelector("tbody").textContent, /\+31205550123/);
-  named(document, "View Amsterdam studio details").click();
-  await pause(30);
-  named(document, "Archive draft").click();
-  await pause(50);
-  named(document, "Archived").click();
-  await pause(30);
-  assert.match(document.querySelector("tbody").textContent, /Amsterdam studio/);
+  const editor = document.querySelector(
+    'dialog[open][aria-label="Add connection"]',
+  );
+  fieldValue(window, labelled(document, "Name"), "Amsterdam office");
+  fieldValue(window, labelled(document, "Destination country"), "nether");
+  await waitFor(
+    () =>
+      editor.querySelectorAll(".destination-country-picker button").length ===
+      1,
+  );
+  editor.querySelector(".destination-country-picker button").click();
+  fieldValue(window, labelled(document, "Destination number"), "invalid");
+  editor
+    .querySelector("form")
+    .dispatchEvent(
+      new window.Event("submit", { bubbles: true, cancelable: true }),
+    );
+  await waitFor(() => editor.querySelector('[role="alert"]'));
+  assert.match(editor.textContent, /matching the selected country/);
+  fieldValue(
+    window,
+    labelled(document, "Destination number"),
+    "+31 20 123 4567",
+  );
+  named(editor, "Save connection").click();
+  await waitFor(
+    () => document.querySelectorAll(".number-connection-card").length === 4,
+  );
+  const card = [...document.querySelectorAll(".number-connection-card")].find(
+    (item) => item.textContent.includes("Amsterdam office"),
+  );
+  assert.match(card.textContent, /\+12025550130/);
+  assert.match(card.textContent, /\+31201234567/);
+  fieldValue(
+    window,
+    document.querySelector('input[aria-label="Search connections"]'),
+    "amsterdam",
+  );
+  await waitFor(
+    () => document.querySelectorAll(".number-connection-card").length === 1,
+  );
+  named(document, "Edit Amsterdam office").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Edit connection"]'),
+  );
+  fieldValue(window, labelled(document, "Name"), "Amsterdam team");
+  named(
+    document.querySelector('dialog[open][aria-label="Edit connection"]'),
+    "Save connection",
+  ).click();
+  await waitFor(() =>
+    document
+      .querySelector(".number-connection-card")
+      ?.textContent.includes("Amsterdam team"),
+  );
+  named(document.querySelector(".number-connection-card"), "Remove").click();
+  await waitFor(
+    () => document.querySelectorAll(".number-connection-card").length === 0,
+  );
+  await navigate(document, "/studio/demo/numbers/");
+  assert.equal(document.querySelectorAll(".owned-number-card").length, 4);
+  assert.ok(named(document, "Connect destination"));
   await navigate(document, "/studio/demo/settings/");
+  await waitFor(() =>
+    document.querySelector(
+      '.guidance-options [role="radio"][aria-checked="true"]',
+    ),
+  );
   const selected = document.querySelector(
     '.guidance-options [role="radio"][aria-checked="true"]',
   );
   selected.dispatchEvent(
     new window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
   );
-  await pause(20);
-  assert.match(
-    document.querySelector(
-      '.guidance-options [role="radio"][aria-checked="true"]',
-    ).textContent,
-    /Guided/,
+  await waitFor(() =>
+    document
+      .querySelector('.guidance-options [role="radio"][aria-checked="true"]')
+      .textContent.includes("Guided"),
   );
   named(document, "Save preference").click();
-  await pause(30);
-  named(document, "Light").click();
-  await pause(30);
-  assert.equal(document.querySelector(".foundation-app").dataset.mode, "light");
   await navigate(document, "/studio/demo/");
-  assert.match(
-    document.querySelector("main h1").textContent,
-    /Your connections/,
-  );
   await navigate(document, "/studio/demo/settings/");
   assert.match(
     document.querySelector(
@@ -349,10 +433,7 @@ test("draft dialog validates, saves, filters, archives and keeps guidance betwee
     /Guided/,
   );
   await navigate(document, "/studio/demo/design/");
-  assert.equal(
-    document.querySelectorAll('main img[src^="data:image/png;base64,"]').length,
-    3,
-  );
+  assert.equal(document.querySelectorAll("main img").length, 3);
   assert.deepEqual(requests, []);
   assert.deepEqual(
     errors.map((e) => e.message),
@@ -519,83 +600,85 @@ function fieldValue(window, element, value) {
   );
 }
 
-test("connections hub adds and searches a destination and reviews routing without transferring the sample call", async (t) => {
-  const { dom, window, document, errors, requests } = setup(
+test("mobile navigation is a dismissible left drawer with all destinations and a safe clickable call card", async (t) => {
+  const { dom, document, window, errors, requests } = setup(
     "file:///AgentBridge-Working-Website.html#/studio/demo/",
   );
   t.after(() => dom.window.close());
   await waitFor(() => document.title === "Your workspace | AgentBridge");
-  assert.match(
-    document.querySelector("main h1").textContent,
-    /Your connections/,
-  );
-  named(document, "New connection").click();
+  assert.equal(document.querySelector(".workspace-demo-note"), null);
+  assert.equal(document.querySelector(".mobile-call-bar"), null);
+  const trigger = named(document, "Open navigation");
+  trigger.focus();
+  trigger.click();
   await waitFor(() =>
-    document.querySelector('dialog[open][aria-label="Create a route draft"]'),
+    document.querySelector('.studio-drawer[open][data-entered="true"]'),
   );
-  const dialog = document.querySelector(
-    'dialog[open][aria-label="Create a route draft"]',
-  );
-  const [label, number] = dialog.querySelectorAll("input");
-  change(window, label, "Tokyo office");
-  change(window, number, "+81 3 1234 5678");
-  await waitFor(() => number.value === "+81 3 1234 5678");
-  dialog
-    .querySelector("form")
-    .dispatchEvent(
-      new window.Event("submit", { bubbles: true, cancelable: true }),
-    );
-  await waitFor(
-    () =>
-      !document.querySelector(
-        'dialog[open][aria-label="Create a route draft"]',
+  const drawer = document.querySelector(".studio-drawer");
+  assert.equal(document.body.style.overflow, "hidden");
+  for (const label of [
+    "Home",
+    "Numbers",
+    "Connections",
+    "Calls",
+    "Routing",
+    "Transcripts",
+    "Calling setup",
+    "Activity",
+    "Settings",
+    "Design boards",
+  ])
+    assert.ok(named(drawer, label, "a"));
+  assert.equal(
+    [...drawer.querySelectorAll("button")].some((button) =>
+      /Mute|End call/.test(
+        button.getAttribute("aria-label") || button.textContent,
       ),
+    ),
+    false,
   );
-  await navigate(document, "/studio/demo/connections/");
-  fieldValue(
-    window,
-    document.querySelector('input[aria-label="Search connections"]'),
-    "tokyo",
+  assert.ok(drawer.querySelector(".active-call-numbers"));
+  assert.ok(named(drawer, "Jump in"));
+  drawer.dispatchEvent(new window.Event("cancel", { cancelable: true }));
+  await waitFor(() => !drawer.open);
+  assert.equal(document.body.style.overflow, "");
+  assert.equal(document.activeElement, trigger);
+  trigger.click();
+  await waitFor(() => drawer.open);
+  named(drawer, "Open call and transcript").click();
+  await waitFor(() => !drawer.open);
+  await waitFor(() => document.querySelector(".gb-call-layout"));
+  assert.match(document.querySelector("main").textContent, /Routing number/);
+  assert.ok(named(document.querySelector("main"), "Mute call"));
+  trigger.click();
+  await waitFor(() => drawer.open);
+  drawer.getBoundingClientRect = () => ({
+    left: 0,
+    right: 320,
+    top: 0,
+    bottom: 800,
+  });
+  drawer.dispatchEvent(
+    new window.MouseEvent("click", {
+      clientX: 370,
+      clientY: 110,
+      bubbles: true,
+    }),
   );
-  await waitFor(
-    () => document.querySelectorAll(".hub-connection-row").length === 1,
-  );
-  assert.match(
-    document.querySelector(".hub-connection-row").textContent,
-    /\+81312345678/,
-  );
-  named(document, "Route to Tokyo office").click();
+  await waitFor(() => !drawer.open);
+  trigger.click();
+  await waitFor(() => drawer.open);
+  named(drawer, "Jump in").click();
+  await waitFor(() => !drawer.open);
   await waitFor(() =>
-    document.querySelector('dialog[open][aria-label="Review call routing"]'),
+    document.querySelector('dialog[open][aria-label="Join call"]'),
   );
+  assert.equal(labelled(document, "Join muted").checked, true);
+  named(document, "Join call").click();
   await waitFor(() =>
     document
-      .querySelector(".routing-review-path")
-      .textContent.includes("Tokyo office"),
-  );
-  assert.match(
-    document.querySelector(".routing-review-dialog").textContent,
-    /No transfer/,
-  );
-  named(document, "Save routing preview").click();
-  await waitFor(() =>
-    document
-      .querySelector(".toast-message")
-      .textContent.includes("No call transferred"),
-  );
-  named(document, "Return to simulated call").click();
-  await waitFor(() => document.querySelector(".hub-routing-summary"));
-  assert.match(
-    document.querySelector(".hub-routing-summary").textContent,
-    /Tokyo office.*No transfer made/,
-  );
-  assert.match(
-    document.querySelector(".call-recipient strong").textContent,
-    /London studio/,
-  );
-  assert.match(
-    document.querySelector(".live-card-top").textContent,
-    /connected/,
+      .querySelector(".call-participants")
+      ?.textContent.includes("You’re in"),
   );
   assert.deepEqual(requests, []);
   assert.deepEqual(
@@ -623,7 +706,12 @@ test("one-tap sample listening stays across pages and timed transcript follows p
     this.dispatchEvent(new window.Event("pause"));
   };
   await waitFor(() => document.title === "Your workspace | AgentBridge");
-  named(document, "Listen in").click();
+  named(
+    document.querySelector(".floating-rail"),
+    "Open call and transcript",
+  ).click();
+  await waitFor(() => document.querySelector(".call-view-entry-actions"));
+  named(document.querySelector("main"), "Listen in").click();
   await waitFor(
     () => document.querySelector(".sample-listen-dock")?.hidden === false,
   );
@@ -633,7 +721,7 @@ test("one-tap sample listening stays across pages and timed transcript follows p
   await navigate(document, "/studio/demo/connections/");
   assert.equal(document.querySelector(".sample-listen-dock audio"), audio);
   assert.equal(document.querySelector(".sample-listen-dock").hidden, false);
-  named(document, "Return to simulated call").click();
+  named(document, "Open call and transcript").click();
   await waitFor(() =>
     document
       .querySelector(".call-participants")
@@ -641,13 +729,13 @@ test("one-tap sample listening stays across pages and timed transcript follows p
   );
   assert.match(
     document.querySelector(".call-inline-transcript").textContent,
-    /Transcription is off/,
+    /Transcription off/,
   );
-  assert.ok(named(document, "Record sample call"));
-  named(document, "Transcribe sample call").click();
+  assert.ok(named(document, "Start recording"));
+  named(document, "Start transcription").click();
   await waitFor(() => document.querySelector("dialog[open]"));
-  labelled(document, "Permission is confirmed in this sample").click();
-  named(document, "Enable sample transcription").click();
+  labelled(document, "Permission confirmed").click();
+  named(document, "Enable transcription").click();
   await waitFor(
     () => document.querySelectorAll(".live-transcript-line").length === 1,
   );
@@ -660,18 +748,18 @@ test("one-tap sample listening stays across pages and timed transcript follows p
     document.querySelector(".live-transcript").textContent,
     /D E M O two zero four/,
   );
-  named(document, "Mute simulated call").click();
+  named(document, "Mute call").click();
   await waitFor(() => audio.muted === true);
-  named(document, "Leave sample listening").click();
+  named(document, "Leave listening").click();
   await waitFor(
     () => document.querySelector(".sample-listen-dock").hidden === true,
   );
   assert.ok(pauses >= 1);
   assert.match(
     document.querySelector(".live-card-top").textContent,
-    /connected/,
+    /Connected/,
   );
-  assert.ok(named(document, "Record sample call"));
+  assert.ok(named(document, "Start recording"));
   assert.deepEqual(requests, []);
   assert.deepEqual(
     errors.map((e) => e.message),
@@ -691,7 +779,12 @@ test("blocked playback does not join and ending a call cancels a pending sample 
   window.HTMLMediaElement.prototype.play = () =>
     Promise.reject(new Error("Playback blocked"));
   await waitFor(() => document.title === "Your workspace | AgentBridge");
-  named(document, "Listen in").click();
+  named(
+    document.querySelector(".floating-rail"),
+    "Open call and transcript",
+  ).click();
+  await waitFor(() => document.querySelector(".call-view-entry-actions"));
+  named(document.querySelector("main"), "Listen in").click();
   await waitFor(() =>
     document
       .querySelector(".toast-message")
@@ -703,13 +796,18 @@ test("blocked playback does not join and ending a call cancels a pending sample 
     new Promise((resolve) => {
       finishPlay = resolve;
     });
-  named(document, "Listen in").click();
-  named(document, "End simulated call").click();
+  named(
+    document.querySelector(".floating-rail"),
+    "Open call and transcript",
+  ).click();
+  await waitFor(() => document.querySelector(".call-view-entry-actions"));
+  named(document.querySelector("main"), "Listen in").click();
+  await endFixtureCall(document);
   finishPlay();
   await waitFor(() => pauses >= 1);
-  await waitFor(() => document.querySelector(".call-idle"));
+  await waitFor(() => document.querySelector(".nav-call-empty"));
   assert.equal(document.querySelector(".sample-listen-dock").hidden, true);
-  assert.ok(named(document, "Restart sample call"));
+  assert.ok(named(document, "Restart call"));
   assert.deepEqual(requests, []);
   assert.deepEqual(
     errors.map((e) => e.message),
@@ -723,7 +821,7 @@ test("international call planning saves optional capture choices and join defaul
   );
   t.after(() => dom.window.close());
   await waitFor(() => document.title === "Calls | AgentBridge");
-  named(document, "Plan an international call").click();
+  named(document, "New call").click();
   await waitFor(() => document.querySelector("dialog[open]"));
   fieldValue(window, labelled(document, "Call name"), "Amsterdam viewing test");
   fieldValue(
@@ -742,7 +840,7 @@ test("international call planning saves optional capture choices and join defaul
   assert.equal(labelled(document, "Create a transcript").checked, false);
   labelled(document, "Create a transcript").click();
   fieldValue(window, labelled(document, "Transcript language"), "nl");
-  named(document, "Save sample call plan").click();
+  named(document, "Save call plan").click();
   await waitFor(() =>
     document
       .querySelector(".call-plan-list")
@@ -781,7 +879,7 @@ test("international call planning saves optional capture choices and join defaul
   named(document, "Save capture and join preferences").click();
   await waitFor(() => document.querySelector(".tools-success"));
   await navigate(document, "/studio/demo/call/");
-  named(document, "Let me join").click();
+  named(document, "Jump in").click();
   // Opening the dialog and applying saved preferences happen in separate
   // renders. Wait for the actual phone field before asserting its value.
   await waitFor(() =>
@@ -793,7 +891,7 @@ test("international call planning saves optional capture choices and join defaul
     labelled(document, "Number where I’ll join").value,
     "+31612345678",
   );
-  named(document, "Join sample call").click();
+  named(document, "Join call").click();
   await waitFor(() =>
     document
       .querySelector(".call-participants")
@@ -811,21 +909,21 @@ test("sample call joins and leaves without ending, requires capture permission a
   );
   t.after(() => dom.window.close());
   await waitFor(() => document.title === "Call | AgentBridge");
-  named(document, "Let me join").click();
+  named(document, "Jump in").click();
   await waitFor(() => document.querySelector("dialog[open]"));
-  named(document, "Join sample call").click();
+  named(document, "Join call").click();
   await waitFor(() =>
     document
       .querySelector(".call-participants")
       ?.textContent.includes("You’re in"),
   );
-  named(document, "Unmute yourself in sample call").click();
+  named(document, "Unmute microphone").click();
   await waitFor(() =>
     document
       .querySelector(".call-participants")
-      .textContent.includes("Speaking in preview"),
+      .textContent.includes("Unmuted"),
   );
-  named(document, "Leave sample call").click();
+  named(document, "Leave call").click();
   await waitFor(
     () =>
       !document
@@ -834,36 +932,36 @@ test("sample call joins and leaves without ending, requires capture permission a
   );
   assert.match(
     document.querySelector(".live-card-top").textContent,
-    /connected/,
+    /Connected/,
   );
-  named(document, "Record sample call").click();
+  named(document, "Start recording").click();
   await waitFor(() => document.querySelector("dialog[open]"));
-  assert.equal(named(document, "Enable sample recording").disabled, true);
-  labelled(document, "Permission is confirmed in this sample").click();
-  named(document, "Enable sample recording").click();
+  assert.equal(named(document, "Enable recording").disabled, true);
+  labelled(document, "Permission confirmed").click();
+  named(document, "Enable recording").click();
   await waitFor(() =>
     document
       .querySelector(".capture-control-heading")
-      ?.textContent.includes("Sample capture on"),
+      ?.textContent.includes("Recording"),
   );
-  named(document, "Pause sample recording").click();
+  named(document, "Pause recording").click();
   await waitFor(() =>
     document
       .querySelector(".capture-control-heading")
       ?.textContent.includes("Paused"),
   );
-  named(document, "Resume sample recording").click();
-  named(document, "Transcribe sample call").click();
+  named(document, "Resume recording").click();
+  named(document, "Start transcription").click();
   await waitFor(() => document.querySelector("dialog[open]"));
-  assert.equal(named(document, "Enable sample transcription").disabled, true);
-  labelled(document, "Permission is confirmed in this sample").click();
-  named(document, "Enable sample transcription").click();
+  assert.equal(named(document, "Enable transcription").disabled, true);
+  labelled(document, "Permission confirmed").click();
+  named(document, "Enable transcription").click();
   await waitFor(() =>
     [...document.querySelectorAll(".live-transcript button")].some(
-      (button) => button.textContent.trim() === "Show full sample transcript",
+      (button) => button.textContent.trim() === "Show full transcript",
     ),
   );
-  named(document, "Show full sample transcript").click();
+  named(document, "Show full transcript").click();
   await waitFor(
     () => document.querySelectorAll(".live-transcript-line").length === 6,
   );
@@ -910,18 +1008,16 @@ test("sample call joins and leaves without ending, requires capture permission a
     /not a real confirmation/,
   );
   await navigate(document, "/studio/demo/call/");
-  assert.ok(named(document, "Pause sample recording"));
-  assert.ok(named(document, "Stop sample transcription"));
-  named(document, "End sample call").click();
+  assert.ok(named(document, "Pause recording"));
+  assert.ok(named(document, "Stop transcription"));
+  await endFixtureCall(document);
+  await waitFor(() => document.querySelector("main .nav-call-empty"));
+  named(document, "Restart call").click();
   await waitFor(() =>
-    document.querySelector(".live-card-top").textContent.includes("ended"),
+    document.querySelector(".live-card-top").textContent.includes("Connected"),
   );
-  named(document, "Restart sample call").click();
-  await waitFor(() =>
-    document.querySelector(".live-card-top").textContent.includes("connected"),
-  );
-  assert.ok(named(document, "Record sample call"));
-  assert.ok(named(document, "Transcribe sample call"));
+  assert.ok(named(document, "Start recording"));
+  assert.ok(named(document, "Start transcription"));
   assert.deepEqual(requests, []);
   assert.deepEqual(
     errors.map((e) => e.message),

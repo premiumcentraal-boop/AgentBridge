@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { openStore } from './store.mjs';
 import { inspectIntegration } from './integration.mjs';
 import { validateCallPlan, validateCapture } from '../shared/call-plans.mjs';
+import { validateNumberConnection, validateNumberOrder } from '../shared/numbers.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const STUDIO_CSP = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
@@ -82,6 +83,26 @@ export function createApp({ env = process.env, store = openStore(env.STUDIO_DATA
           return json(200, { authenticated: true });
         }
         if (!authenticated(req)) return fail(401, 'UNAUTHORIZED', 'Sign in to your studio.');
+        if(pathname==='/api/studio/numbers'&&req.method==='GET'){
+          const state=store.snapshot();return json(200,{numbers:state.routing_numbers,orders:state.number_orders,purchase_enabled:false,routing_enabled:false});
+        }
+        if(pathname==='/api/studio/number-orders'&&req.method==='POST'){
+          const validated=validateNumberOrder(await body());
+          if(validated.error)return fail(422,'INVALID_NUMBER_ORDER',validated.error);
+          const result=store.createNumberOrder(validated.value);
+          return result.error?fail(409,result.error,result.error==='REQUEST_CONFLICT'?'This request identifier belongs to another order.':'The number request limit has been reached.'):json(202,{...result,purchase_enabled:false,charged:false});
+        }
+        if(pathname==='/api/studio/connections'&&req.method==='GET')return json(200,{connections:store.snapshot().connections,routing_enabled:false});
+        const connectionMatch=pathname.match(/^\/api\/studio\/connections\/([a-f0-9-]{36})$/);
+        if((pathname==='/api/studio/connections'&&req.method==='POST')||(connectionMatch&&req.method==='PATCH')){
+          const validated=validateNumberConnection(await body());
+          if(validated.error)return fail(422,'INVALID_CONNECTION',validated.error);
+          const result=store.saveNumberConnection(validated.value,connectionMatch?.[1]);
+          const errors={NUMBER_NOT_OWNED:[422,'Choose an owned routing number.'],NUMBER_ALREADY_LINKED:[409,'This routing number already has a destination.'],OWN_NUMBER_DESTINATION:[422,'Choose an outside destination, not one of your routing numbers.'],NOT_FOUND:[404,'Connection not found.'],CONNECTION_LIMIT:[409,'The connection limit has been reached.']};
+          if(result.error){const [status,message]=errors[result.error]||[409,'Connection could not be saved.'];return fail(status,result.error,message);}
+          return json(connectionMatch?200:201,{...result,routing_enabled:false,calling_enabled:false});
+        }
+        if(connectionMatch&&req.method==='DELETE')return store.archiveNumberConnection(connectionMatch[1])?json(200,{ok:true,routing_enabled:false}):fail(404,'NOT_FOUND','Connection not found.');
         if (pathname === '/api/studio/overview' && req.method === 'GET') return json(200, { ...store.snapshot(), routing_enabled: false, integration_configured: Boolean(env.AGENTBRIDGE_BACKEND_URL && env.AGENTBRIDGE_ACCOUNT_TOKEN) });
         if (pathname === '/api/studio/call-plans' && req.method === 'POST') {
           const validated=validateCallPlan(await body());

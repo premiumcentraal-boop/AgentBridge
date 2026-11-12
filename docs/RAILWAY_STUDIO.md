@@ -5,7 +5,7 @@ control studio. Victor's `/agentbridge` route frames only the public product,
 following Meridian's integration. The studio opens at the top level and cannot
 be framed. Deploy AgentBridge first, then release the Victor tab.
 
-This service is a workspace for **drafts, call plans, capture/join preferences and read-only backend inspection**.
+This service is a workspace for **routing-number references, two-number connections, purchase requests, drafts, call plans, capture/join preferences and read-only backend inspection**.
 It does not load the telephony Worker, expose its webhooks, issue a live access
 number, approve a call, provision a number, take payment, or enable routing.
 The existing `backend/` Worker and its pending security PRs remain separate.
@@ -158,3 +158,15 @@ The browser/phone join in the sample requests neither microphone nor callback.
 needs a deliberately scoped microphone/media permission policy and authorization.
 Sample playback permits only local/data media in CSP and contacts no audio host.
 See [CALLING_EXTENSIONS.md](CALLING_EXTENSIONS.md).
+
+## Routing-number inventory and purchase requests
+
+Additive SQLite tables store verified routing numbers, outside-number pairings
+and pending purchase requests. Legacy drafts are preserved. Private studio writes
+require login, the configured origin and bounded JSON. A browser cannot mark
+a number owned or an order paid. Each routing number has one current destination.
+
+The allowlisted Docker context now includes shared validation modules and the
+operator number-import script. The HTTP service still does not load the telephony
+Worker or expose provider mutation endpoints. Read [STUDIO_NUMBERS.md](STUDIO_NUMBERS.md)
+for SignalWire credentials, exact inventory verification, import and limitations.

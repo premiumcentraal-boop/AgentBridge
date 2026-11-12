@@ -442,3 +442,13 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added labelled agent/business/agent dialogue to the sample and animated its waveform with reduced-motion support. Verified real-call audio remains future work.
 - Replaced vague section copy with Agentic calling / Made easy, Same agent / Bigger reach and Your agent / Connected to the world. Removed the quiet-connection/Victor-project sentence; kept Grok/xAI independence.
 - Validation: 151 backend/security tests, seven structural checks over 32 pages and 16 geometry/DOM journeys pass (174 total).
+
+
+## 2026-11-12 — Operational studio, mobile drawer and owned-number pairing
+
+- Replaced the centered mobile menu with a full-height left drawer, compact navigation, backdrop/Escape dismissal, scroll lock and focus restoration. Removed mute/end from navigation and added a labelled Jump in action plus clickable call cards. Ending in the call view requires confirmation.
+- Removed promotional/sample-workspace banners, made studio surfaces neutral gray, and moved example-data context into Settings. The active call precedes country/number controls.
+- Added Numbers and a two-number connection editor with country/flag search, owned routing-number selection, editing/removal, and preservation of legacy destination drafts.
+- Added authenticated persistence and server ownership/one-destination/loop checks. Number requests are idempotent and pending; they cannot charge or create owned inventory. An operator-only SignalWire inventory import verifies an already purchased voice number before registration.
+- Corrected Docker context allowlisting to include shared schemas and the import tool. No carrier routing, provider purchasing, audience, DNS or Railway deployment was activated.
+- Validation: 157 backend/security checks, seven structural checks across 34 pages and 16 geometry/DOM journeys pass (180 total). Native-media and drawer tests use DOM stubs; browser layout/playback/touch QA remains unverified.

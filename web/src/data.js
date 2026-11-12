@@ -1,5 +1,6 @@
 export const NAV = [
   ["overview", "Home"],
+  ["numbers", "Numbers"],
   ["connections", "Connections"],
   ["calls", "Calls"],
   ["routes", "Routing"],
@@ -28,6 +29,7 @@ export const WEB_PAGES = [
   "/studio/demo/",
   ...[
     "routes",
+    "numbers",
     "connections",
     "calls",
     "memory",
@@ -67,6 +69,48 @@ export const SAMPLE_ROUTES = [
     initials: "SF",
   },
 ];
+export const SAMPLE_ROUTING_NUMBERS = [
+  {
+    id: "example-number-1",
+    provider: "signalwire",
+    provider_number_id: "example-sw-1",
+    e164: "+12025550110",
+    country: "US",
+    label: "Main line",
+    status: "owned",
+    ownership_source: "example",
+  },
+  {
+    id: "example-number-2",
+    provider: "signalwire",
+    provider_number_id: "example-sw-2",
+    e164: "+12025550111",
+    country: "US",
+    label: "New York line",
+    status: "owned",
+    ownership_source: "example",
+  },
+  {
+    id: "example-number-3",
+    provider: "signalwire",
+    provider_number_id: "example-sw-3",
+    e164: "+12025550112",
+    country: "US",
+    label: "Team line",
+    status: "owned",
+    ownership_source: "example",
+  },
+];
+export const SAMPLE_NUMBER_CONNECTIONS = SAMPLE_ROUTES.map((route, index) => ({
+  id: "connection-" + route.id,
+  label: route.label,
+  routing_number_id: SAMPLE_ROUTING_NUMBERS[index].id,
+  destination: route.destination,
+  country: index === 0 ? "GB" : "US",
+  status: "saved",
+  created_at: route.created_at,
+  updated_at: route.created_at,
+}));
 export const SAMPLE_CALL_PLANS = [
   {
     id: "sample-plan-london",
