@@ -8,6 +8,15 @@ import {
 } from "@astryxdesign/core/SegmentedControl";
 export { Button, Card, Badge, SegmentedControl, SegmentedControlItem };
 const paths = {
+  calls:
+    "M5 3h4l1 5-2 2a14 14 0 0 0 6 6l2-2 5 1v4a2 2 0 0 1-2 2C10 20 4 14 3 5a2 2 0 0 1 2-2",
+  memory: "M5 3h14v18H5zM8 8h8M8 12h8M8 16h5",
+  transcript: "M5 3h14v18H5zM8 8h8M8 12h8M8 16h5",
+  record:
+    "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0",
+  join: "M9 21H3v-3a5 5 0 0 1 10 0M11 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M18 8v10M13 13h10",
+  browser: "M3 4h18v16H3zM3 9h18M6 6.5h.01M9 6.5h.01",
+  wave: "M3 10v4M7 6v12M11 3v18M15 7v10M19 5v14M23 10v4",
   overview: "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z",
   routes: "M5 19 19 5M5 5h14v14",
   connection:

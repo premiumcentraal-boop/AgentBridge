@@ -1,10 +1,10 @@
 # AgentBridge — North Star
-> Version 1.0 · 8 November 2026 · Canonical product and engineering contract
+> Version 1.1 · 12 November 2026 · Canonical product and engineering contract
 
 ## The promise
 **Your agent. Every number. One natural conversation.**
 
-AgentBridge is the invisible international telephone bridge for AI agents that already have a US outbound-calling feature. When a user asks Grok Bot to call a permitted international number, AgentBridge prepares a temporary route to that number and returns a US access number. **Grok Bot remains the sole speaking agent.** AgentBridge never substitutes a voice agent, transcribes conversations, impersonates users or pretends to be an official Grok/xAI product.
+AgentBridge is the invisible international telephone bridge for AI agents that already have a US outbound-calling feature. When a user asks Grok Bot to call a permitted international number, AgentBridge prepares a temporary route to that number and returns a US access number. **Grok Bot remains the sole speaking agent.** AgentBridge never substitutes a voice agent, impersonates users or pretends to be an official Grok/xAI product. The owner-selected extension scope now includes optional recording/transcription and human participation, while an audio-free bridge remains the default. The current website implements planning and sample experiences; it does not activate live media services.
 
 ## The product in one sentence
 "Ask Grok Bot to call abroad; AgentBridge quietly connects the line."
@@ -15,7 +15,7 @@ AgentBridge is the invisible international telephone bridge for AI agents that a
 3. **Apple-like craftsmanship, not imitation.** Editorial whitespace, confident type, gentle depth, precise copy, restrained animation, superb mobile layouts, and small one-idea screens. No false official affiliation with Apple, Grok Bot, Cursor or xAI.
 4. **Trustworthy claims.** Distinguish demo, configured, and live. Do not fake balance, successful calls, prices, coverage, uptime or integration status.
 5. **Security by design.** All telecom secrets server-side. Server-authenticated account ownership; request validation; per-account spend, country and duration limits; one active reservation per assigned DID; atomic reservation consumption; provider webhook verification; abuse monitoring; no open forwarding.
-6. **Privacy by default.** No conversation audio or transcription passes through the AgentBridge app. Store minimum necessary call metadata, separate from conversation content. Explain carrier metadata, billing, retention, and lawful processing.
+6. **Privacy by default.** Recording and transcription are independent, optional and off by default. Any live capture must have the required notice, permission, access controls and retention/deletion behavior. The audio-free bridge remains available. Store minimum metadata separately from conversation content. The website sample uses only a fictional synthetic recording; its capture preferences never start a carrier recording or transcript service.
 7. **Real compatibility validation.** US outbound availability on a Grok Bot subscription, bridge access-number reachability, and permissibility under platform/carrier terms must be confirmed before claiming integration works end-to-end.
 8. **Graceful failure.** Failed carrier setups never show "ready". Expired reservations cannot connect. Users receive actionable retry states without exposing keys.
 9. **Explain money before dialing.** Destination quote and maximum possible amount before a chargeable call; no misleading unlimited plans.

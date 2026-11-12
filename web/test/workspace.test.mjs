@@ -238,11 +238,14 @@ test("working preview navigates real pages and keeps call state in the floating 
   await pause(30);
   assert.match(
     document.querySelector("main h1").textContent,
-    /One familiar voice/,
+    /Your agent. And a place for you/,
   );
   named(document, "End simulated call").click();
   await pause(30);
-  assert.match(document.querySelector("main h1").textContent, /A little quiet/);
+  assert.match(
+    document.querySelector("main h1").textContent,
+    /Ready when your connection is/,
+  );
   await navigate(document, "/studio/demo/activity/");
   assert.match(
     document.querySelector("main").textContent,
@@ -425,6 +428,271 @@ test("reduced motion starts with approaching flags and no early call, with an ex
   named(document, "Pause connection animation").click();
   await pause(30);
   assert.equal(document.querySelector(".world-network").dataset.paused, "true");
+  assert.deepEqual(requests, []);
+  assert.deepEqual(
+    errors.map((e) => e.message),
+    [],
+  );
+});
+
+function labelled(document, label) {
+  const node = [...document.querySelectorAll("label[for]")].find((el) =>
+    el.textContent.trim().startsWith(label),
+  );
+  assert.ok(node, "Missing field: " + label);
+  const input = document.getElementById(node.htmlFor);
+  assert.ok(input, "Missing labelled control: " + label);
+  return input;
+}
+function fieldValue(window, element, value) {
+  const proto =
+    element.tagName === "SELECT"
+      ? window.HTMLSelectElement.prototype
+      : element.tagName === "TEXTAREA"
+        ? window.HTMLTextAreaElement.prototype
+        : window.HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(proto, "value").set.call(element, value);
+  element.dispatchEvent(
+    new window.Event(element.tagName === "SELECT" ? "change" : "input", {
+      bubbles: true,
+    }),
+  );
+}
+test("international call planning saves optional capture choices and join defaults across studio pages", async (t) => {
+  const { dom, window, document, errors, requests } = setup(
+    "file:///AgentBridge-Working-Website.html#/studio/demo/calls/",
+  );
+  t.after(() => dom.window.close());
+  await waitFor(() => document.title === "Calls | AgentBridge");
+  named(document, "Plan an international call").click();
+  await waitFor(() => document.querySelector("dialog[open]"));
+  fieldValue(window, labelled(document, "Call name"), "Amsterdam viewing test");
+  fieldValue(
+    window,
+    labelled(document, "International phone number"),
+    "+31 20 123 4567",
+  );
+  fieldValue(
+    window,
+    labelled(document, "What should your agent find out?"),
+    "Ask about a viewing and return the reference.",
+  );
+  named(document, "Continue to options").click();
+  await waitFor(() => document.querySelector('input[role="switch"]'));
+  assert.equal(labelled(document, "Record the call").checked, false);
+  assert.equal(labelled(document, "Create a transcript").checked, false);
+  labelled(document, "Create a transcript").click();
+  fieldValue(window, labelled(document, "Transcript language"), "nl");
+  named(document, "Save sample call plan").click();
+  await waitFor(() =>
+    document
+      .querySelector(".call-plan-list")
+      ?.textContent.includes("Amsterdam viewing test"),
+  );
+  const row = [...document.querySelectorAll(".call-plan-row")].find((r) =>
+    r.textContent.includes("Amsterdam viewing test"),
+  );
+  assert.match(row.textContent, /Recording off/);
+  assert.match(row.textContent, /Transcript requested/);
+  [...row.querySelectorAll("button")]
+    .find((b) => b.textContent.includes("Review plan"))
+    .click();
+  await waitFor(() => document.querySelector(".plan-review"));
+  assert.match(
+    document.querySelector(".plan-review").textContent,
+    /Ask before capture/,
+  );
+  named(document, "Explore the sample call", "a").click();
+  await waitFor(() => document.querySelector(".tools-live-card"));
+  await navigate(document, "/studio/demo/memory/");
+  fieldValue(window, labelled(document, "When I join a call"), "phone");
+  await waitFor(() =>
+    [...document.querySelectorAll("label")].some((el) =>
+      el.textContent.startsWith("My international phone number"),
+    ),
+  );
+  fieldValue(
+    window,
+    labelled(document, "My international phone number"),
+    "+31 6 1234 5678",
+  );
+  labelled(document, "Create a transcript").click();
+  fieldValue(window, labelled(document, "Transcript language"), "nl");
+  fieldValue(window, labelled(document, "Keep captured content"), "7");
+  named(document, "Save capture and join preferences").click();
+  await waitFor(() => document.querySelector(".tools-success"));
+  await navigate(document, "/studio/demo/call/");
+  named(document, "Let me join").click();
+  await waitFor(() => document.querySelector("dialog[open]"));
+  assert.equal(
+    labelled(document, "Number where I’ll join").value,
+    "+31612345678",
+  );
+  named(document, "Join sample call").click();
+  await waitFor(() =>
+    document
+      .querySelector(".call-participants")
+      ?.textContent.includes("You’re in"),
+  );
+  assert.deepEqual(requests, []);
+  assert.deepEqual(
+    errors.map((e) => e.message),
+    [],
+  );
+});
+test("sample call joins and leaves without ending, requires capture permission and supports transcript search and audio seeking", async (t) => {
+  const { dom, window, document, errors, requests } = setup(
+    "file:///AgentBridge-Working-Website.html#/studio/demo/call/",
+  );
+  t.after(() => dom.window.close());
+  await waitFor(() => document.title === "Call | AgentBridge");
+  named(document, "Let me join").click();
+  await waitFor(() => document.querySelector("dialog[open]"));
+  named(document, "Join sample call").click();
+  await waitFor(() =>
+    document
+      .querySelector(".call-participants")
+      ?.textContent.includes("You’re in"),
+  );
+  named(document, "Unmute yourself in sample call").click();
+  await waitFor(() =>
+    document
+      .querySelector(".call-participants")
+      .textContent.includes("Speaking in preview"),
+  );
+  named(document, "Leave sample call").click();
+  await waitFor(
+    () =>
+      !document
+        .querySelector(".call-participants")
+        .textContent.includes("You’re in"),
+  );
+  assert.match(
+    document.querySelector(".live-card-top").textContent,
+    /connected/,
+  );
+  named(document, "Record sample call").click();
+  await waitFor(() => document.querySelector("dialog[open]"));
+  assert.equal(named(document, "Enable sample recording").disabled, true);
+  labelled(document, "Permission is confirmed in this sample").click();
+  named(document, "Enable sample recording").click();
+  await waitFor(() =>
+    document
+      .querySelector(".capture-control-heading")
+      ?.textContent.includes("Sample capture on"),
+  );
+  named(document, "Pause sample recording").click();
+  await waitFor(() =>
+    document
+      .querySelector(".capture-control-heading")
+      ?.textContent.includes("Paused"),
+  );
+  named(document, "Resume sample recording").click();
+  named(document, "Transcribe sample call").click();
+  await waitFor(() => document.querySelector("dialog[open]"));
+  assert.equal(named(document, "Enable sample transcription").disabled, true);
+  labelled(document, "Permission is confirmed in this sample").click();
+  named(document, "Enable sample transcription").click();
+  await waitFor(() => document.querySelector(".live-transcript"));
+  named(document, "Show full sample transcript").click();
+  await waitFor(
+    () => document.querySelectorAll(".live-transcript-line").length === 6,
+  );
+  await navigate(document, "/studio/demo/memory/");
+  const audio = document.querySelector("audio");
+  assert.match(audio.getAttribute("src"), /^data:audio\/(?:mpeg|mp3);base64,/);
+  named(document, "Transcript").click();
+  await waitFor(() =>
+    document.querySelector('input[aria-label="Search sample transcript"]'),
+  );
+  fieldValue(
+    window,
+    document.querySelector('input[aria-label="Search sample transcript"]'),
+    "reference",
+  );
+  fieldValue(window, labelled(document, "Speaker"), "Recipient");
+  await waitFor(
+    () => document.querySelectorAll(".transcript-lines article").length === 1,
+  );
+  assert.match(
+    document.querySelector(".transcript-lines").textContent,
+    /two zero four/,
+  );
+  named(document, "Jump to 00:16").click();
+  assert.equal(audio.currentTime, 16.07);
+  fieldValue(
+    window,
+    document.querySelector('input[aria-label="Search sample transcript"]'),
+    "does-not-exist",
+  );
+  await waitFor(() => document.querySelector(".tools-empty"));
+  assert.match(
+    document.querySelector(".tools-empty").textContent,
+    /No matching transcript/,
+  );
+  named(document, "Outcome").click();
+  await waitFor(() => document.querySelector(".memory-outcome"));
+  assert.match(
+    document.querySelector(".memory-outcome").textContent,
+    /DEMO 204/,
+  );
+  assert.match(
+    document.querySelector(".memory-outcome").textContent,
+    /not a real confirmation/,
+  );
+  await navigate(document, "/studio/demo/call/");
+  assert.ok(named(document, "Pause sample recording"));
+  assert.ok(named(document, "Stop sample transcription"));
+  named(document, "End sample call").click();
+  await waitFor(() =>
+    document.querySelector(".live-card-top").textContent.includes("ended"),
+  );
+  named(document, "Restart sample call").click();
+  await waitFor(() =>
+    document.querySelector(".live-card-top").textContent.includes("connected"),
+  );
+  assert.ok(named(document, "Record sample call"));
+  assert.ok(named(document, "Transcribe sample call"));
+  assert.deepEqual(requests, []);
+  assert.deepEqual(
+    errors.map((e) => e.message),
+    [],
+  );
+});
+test("feature pages link into international planning, call memory and joining through real routes", async (t) => {
+  const { dom, document, errors, requests } = setup();
+  t.after(() => dom.window.close());
+  await waitFor(() => document.title.includes("connect agents worldwide"));
+  await navigate(document, "/features/");
+  assert.match(
+    document.querySelector("main h1").textContent,
+    /More possibilities/,
+  );
+  await navigate(document, "/international-calling/");
+  assert.match(
+    document.querySelector("main h1").textContent,
+    /further destination/,
+  );
+  assert.ok(document.querySelector('a[href="#/studio/demo/calls/"]'));
+  await navigate(document, "/call-memory/");
+  assert.ok(document.querySelector("audio"));
+  assert.match(
+    document.querySelector("main").textContent,
+    /synthetic demonstration voices/i,
+  );
+  await navigate(document, "/join-call/");
+  named(document, "Let me join").click();
+  await waitFor(() =>
+    document.querySelector(".feature-people").textContent.includes("You’re in"),
+  );
+  named(document, "Leave illustration").click();
+  await waitFor(
+    () =>
+      !document
+        .querySelector(".feature-people")
+        .textContent.includes("You’re in"),
+  );
+  assert.ok(document.querySelector('a[href="#/studio/demo/call/"]'));
   assert.deepEqual(requests, []);
   assert.deepEqual(
     errors.map((e) => e.message),

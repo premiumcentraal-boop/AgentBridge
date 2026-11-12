@@ -7,7 +7,12 @@ import {
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { A, useRoute } from "./context.jsx";
-import { NAV, SAMPLE_ROUTES, SAMPLE_EVENTS } from "./data.js";
+import {
+  NAV,
+  SAMPLE_ROUTES,
+  SAMPLE_EVENTS,
+  SAMPLE_CALL_PLANS,
+} from "./data.js";
 import {
   Button,
   Card,
@@ -21,7 +26,12 @@ import {
   Wave,
   Loop,
 } from "./ui.jsx";
+import { CallExtensions } from "./call-tools.jsx";
+import { ExtensionShortcuts } from "./features.jsx";
+import { DEFAULT_CAPTURE } from "../../shared/call-plans.mjs";
 const empty = () => ({
+  call_plans: [],
+  capture_preferences: { ...DEFAULT_CAPTURE },
   routes: [],
   events: [],
   settings: { experience: "simple" },
@@ -66,6 +76,11 @@ export function Studio({ mode, setMode, isDemo }) {
   const [snapshot, setSnapshot] = useState(() =>
     isDemo
       ? {
+          call_plans: SAMPLE_CALL_PLANS.map((p) => ({
+            ...p,
+            capture: { ...p.capture },
+          })),
+          capture_preferences: { ...DEFAULT_CAPTURE },
           routes: SAMPLE_ROUTES.map((r) => ({ ...r })),
           events: SAMPLE_EVENTS.map((e) => ({ ...e })),
           settings: { experience: "simple" },
@@ -83,11 +98,17 @@ export function Studio({ mode, setMode, isDemo }) {
     [newDraft, setNewDraft] = useState(false),
     [detail, setDetail] = useState(null),
     [search, setSearch] = useState(""),
-    [filter, setFilter] = useState("all");
+    [filter, setFilter] = useState("all"),
+    [joinOpen, setJoinOpen] = useState(false);
   const [call, setCall] = useState({
       active: isDemo,
       muted: false,
-      elapsed: 154,
+      elapsed: 18,
+      joined: false,
+      userMuted: true,
+      recording: false,
+      transcription: false,
+      recordingPaused: false,
     }),
     [message, setMessage] = useState(""),
     [integration, setIntegration] = useState({
@@ -176,6 +197,77 @@ export function Studio({ mode, setMode, isDemo }) {
     message: text,
     created_at: new Date().toISOString(),
   });
+  const saveCallPlan = async (value) => {
+    if (isDemo) {
+      if ((snapshot.call_plans || []).length >= 200)
+        throw new Error("This workspace can hold up to 200 call plans.");
+      const now = new Date().toISOString();
+      setSnapshot((s) => ({
+        ...s,
+        call_plans: [
+          {
+            ...value,
+            id: uuid(),
+            status: "draft",
+            created_at: now,
+            updated_at: now,
+          },
+          ...(s.call_plans || []),
+        ],
+        events: [
+          event("call_plan.created", "Sample call plan saved. No call placed."),
+          ...s.events,
+        ],
+      }));
+    } else {
+      await api("call-plans", { method: "POST", body: JSON.stringify(value) });
+      await refresh();
+    }
+    notify(
+      isDemo
+        ? "Call plan saved in this sample workspace."
+        : "Call plan saved. No call placed.",
+    );
+  };
+  const archiveCallPlan = async (id) => {
+    if (isDemo)
+      setSnapshot((s) => ({
+        ...s,
+        call_plans: s.call_plans.map((p) =>
+          p.id === id ? { ...p, status: "archived" } : p,
+        ),
+        events: [
+          event("call_plan.archived", "Sample call plan archived."),
+          ...s.events,
+        ],
+      }));
+    else {
+      await api(`call-plans/${id}/archive`, { method: "POST", body: "{}" });
+      await refresh();
+    }
+    notify("Call plan archived.");
+  };
+  const saveCapture = async (value) => {
+    if (isDemo)
+      setSnapshot((s) => ({
+        ...s,
+        capture_preferences: { ...value },
+        events: [
+          event(
+            "capture.preferences_updated",
+            "Capture and join preferences changed in the sample workspace.",
+          ),
+          ...s.events,
+        ],
+      }));
+    else {
+      await api("capture-preferences", {
+        method: "PATCH",
+        body: JSON.stringify(value),
+      });
+      await refresh();
+    }
+  };
   const saveRoute = async ({ label, destination }) => {
     const clean = {
       label: label.trim(),
@@ -319,7 +411,16 @@ export function Studio({ mode, setMode, isDemo }) {
   };
   const endCall = () => {
     if (isDemo) {
-      setCall((c) => ({ ...c, active: false, muted: false }));
+      setCall((c) => ({
+        ...c,
+        active: false,
+        muted: false,
+        joined: false,
+        recording: false,
+        transcription: false,
+        recordingPaused: false,
+      }));
+      setJoinOpen(false);
       setSnapshot((s) => ({
         ...s,
         events: [
@@ -333,7 +434,16 @@ export function Studio({ mode, setMode, isDemo }) {
   const returnCall = () => go(studioBase + "call/");
   const restartCall = () => {
     if (isDemo) {
-      setCall({ active: true, muted: false, elapsed: 0 });
+      setCall({
+        active: true,
+        muted: false,
+        elapsed: 0,
+        joined: false,
+        userMuted: true,
+        recording: false,
+        transcription: false,
+        recordingPaused: false,
+      });
       returnCall();
     }
   };
@@ -396,6 +506,10 @@ export function Studio({ mode, setMode, isDemo }) {
           onEnd={endCall}
           onReturn={returnCall}
           onRestart={restartCall}
+          onJoin={() => {
+            returnCall();
+            setJoinOpen(true);
+          }}
         />
       }
       footer={
@@ -444,7 +558,7 @@ export function Studio({ mode, setMode, isDemo }) {
             key={id}
             label={label}
             icon={<Icon name={id} size={17} />}
-            isSelected={page === id}
+            isSelected={page === id || (page === "call" && id === "calls")}
             href={href(navTo(id))}
             onClick={(e) => link(e, navTo(id))}
             endContent={
@@ -480,7 +594,7 @@ export function Studio({ mode, setMode, isDemo }) {
             <i>/</i>
             <strong>
               {page === "call"
-                ? "Call preview"
+                ? "Call workspace"
                 : NAV.find(([id]) => id === page)?.[1] || "Overview"}
             </strong>
           </div>
@@ -521,8 +635,29 @@ export function Studio({ mode, setMode, isDemo }) {
           )}
         </div>
         <main className="workspace-main" id="main" tabIndex={-1}>
-          {page === "overview" ? (
-            <Overview {...shared} integration={integration} />
+          {["calls", "memory", "call"].includes(page) ? (
+            <CallExtensions
+              page={page}
+              snapshot={snapshot}
+              isDemo={isDemo}
+              call={call}
+              setCall={setCall}
+              onMute={toggleMute}
+              onEnd={endCall}
+              onRestart={restartCall}
+              onSavePlan={saveCallPlan}
+              onArchivePlan={archiveCallPlan}
+              onSaveCapture={saveCapture}
+              navTo={navTo}
+              notify={notify}
+              joinOpen={joinOpen}
+              setJoinOpen={setJoinOpen}
+            />
+          ) : page === "overview" ? (
+            <>
+              <Overview {...shared} integration={integration} />
+              <ExtensionShortcuts navTo={navTo} />
+            </>
           ) : page === "routes" ? (
             <Routes
               {...shared}
@@ -550,14 +685,6 @@ export function Studio({ mode, setMode, isDemo }) {
               signout={signout}
               isDemo={isDemo}
             />
-          ) : page === "call" ? (
-            <CallPage
-              call={call}
-              isDemo={isDemo}
-              onMute={toggleMute}
-              onEnd={endCall}
-              onRestart={restartCall}
-            />
           ) : (
             <DesignArchive />
           )}
@@ -565,7 +692,7 @@ export function Studio({ mode, setMode, isDemo }) {
         <footer className="workspace-footer">
           <span>
             <i className="tiny-dot" />
-            Development preview · Carrier routing paused
+            Development preview · Live call controls require setup
           </span>
           <span>AGENTBRIDGE / VICTOR</span>
         </footer>
@@ -612,6 +739,7 @@ function CallCard({
   onEnd,
   onReturn,
   onRestart,
+  onJoin,
 }) {
   return (
     <div className={"rail-call-card " + (!call.active ? "call-idle" : "")}>
@@ -660,6 +788,17 @@ function CallCard({
                 label="Return to simulated call"
                 name="arrow"
                 onClick={onReturn}
+              />
+            )}
+            {!compact && (
+              <IconBtn
+                label={
+                  call.joined
+                    ? "Return to joined sample call"
+                    : "Let me join sample call"
+                }
+                name="join"
+                onClick={call.joined ? onReturn : onJoin}
               />
             )}
             <IconBtn
@@ -1367,68 +1506,6 @@ function Settings({
           )}
         </Card>
       </div>
-    </>
-  );
-}
-function CallPage({ call, isDemo, onMute, onEnd, onRestart }) {
-  return (
-    <>
-      <PageHead
-        eyebrow={isDemo ? "SIMULATED CALL EXPERIENCE" : "YOUR CALLS"}
-        title={call.active ? "One familiar voice." : "A little quiet."}
-        description={
-          isDemo
-            ? "A visual demonstration. No real call is connected."
-            : "There are no active calls in this workspace."
-        }
-      />
-      <Card className="full-call-card" padding={0}>
-        <Loop variant="call" />
-        <div className="full-call-content">
-          <span className="full-call-avatar">
-            <Icon name="phone" size={31} />
-          </span>
-          <Pill dot tone="sage">
-            {call.active ? "DEMO CALL · CONNECTED" : "NO ACTIVE CALL"}
-          </Pill>
-          <h2>{call.active ? "London studio" : "Ready for what’s next."}</h2>
-          <p>
-            {call.active
-              ? "+44 20 7946 0123"
-              : "Call functionality remains a development preview."}
-          </p>
-          {call.active && (
-            <>
-              <Wave muted={call.muted} />
-              <time>{formatDuration(call.elapsed)}</time>
-              <small>
-                {call.muted
-                  ? "Microphone muted in preview"
-                  : "Grok Bot remains the only conversational voice."}
-              </small>
-              <div className="full-call-controls">
-                <IconBtn
-                  label={
-                    call.muted ? "Unmute simulated call" : "Mute simulated call"
-                  }
-                  name={call.muted ? "muted" : "mute"}
-                  onClick={onMute}
-                  aria-pressed={call.muted}
-                />
-                <IconBtn
-                  label="End simulated call"
-                  name="end"
-                  className="end-call-control"
-                  onClick={onEnd}
-                />
-              </div>
-            </>
-          )}
-          {!call.active && isDemo && (
-            <Btn label="Restart the call preview" onClick={onRestart} />
-          )}
-        </div>
-      </Card>
     </>
   );
 }

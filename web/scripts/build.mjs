@@ -17,7 +17,7 @@ await build({
   format: "esm",
   packages: "external",
   jsx: "automatic",
-  loader: { ".svg": "text" },
+  loader: { ".svg": "text", ".mp3": "dataurl" },
   outfile: resolve(web, ".cache/render.mjs"),
   logLevel: "warning",
 });
@@ -31,7 +31,7 @@ await build({
   platform: "browser",
   format: "esm",
   jsx: "automatic",
-  loader: { ".svg": "text" },
+  loader: { ".svg": "text", ".mp3": "dataurl" },
   minify: true,
   legalComments: "linked",
   outfile: output,
@@ -47,7 +47,7 @@ const revision = createHash("sha256")
   .digest("hex")
   .slice(0, 10);
 const defaultCsp =
-  "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; upgrade-insecure-requests";
+  "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; upgrade-insecure-requests";
 for (const path of WEB_PAGES) {
   const privatePage = path.startsWith("/studio/") || path.startsWith("/app/");
   const policy = privatePage
@@ -109,7 +109,7 @@ const offlineBuild = await build({
   platform: "browser",
   format: "iife",
   jsx: "automatic",
-  loader: { ".svg": "text" },
+  loader: { ".svg": "text", ".mp3": "dataurl" },
   minify: true,
   write: false,
   legalComments: "inline",

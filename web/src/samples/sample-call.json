@@ -1,0 +1,50 @@
+{
+  "sample": true,
+  "title": "London studio viewing",
+  "duration": 34.05,
+  "transcript": [
+    {
+      "id": "line-0",
+      "speaker": "Agent",
+      "text": "Hello. This is a sample call on behalf of Victor. Could we arrange a studio viewing for Tuesday morning?",
+      "start": 0.0,
+      "end": 6.17
+    },
+    {
+      "id": "line-1",
+      "speaker": "Recipient",
+      "text": "Of course. We have ten thirty on Tuesday the seventeenth of November.",
+      "start": 6.72,
+      "end": 10.81
+    },
+    {
+      "id": "line-2",
+      "speaker": "Agent",
+      "text": "Ten thirty London time works. May I have a reference for the viewing?",
+      "start": 11.36,
+      "end": 15.52
+    },
+    {
+      "id": "line-3",
+      "speaker": "Recipient",
+      "text": "The sample reference is D E M O two zero four. We will meet at reception.",
+      "start": 16.07,
+      "end": 20.66
+    },
+    {
+      "id": "line-4",
+      "speaker": "Agent",
+      "text": "Thank you. I have the time and reference. Victor can join the conversation whenever he needs to.",
+      "start": 21.2,
+      "end": 27.11
+    },
+    {
+      "id": "line-5",
+      "speaker": "Recipient",
+      "text": "Perfect. This demonstration booking is fictional. We look forward to showing you around.",
+      "start": 27.66,
+      "end": 33.51
+    }
+  ],
+  "notice": "Fictional dialogue with synthetic demonstration voices. No real booking or call."
+}

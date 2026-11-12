@@ -10,7 +10,7 @@ AgentBridge tab in the `victor-ceo` repository, following Meridian’s integrati
 - `/studio/demo/` — interactive sample workspace; changes reset when the tab reloads. The old `/studio/?demo=1` link still works.
 - `/design/` — three original design boards (Signal, Material, Atlas) with floating call navigation and an interactive component preview; also under **Design boards** in the studio. See [design rationale and references](docs/DESIGN_DIRECTIONS.md).
 - `/studio/` — private operator sign-in; server-backed route drafts, search, archive, activity,
-  guidance preferences, export and optional read-only private backend discovery.
+  call plans, capture/join preferences, export and optional read-only private backend discovery.
 - `npm start` — standalone Node service; persistent SQLite storage, no runtime dependencies.
 
 **Mobile preview:** [Open the working pages](https://agentbridge-worldwide.premiumcentraal.chatgpt.site).
@@ -37,18 +37,22 @@ A premium website and developer-first international telecom bridge for AI agents
 The public site and control studio share an Astryx/React 19 foundation. The
 interface uses actual Astryx navigation, buttons, cards, segmented controls,
 dialogs and inputs, with custom glass surfaces and original SVG connection art.
-Build output contains 20 rendered HTML pages, so direct links and public content
+Build output contains 28 rendered HTML pages, so direct links and public content
 work before JavaScript starts. The original `/design/` gallery remains available.
 
 - `/` — Product overview
+- `/features/` — Calling extensions overview
+- `/international-calling/` — International call planning walkthrough
+- `/call-memory/` — Optional recording/transcription and playable sample
+- `/join-call/` — Let me join walkthrough and interactive participant illustration
 - `/how-it-works/` — Interactive three-step walkthrough
 - `/pricing/` — Preview and self-hosting options
 - `/connect/` — Studio access and private backend setup
 - `/docs/` — Developer and deployment notes
 - `/studio/` — Protected operator workspace
 - `/studio/demo/` — Sample workspace with persistent in-tab floating call preview
-- `/studio/{routes,connection,activity,settings,call,design}/` — Direct studio pages
-- `/studio/demo/{routes,connection,activity,settings,call,design}/` — Matching demo pages
+- `/studio/{routes,calls,memory,connection,activity,settings,call,design}/` — Direct studio pages
+- `/studio/demo/{routes,calls,memory,connection,activity,settings,call,design}/` — Matching demo pages
 - `/app/` — Compatibility link to the sample studio
 
 The main hero says **connect agents worldwide**. Pairs of bold coloured country
@@ -66,8 +70,30 @@ Flags are local SVG symbols from the
 MIT-licensed flag-icons project.
 
 The rail has an expanded/compact state, a simulated active call at the top,
-mute/return/end controls, six workspace items and a dark/light switch. On small
+mute/return/end controls, eight workspace items and a dark/light switch. On small
 screens it becomes a modal drawer with a persistent call strip.
+
+### Calling extensions
+
+International Calling, optional Recording & Transcription, and **Let me join**
+now have rendered product pages and complete sample studio flows. The studio
+can save validated international call plans, independent capture preferences,
+transcript language/retention preferences and browser/phone join preferences.
+Private plans and preferences persist in SQLite; demo changes stay in memory.
+
+The sample call supports joining muted, muting your participant, leaving while
+its agent continues, optional recording permission, pause/resume and optional
+transcription. Call Memory includes an original fictional stereo recording,
+transcript search/speaker filters, timestamp-to-audio navigation, downloads and
+a clearly labelled sample outcome. The MP3 is bundled locally and uses synthetic
+stock demonstration voices; it is not a real Grok call or a real booking.
+
+**Live capability boundary:** these website flows do not add a chargeable
+carrier route, media pipeline, recording service or live conference integration.
+The current backend connection remains read-only discovery. Live international
+calling, recording/transcription and joining require their separately implemented
+and authorized integrations. Saving a plan or preference never enables them.
+See [calling extensions and integration requirements](docs/CALLING_EXTENSIONS.md).
 
 ### Run locally
 
@@ -92,7 +118,7 @@ private API, and route drafts reset when reloaded. This is an actual working UI,
 not a screenshot or replacement for a production deployment.
 
 `npm run test:web` exercises real bundled React interactions in a DOM harness;
-`npm run test:site` checks all 21 pages for landmarks, labels, links and assets.
+`npm run test:site` checks all 29 pages for landmarks, labels, links and assets.
 These checks do not replace browser layout and accessibility testing. For a
 project site, build and audit with `BASE_PATH=/AgentBridge`.
 
@@ -126,7 +152,7 @@ Follow **[docs/STAGING_DEPLOY.md](docs/STAGING_DEPLOY.md)** (owner runbook) and 
 **Important:** This is not approved for public paid use. Shared phone numbers, fluctuating AI caller IDs, caller-ID based access, stuck connecting calls, missing callback retries, exact carrier billing, multiple providers, KYC, fraud protection and regulatory obligations remain unresolved. Time-limited DID access alone is **not sufficient anti-fraud protection** for a commercial relay. **Caller ID can be spoofed**, so \`TEST_CALLER_E164\` is only a conservative additional private-test guard, not proof of identity or an authorization mechanism suitable for public service. Carrier-verified origin or a cryptographic per-call challenge remains required before expansion.
 
 ### Security rules
-Never put real carrier credentials into public site code or the Git repo. No authorization fallback or arbitrary forwarding. Never turn off webhook validation to make a test pass. No premium/emergency/short-code destinations. Avoid recording or transcribing calls. Do not present made-up telecom prices as live quotations.
+Never put real carrier credentials into public site code or the Git repo. No authorization fallback or arbitrary forwarding. Never turn off webhook validation to make a test pass. No premium/emergency/short-code destinations. The private-pilot Worker still has no audio capture. Optional live capture requires its own authorized integration and permission policy. Do not present made-up telecom prices as live quotations.
 
 ## Continuous development
 - \`.github/workflows/ci.yml\`: quality gate on push and pull requests.

@@ -397,3 +397,28 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Coded SVG artwork samples verify the contact sequence separately from browser
   playback/layout QA, which remains unavailable through the supported browser
   tools in this session. The same owner-private mobile Site and PR #39 are reused.
+
+## 2026-11-12 — calling extensions across product pages and studio
+
+- Added Features, International Calling, optional Recording & Transcription and
+  Let me join pages, with direct studio Calls and Call Memory routes. Home and
+  navigation link to the new flows; the original hero motion remains intact.
+- Added international call-plan preparation/review/archive and independent
+  capture, language, retention and browser/phone join preferences. Private
+  records persist through authenticated same-origin studio APIs and additive
+  SQLite tables. Validation rejects activation fields; saving never contacts a
+  provider or enables dialing, recording, transcription or joining.
+- Added a complete sample call workspace: join muted, mute/unmute yourself,
+  leave while the agent continues, separate end-call control, optional capture
+  acknowledgement, recording pause/resume and sample transcript controls.
+- Added an original fictional 34-second stereo sample, native playback,
+  transcript/speaker search, audio timestamp navigation, downloads and a clearly
+  labelled demonstration outcome. Audio is bundled locally; no microphone,
+  carrier callback or external transcription service is used in the preview.
+- Updated the product contract for optional capture/human participation while
+  preserving the audio-free default and the original conversational agent.
+  Documented the live calling/media/conference integrations still required.
+- Validation: `npm run ci` passes 151 backend/server tests, seven structural
+  checks across 29 pages and 12 geometry/DOM tests (170 total). `ffprobe` confirms 24 kHz stereo MP3. Browser
+  layout, playback and touch QA remain pending without supported browser tools.
+- Reuses the same owner-private mobile Site and draft PR #39.

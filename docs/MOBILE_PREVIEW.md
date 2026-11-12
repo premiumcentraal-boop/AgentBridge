@@ -38,3 +38,19 @@ access keys or runtime configuration into the static review.
 Browser layout, touch and screen-reader verification remain pending in this
 session because no supported browser-control tool is exposed. Structural,
 geometry and DOM interaction checks pass; Sites reports successful publication.
+
+## Calling extensions
+
+Use **Features** to explore International Calling, optional Recording &
+Transcription, and Let me join. In **Calls**, save a sample international plan.
+The sample call lets you join muted, speak/leave in the simulation, request
+optional capture and pause recording. **Recordings & transcripts** contains a
+fictional synthetic sample with a real audio player, searchable transcript,
+speaker filtering, timestamp navigation and downloads. Capture/join defaults
+can be changed and retained while navigating the sample studio.
+
+The static Site keeps all changes in the current tab. The Node service provides
+authenticated SQLite persistence for call plans and preferences. Neither mode
+adds live carrier calling, media capture or conference participation. Live use
+requires additional authorized integration; sample actions contact no carrier
+and request no microphone or callback.

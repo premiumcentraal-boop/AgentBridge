@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { A, useRoute } from "./context.jsx";
 import { WorldNetwork } from "./world-network.jsx";
+import { FeatureCards } from "./features.jsx";
 import {
   Button,
   Card,
@@ -17,6 +18,7 @@ import {
 
 const publicNav = [
   ["/", "Overview"],
+  ["/features/", "Features"],
   ["/how-it-works/", "How it works"],
   ["/connect/", "Get connected"],
   ["/docs/", "Developers"],
@@ -93,6 +95,7 @@ export function PublicShell({ children, mode, setMode }) {
           <p>A quiet connection. An independent Victor project.</p>
         </div>
         <nav aria-label="Footer navigation">
+          <A to="/features/">Calling extensions</A>
           <A to="/how-it-works/">How it works</A>
           <A to="/connect/">Get connected</A>
           <A to="/pricing/">Preview & plans</A>
@@ -246,6 +249,7 @@ export function Home() {
         <span className="band-line" />
         <span>THE PEOPLE YOU NEED</span>
       </div>
+      <FeatureCards />
       <section className="public-section frame">
         <SectionHead
           eyebrow="A SMALL CONNECTION. A BIGGER IDEA."
@@ -658,6 +662,7 @@ export function Pricing() {
               "Interactive control studio",
               "Destination draft creation",
               "Floating call-navigation demo",
+              "Optional capture and joining previews",
             ].map((s) => (
               <li key={s}>
                 <Icon name="check" size={15} />
@@ -681,7 +686,7 @@ export function Pricing() {
           <ul>
             {[
               "Protected operator sign-in",
-              "Persistent drafts and preferences",
+              "Persistent drafts, call plans and preferences",
               "Workspace activity and export",
               "Private backend discovery checks",
             ].map((s) => (
