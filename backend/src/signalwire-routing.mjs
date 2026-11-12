@@ -65,7 +65,7 @@ async function recordEvent(env,callId,eventType,now){
   }catch{return false;}
 }
 async function setOutcome(env,callId,eventType,outcome,reservationId=null){
-  await env.DB.prepare("UPDATE provider_events SET outcome=?,reservation_id=? WHERE provider='signalwire' AND provider_call_id=? AND event_type=?")
+  await env.DB.prepare("UPDATE provider_events SET outcome=?,reservation_id=? WHERE provider='signalwire' AND provider_call_id=? AND event_type=? AND outcome='received'")
     .bind(outcome,reservationId,callId,eventType).run();
 }
 async function denialOutcome(env,callId,eventType,outcome,reservationId=null){
