@@ -80,6 +80,16 @@ async function reconcile(row,env,fetchImpl){
       return failed('AMBIGUOUS_CARRIER_LOG_ENTRIES');
     ids.add(entry.id);
   }
+  // The detail endpoint and list endpoint are independent reads. If the list
+  // includes the inbound segment, contradictory terminal state or charges must
+  // never be treated as verified evidence for releasing a reservation.
+  const listedInbound=listing.data.find(x=>x.id===inbound.id);
+  if(listedInbound&&(
+    listedInbound.direction!==inbound.direction||
+    listedInbound.to!==inbound.to||
+    listedInbound.status!==inbound.status||
+    listedInbound.charge!==inbound.charge))
+    return failed('CONFLICTING_INBOUND_CARRIER_LOGS');
   if(inbound.id!==row.provider_segment_id)return failed('INBOUND_LOG_MISMATCH');
   if(inbound.direction!=='inbound'||inbound.to!==env.US_BRIDGE_DID)
     return failed('INBOUND_LOG_MISMATCH');
