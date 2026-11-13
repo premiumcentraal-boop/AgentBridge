@@ -297,3 +297,31 @@ test('high-volume unrelated Voice Logs preserve the completeness boundary',async
   assert.equal(locked.code,'PAGINATED_CARRIER_LOGS');
   assert.equal(paginated.calls.length,2,'must not follow provider-supplied cursor with credentials');
 });
+
+test('pagination metadata cannot falsely claim a complete first-page ledger',async()=>{
+  const base='https://example-space.signalwire.com/api/voice/logs';
+  const invalid=[
+    {...COMPLETE_LINKS,self:'https://attacker.example/api/voice/logs'},
+    {...COMPLETE_LINKS,first:'http://example-space.signalwire.com/api/voice/logs'},
+    {...COMPLETE_LINKS,self:base+'/other'},
+    {...COMPLETE_LINKS,self:base+'?page_number=1'},
+    {...COMPLETE_LINKS,first:base+'?page_number=2'},
+    {...COMPLETE_LINKS,self:base+'?page_number=0&page_number=1'},
+    {...COMPLETE_LINKS,self:'https://user:pass@example-space.signalwire.com/api/voice/logs'},
+    {...COMPLETE_LINKS,first:base+'#fragment'},
+    {...COMPLETE_LINKS,first:'not a url'}
+  ];
+  for(const links of invalid){
+    const p=provider(inbound,[child],links);
+    const result=await fetchCarrierReconciliation(row,env,p.fetchImpl);
+    assert.equal(result.code,'INCOMPLETE_CARRIER_PAGINATION',JSON.stringify({links,result}));
+    assert.equal(p.calls.length,2,'must not follow untrusted pagination metadata');
+  }
+  for(const links of [
+    {...COMPLETE_LINKS,self:base+'?page_number=0'},
+    {...COMPLETE_LINKS,first:base+'?page_number=0'}
+  ]){
+    const result=await fetchCarrierReconciliation(row,env,provider(inbound,[child],links).fetchImpl);
+    assert.equal(result.ok,true,JSON.stringify({links,result}));
+  }
+});
