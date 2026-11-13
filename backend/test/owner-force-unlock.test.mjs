@@ -81,7 +81,7 @@ test('force-unlock tries carrier reconciliation first and completes normally whe
   const seen=[];
   t.mock.method(globalThis,'fetch',async(url,o)=>{
     seen.push(o.method);
-    return new Response(JSON.stringify(String(url).endsWith('/'+SEG)?inbound:{data:[inbound,child],links:{self:'s',first:'f'}}));
+    return new Response(JSON.stringify(String(url).endsWith('/'+SEG)?inbound:{data:[inbound,child],links:{self:String(url),first:String(url)}}));
   });
   const r=await worker.fetch(unlock(id,{}),env);
   assert.equal(r.status,200);
