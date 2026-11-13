@@ -259,3 +259,41 @@ test('rejects contradictory inbound parent linkage across detail and list',async
   const result=await fetchCarrierReconciliation(row,env,provider(root,[listed,child]).fetchImpl);
   assert.equal(result.code,'CONFLICTING_INBOUND_CARRIER_LOGS');
 });
+
+test('reservation creation clock-skew boundary is deterministic and never widens provider lookup silently',async()=>{
+  const base=row.created_at;
+  for(const skew of [-121,-120,-119,0,119,120,121]){
+    const local={...row,created_at:base+skew};
+    const p=provider();
+    const result=await fetchCarrierReconciliation(local,env,p.fetchImpl);
+    assert.equal(result.ok,true,JSON.stringify({skew,result}));
+    assert.equal(p.calls.length,2);
+    const url=new URL(p.calls[1].url);
+    assert.equal(url.searchParams.get('created_after'),
+      new Date((local.created_at-120)*1000).toISOString());
+    assert.equal(url.searchParams.get('page_size'),'1000');
+  }
+  // A valid detail response cannot compensate for a missing inbound list row.
+  // This simulates the provider excluding the inbound row due to timestamp skew.
+  const missing=provider(inbound,[child],COMPLETE_LINKS,false);
+  const locked=await fetchCarrierReconciliation(row,env,missing.fetchImpl);
+  assert.equal(locked.code,'INBOUND_MISSING_FROM_CARRIER_LIST');
+  assert.equal(locked.ok,false);
+});
+
+test('high-volume unrelated Voice Logs preserve the completeness boundary',async()=>{
+  const unrelated=Array.from({length:998},(_,i)=>({
+    id:'unrelated-volume-'+i,parent_id:null,direction:'outbound',
+    to:'+13125550100',status:'completed',charge:0.01
+  }));
+  // 999 unrelated records plus the two expected legs cannot fit one page.
+  const full=provider(inbound,[child,...unrelated],COMPLETE_LINKS);
+  const denied=await fetchCarrierReconciliation(row,env,full.fetchImpl);
+  assert.equal(denied.code,'INCOMPLETE_CARRIER_PAGINATION');
+  // A continuation link is never silently ignored, even for a short page.
+  const paginated=provider(inbound,[child,...unrelated.slice(0,3)],
+    {...COMPLETE_LINKS,next:'https://example-space.signalwire.com/api/voice/logs?page_number=2'});
+  const locked=await fetchCarrierReconciliation(row,env,paginated.fetchImpl);
+  assert.equal(locked.code,'PAGINATED_CARRIER_LOGS');
+  assert.equal(paginated.calls.length,2,'must not follow provider-supplied cursor with credentials');
+});
