@@ -109,9 +109,13 @@ async function reconcile(row,env,fetchImpl){
     listedInbound.direction!==inbound.direction||
     listedInbound.to!==inbound.to||
     listedInbound.status!==inbound.status||
-    listedInbound.charge!==inbound.charge)
+    listedInbound.charge!==inbound.charge||
+    listedInbound.parent_id!==inbound.parent_id)
     return failed('CONFLICTING_INBOUND_CARRIER_LOGS');
   if(inbound.id!==row.provider_segment_id)return failed('INBOUND_LOG_MISMATCH');
+  // A root inbound segment must not itself be a child of another billable leg.
+  if(inbound.parent_id!==null&&inbound.parent_id!==undefined)
+    return failed('INBOUND_LOG_MISMATCH');
   if(inbound.direction!=='inbound'||inbound.to!==env.US_BRIDGE_DID)
     return failed('INBOUND_LOG_MISMATCH');
   if(!INBOUND_TERMINAL.has(inbound.status))return failed('INBOUND_CARRIER_NOT_TERMINAL');
