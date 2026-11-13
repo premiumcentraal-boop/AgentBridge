@@ -56,17 +56,17 @@ work before JavaScript starts. The original `/design/` gallery remains available
 - `/studio/demo/{numbers,connections,routes,calls,memory,connection,activity,settings,call,design}/` — Matching demo pages
 - `/app/` — Compatibility link to the sample studio
 
-The main hero says **connect agents worldwide**, with a signup-first action, secondary studio entry and an interactive sample-agent widget showing a three-message agent/business exchange. The sample waveform animates with reduced-motion support. A separate worldwide section preserves pairs of bold coloured country
-lines enter from opposite edges, glide, then accelerate into the exact centre.
-Their flags travel with the advancing line heads, then dissolve before the
-circles overlap. Contact triggers a green pulse, a phone that pops into place
-and a check mark that draws on as the country lines fade. The brief **Call
-connected** confirmation clears before the next pair starts. Twelve pairings cover
-all 16 flags over a 60-second cycle, with straight or single-turn approaches.
-Every new pair paints above the older lines, flags and call icons, including at
-the loop seam. The scene respects reduced motion, offers pause/play, and stops
-when off screen or the tab is hidden. Reduced motion samples the same scene as a
-still, including before JavaScript starts, with no call icon before contact.
+The main hero says **connect agents worldwide**, with a signup-first action, secondary studio entry and an interactive sample-agent widget showing a three-message agent/business exchange. The sample waveform animates with reduced-motion support. A separate worldwide section shows overlapping bold country routes:
+12 journeys cover all 16 flags over a 60-second cycle, with at most two
+approaching together. Complementary routes use four aligned connection points,
+consistent rounded corners and occasional crossings, leaving room between flags
+and around call confirmations. Two journeys bring three countries together.
+Mirrored compositions and alternating departures provide variety. Flags travel
+with the line heads; the final approach accelerates into contact. Only then do
+that journey's lines fade and its smaller green phone, pulse and animated check
+appear. New routes paint above older ones, including at the loop seam. The scene
+respects reduced motion, offers pause/play, and stops off screen or in hidden tabs.
+Reduced motion samples the same composition with no call before its own contact.
 Flags are local SVG symbols from the
 MIT-licensed flag-icons project.
 

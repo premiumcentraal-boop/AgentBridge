@@ -32,6 +32,8 @@ const paths = {
     "M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0",
   design: "M3 3h18v18H3zM3 9h18M9 9v12",
   arrow: "M5 12h14M13 6l6 6-6 6",
+  filter: "M4 7h16M4 17h16M8 4v6M16 14v6",
+  "arrow-down": "M12 5v14M6 13l6 6 6-6",
   diagonal: "M6 18 18 6M6 6h12v12",
   plus: "M12 5v14M5 12h14",
   close: "m6 6 12 12M6 18 18 6",
@@ -111,6 +113,18 @@ export function Pill({ children, tone = "muted", dot = false }) {
     </span>
   );
 }
+// One navigation arrow: right to open, rotated down to expand.
+export function DirectionArrow({ expanded = false, compact = false }) {
+  return (
+    <span
+      className={"direction-arrow " + (compact ? "is-compact" : "")}
+      data-expanded={expanded}
+      aria-hidden="true"
+    >
+      <Icon name="arrow" size={compact ? 16 : 20} />
+    </span>
+  );
+}
 export function Btn({
   label,
   icon,
@@ -124,7 +138,15 @@ export function Btn({
       label={label}
       variant={primary ? "primary" : "secondary"}
       icon={icon ? <Icon name={icon} size={16} /> : undefined}
-      endContent={end ? <Icon name={end} size={15} /> : undefined}
+      endContent={
+        end ? (
+          ["arrow", "diagonal", "chevron", "arrow-down"].includes(end) ? (
+            <DirectionArrow compact expanded={end === "arrow-down"} />
+          ) : (
+            <Icon name={end} size={16} />
+          )
+        ) : undefined
+      }
       className={"ab-button " + (primary ? "button-primary " : "") + className}
       {...props}
     />

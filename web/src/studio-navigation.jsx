@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import { BotFace, StateTag } from "./grok-ui.jsx";
-import { Btn, Icon } from "./ui.jsx";
+import { Btn, DirectionArrow, Icon, Wave } from "./ui.jsx";
 
 export const callDuration = (seconds) =>
   `${Math.floor((seconds || 0) / 60)
@@ -15,7 +15,14 @@ export function ActiveCallCard({
   onJump,
   compact = false,
   navigation = false,
+  expandable = false,
+  transcript = [],
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const detailsId = useId();
+  useEffect(() => {
+    if (!call.active) setExpanded(false);
+  }, [call.active]);
   if (!call.active)
     return (
       <div className="nav-call-empty">
@@ -23,6 +30,14 @@ export function ActiveCallCard({
         {!compact && <span>No active call</span>}
       </div>
     );
+  const openOverview = onOpen || onJump;
+  const visibleLines = transcript
+    .filter(
+      (line) =>
+        line.start <=
+        (call.listening ? call.samplePosition || 0 : call.elapsed),
+    )
+    .slice(-3);
   const body = (
     <>
       <BotFace size={navigation ? 36 : 56} tone="neutral" state="working" />
@@ -36,7 +51,9 @@ export function ActiveCallCard({
           <time>{callDuration(call.elapsed)}</time>
         </div>
       )}
-      {onOpen && <Icon name="chevron" size={15} />}
+      {!compact && (expandable || onOpen) && (
+        <DirectionArrow expanded={expandable && expanded} />
+      )}
     </>
   );
   return (
@@ -44,16 +61,25 @@ export function ActiveCallCard({
       className={
         "active-call-card " +
         (navigation ? "nav-call-card " : "") +
-        (compact ? "compact-call-card" : "")
+        (compact ? "compact-call-card " : "") +
+        (expandable ? "expandable-call-card" : "")
       }
       aria-label="Active call"
     >
-      {onOpen ? (
+      {expandable || onOpen ? (
         <button
           type="button"
           className="active-call-open"
-          aria-label="Open call and transcript"
-          onClick={onOpen}
+          aria-label={
+            expandable
+              ? expanded
+                ? "Minimize live call"
+                : "Expand live call"
+              : "Open call and transcript"
+          }
+          aria-expanded={expandable ? expanded : undefined}
+          aria-controls={expandable ? detailsId : undefined}
+          onClick={expandable ? () => setExpanded((value) => !value) : onOpen}
         >
           {body}
         </button>
@@ -62,31 +88,108 @@ export function ActiveCallCard({
       )}
       {!compact && (
         <>
-          <div className="active-call-numbers">
-            <span>
-              <small>Routing number</small>
-              <b>{call.routing_number || "+12025550110"}</b>
-            </span>
-            <Icon name="arrow" size={14} />
-            <span>
-              <small>Destination</small>
-              <b>{call.destination || "+442079460123"}</b>
-            </span>
+          <div
+            id={expandable ? detailsId : undefined}
+            className="active-call-details"
+            hidden={expandable && !expanded}
+          >
+            <div className="active-call-numbers">
+              <span>
+                <small>Routing number</small>
+                <b>{call.routing_number || "+12025550110"}</b>
+              </span>
+              <Icon name="arrow" size={14} />
+              <span>
+                <small>Destination</small>
+                <b>{call.destination || "+442079460123"}</b>
+              </span>
+            </div>
+            {expandable && (
+              <div className="active-call-transcript">
+                <div className="active-call-transcript-heading">
+                  <Icon name="transcript" size={16} />
+                  <strong>Transcript</strong>
+                  <span>{call.transcription ? "Following" : "Off"}</span>
+                </div>
+                {call.transcription && visibleLines.length ? (
+                  visibleLines.map((line) => (
+                    <div className="active-call-transcript-line" key={line.id}>
+                      <span>
+                        {line.speaker}
+                        <time>{callDuration(line.start)}</time>
+                      </span>
+                      <p>{line.text}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p>
+                    {call.transcription
+                      ? "Waiting for words…"
+                      : "Transcription is off. Manage it in the call overview."}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
-          {onJump && (
+          {openOverview && (
             <div className="active-call-actions">
+              {expandable && <Wave animated />}
               <Btn
-                label={call.joined ? "Return to call" : "Jump in"}
-                icon={call.joined ? "phone" : "headphones"}
+                label="Call overview"
+                icon="calls"
                 primary
-                end={null}
-                onClick={call.joined && onOpen ? onOpen : onJump}
+                end="arrow"
+                onClick={openOverview}
               />
             </div>
           )}
         </>
       )}
     </section>
+  );
+}
+
+export function SavedCallCard({
+  label,
+  destination,
+  country,
+  onOpen,
+  isPlan,
+  onStart,
+  current,
+  anotherCall,
+}) {
+  return (
+    <article className="active-call-card saved-call-card">
+      <button
+        type="button"
+        className="active-call-open"
+        aria-label={"Open " + label}
+        onClick={onOpen}
+      >
+        <BotFace size={56} state="idle" tone="neutral" />
+        <span className="active-call-identity">
+          <strong>{label}</strong>
+          <span>{destination}</span>
+          <small>
+            {country} · {isPlan ? "Saved call" : "Connection"}
+          </small>
+        </span>
+        <StateTag state="idle">Ready</StateTag>
+        <DirectionArrow />
+      </button>
+      {onStart && (
+        <div className="saved-call-actions">
+          <Btn
+            label={current ? "Open call" : "Start demo call"}
+            icon="calls"
+            end={null}
+            disabled={anotherCall}
+            onClick={onStart}
+          />
+        </div>
+      )}
+    </article>
   );
 }
 

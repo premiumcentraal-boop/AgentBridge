@@ -1,0 +1,101 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { createApp } from '../app.mjs';
+import { openStore } from '../store.mjs';
+import { openAccountDatabase } from '../accounts/node-database.mjs';
+import { createAccountService } from '../accounts/service.mjs';
+const origin='https://agentbridge.victor.ceo', address='tester@example.com';
+const invite='test-only-single-tester-invitation';
+const password='test-only-long-account-password';
+const registration=()=>({email:address,name:'Tester',agent_name:'My agent',password,invite_token:invite});
+async function harness(t,{filename=':memory:',...overrides}={}) {
+ const database=openAccountDatabase(filename), operator=openStore(':memory:');let fetched=0;
+ operator.createRoute('Operator private record','+442079460199');
+ const env={NODE_ENV:'production',STUDIO_PUBLIC_ORIGIN:origin,DEMO_TESTER_EMAIL:address,DEMO_SIGNUP_INVITE_SHA256:createHash('sha256').update(invite).digest('hex'),AGENTBRIDGE_BACKEND_URL:'https://must-not-contact.example',AGENTBRIDGE_ACCOUNT_TOKEN:'test-provider-key',...overrides};
+ const server=createApp({env,store:operator,accountDatabase:database,fetcher:()=>{fetched++;throw new Error('Sandbox must never call a provider');}});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));let closed=false;
+ const close=()=>new Promise(resolve=>{if(closed)return resolve();closed=true;server.close(resolve);});t.after(close);
+ const request=(path,options={})=>fetch('http://127.0.0.1:'+server.address().port+path,{...options,headers:{Origin:origin,'Content-Type':'application/json',...options.headers}});
+ const signup=async()=>{const response=await request('/api/auth/register',{method:'POST',body:JSON.stringify(registration())});assert.equal(response.status,201,await response.clone().text());return {data:await response.json(),cookie:response.headers.get('set-cookie').split(';')[0]};};
+ return {database,request,signup,close,fetched:()=>fetched};
+}
+test('single tester signs up, receives a durable private session and cannot create a second account',async t=>{
+ const h=await harness(t);
+ let status=await (await h.request('/api/auth/session')).json();assert.equal(status.authenticated,false);assert.equal(status.registration_available,true);assert.equal(status.auth_method,'password');
+ assert.equal((await h.request('/api/auth/register',{method:'POST',body:JSON.stringify({...registration(),email:'other@example.com'})})).status,403);
+ assert.equal((await h.request('/api/auth/register',{method:'POST',body:JSON.stringify({...registration(),invite_token:'wrong'})})).status,403);
+ const {data,cookie}=await h.signup();assert.equal(data.account.email,address);assert.equal(data.account.mode,'demo');assert.equal(data.account.password_hash,undefined);assert.equal(data.redirect,'/studio/');
+ const account=await h.database.first('SELECT * FROM ab_accounts');assert.notEqual(account.password_hash,password);assert.match(account.password_hash,/^scrypt\$/);assert.equal(account.auth_provider,'password');
+ const session=await h.database.first('SELECT * FROM ab_sessions');assert.equal(session.account_id,data.account.id);assert.notEqual(session.token_hash,cookie.slice('ab_customer='.length));
+ status=await (await h.request('/api/auth/session',{headers:{Cookie:cookie}})).json();assert.equal(status.authenticated,true);assert.equal(status.registration_available,false);
+ assert.equal((await h.request('/api/auth/register',{method:'POST',body:JSON.stringify(registration())})).status,409);
+ const snapshot=await (await h.request('/api/studio/overview',{headers:{Cookie:cookie}})).json();assert.equal(snapshot.connections.length,0);assert.equal(snapshot.routes.length,0);assert.equal(snapshot.routing_numbers.length,0);assert.equal(snapshot.demo_call.active,false);assert.equal(snapshot.account.id,data.account.id);assert.equal(snapshot.sandbox,true);
+ for(const key of ['purchase_enabled','calling_enabled','routing_enabled','recording_enabled','joining_enabled'])assert.equal(snapshot[key],false);
+ assert.equal(h.fetched(),0);
+});
+test('signup races create exactly one account and one workspace; public signup without an invitation stays closed',async t=>{
+ const h=await harness(t);
+ const responses=await Promise.all([h.request('/api/auth/register',{method:'POST',body:JSON.stringify(registration())}),h.request('/api/auth/register',{method:'POST',body:JSON.stringify(registration())})]);
+ assert.deepEqual(responses.map(response=>response.status).sort(),[201,409]);
+ assert.equal((await h.database.first('SELECT COUNT(*) AS n FROM ab_accounts')).n,1);assert.equal((await h.database.first('SELECT COUNT(*) AS n FROM ab_workspaces')).n,1);
+ const closed=await harness(t,{DEMO_SIGNUP_INVITE_SHA256:''});const status=await (await closed.request('/api/auth/session')).json();assert.equal(status.registration_available,false);assert.equal((await closed.request('/api/auth/register',{method:'POST',body:JSON.stringify(registration())})).status,403);
+});
+test('login validates credentials, sets secure cookies, and logout and expiration revoke access',async t=>{
+ const h=await harness(t);await h.signup();
+ assert.equal((await h.request('/api/studio/overview',{headers:{'oai-authenticated-user-id':'forged','oai-authenticated-user-email':address}})).status,401);
+ assert.equal((await h.request('/api/auth/login',{method:'POST',body:JSON.stringify({email:address,password:'wrong'})})).status,401);
+ const login=await h.request('/api/auth/login',{method:'POST',body:JSON.stringify({email:address.toUpperCase(),password})});assert.equal(login.status,200);
+ const header=login.headers.get('set-cookie');for(const flag of ['HttpOnly','SameSite=Strict','Secure','Path=/api','Max-Age=28800'])assert.ok(header.includes(flag));const cookie=header.split(';')[0];
+ assert.equal((await h.request('/api/studio/overview',{headers:{Cookie:cookie}})).status,200);
+ const logout=await h.request('/api/auth/logout',{method:'POST',headers:{Cookie:cookie},body:'{}'});assert.equal(logout.status,200);assert.match(logout.headers.get('set-cookie'),/Max-Age=0/);
+ assert.equal((await h.request('/api/studio/overview',{headers:{Cookie:cookie}})).status,401);
+ const second=await h.request('/api/auth/login',{method:'POST',body:JSON.stringify({email:address,password})});const expired=second.headers.get('set-cookie').split(';')[0];await h.database.run('UPDATE ab_sessions SET expires_at=0');
+ assert.equal((await h.request('/api/studio/overview',{headers:{Cookie:expired}})).status,401);
+});
+test('origin, request bounds, forged fields and failed-login limits protect real account operations',async t=>{
+ const h=await harness(t);const {cookie}=await h.signup();
+ assert.equal((await h.request('/api/auth/logout',{method:'POST',headers:{Cookie:cookie,Origin:'https://attacker.example'},body:'{}'})).status,403);
+ assert.equal((await h.request('/api/auth/account',{method:'PATCH',headers:{Cookie:cookie},body:JSON.stringify({name:'New',agent_name:'Agent',role:'admin'})})).status,422);
+ assert.equal((await h.request('/api/auth/account',{method:'PATCH',headers:{Cookie:cookie},body:'{"name":"'+ 'x'.repeat(9000)+'"}'})).status,413);
+ for(let index=0;index<10;index++)assert.equal((await h.request('/api/auth/login',{method:'POST',body:JSON.stringify({email:address,password:'wrong'})})).status,401);
+ assert.equal((await h.request('/api/auth/login',{method:'POST',body:JSON.stringify({email:address,password})})).status,429);
+});
+test('the real account API owns virtual inventory, connections, saved calls and capture choices without provider access',async t=>{
+ const h=await harness(t);const {cookie}=await h.signup();const headers={Cookie:cookie};
+ const order={request_id:randomUUID(),provider:'signalwire',country:'US',area_code:'202',label:'Demo line',candidate:'+12025550130'};
+ const buy=await h.request('/api/studio/number-orders',{method:'POST',headers,body:JSON.stringify(order)});assert.equal(buy.status,201);const purchased=await buy.json();assert.equal(purchased.number.ownership_source,'demo');assert.equal(purchased.charged,false);
+ const replay=await (await h.request('/api/studio/number-orders',{method:'POST',headers,body:JSON.stringify(order)})).json();assert.equal(replay.number.id,purchased.number.id);
+ assert.equal((await h.request('/api/studio/number-orders',{method:'POST',headers,body:JSON.stringify({...order,request_id:randomUUID(),candidate:'+12025551234'})})).status,422);
+ const draft={label:'London studio',country:'GB',destination:'+442079460123',routing_number_id:purchased.number.id};
+ const create=await h.request('/api/studio/connections',{method:'POST',headers,body:JSON.stringify(draft)});assert.equal(create.status,201);const {connection}=await create.json();
+ assert.equal((await h.request('/api/studio/connections',{method:'POST',headers,body:JSON.stringify({...draft,label:'Duplicate'})})).status,409);
+ const call=await (await h.request('/api/studio/demo-call/start',{method:'POST',headers,body:JSON.stringify({connection_id:connection.id})})).json();assert.equal(call.call.active,true);assert.equal(call.call.routing_number,order.candidate);assert.equal(call.calling_enabled,false);
+ assert.equal((await h.request('/api/studio/demo-call',{method:'PATCH',headers,body:JSON.stringify({call_id:call.call.id,transcription:true})})).status,422);
+ assert.equal((await h.request('/api/studio/demo-call',{method:'PATCH',headers,body:JSON.stringify({call_id:call.call.id,transcription:true,capturePermission:true,joined:true,userMuted:true})})).status,200);
+ await h.request('/api/studio/settings',{method:'PATCH',headers,body:JSON.stringify({experience:'guided'})});
+ await h.request('/api/auth/account',{method:'PATCH',headers,body:JSON.stringify({name:'Updated tester',agent_name:'Concierge'})});
+ let state=await (await h.request('/api/studio/overview',{headers})).json();assert.equal(state.routing_numbers.length,1);assert.equal(state.connections.length,1);assert.equal(state.demo_call.transcription,true);assert.equal(state.settings.experience,'guided');assert.equal(state.account.agent_name,'Concierge');assert.equal(state.integration_configured,false);
+ await h.request('/api/studio/demo-call',{method:'PATCH',headers,body:JSON.stringify({call_id:call.call.id,active:false})});
+ state=await (await h.request('/api/studio/export',{headers})).json();assert.equal(state.demo_call.active,false);assert.equal(state.call_history.length,1);assert.equal(state.demo_call.joined,false);assert.equal(state.demo_call.transcription,false);
+ assert.equal((await h.request('/api/studio/reservations',{method:'POST',headers,body:'{}'})).status,404);assert.equal(h.fetched(),0);
+});
+test('account sessions and workspace data survive a real server/database restart',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'agentbridge-customer-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));const filename=join(directory,'accounts.sqlite');
+ const first=await harness(t,{filename});const {cookie,data}=await first.signup();await first.request('/api/studio/settings',{method:'PATCH',headers:{Cookie:cookie},body:JSON.stringify({experience:'advanced'})});await first.close();
+ const second=await harness(t,{filename});const session=await (await second.request('/api/auth/session',{headers:{Cookie:cookie}})).json();assert.equal(session.authenticated,true);assert.equal(session.account.id,data.account.id);const state=await (await second.request('/api/studio/overview',{headers:{Cookie:cookie}})).json();assert.equal(state.settings.experience,'advanced');
+});
+test('hosted identity registration uses verified subject and email and never trusts an email in the form alone',async t=>{
+ const database=openAccountDatabase(':memory:');t.after(()=>database.close());const service=createAccountService({database,testerEmail:address,publicOrigin:origin,platformIdentity:true});
+ const headers={Origin:origin,'Content-Type':'application/json','oai-authenticated-user-id':'verified-owner','oai-authenticated-user-email':address};
+ const request=(path,method='GET',body,extra=headers)=>service.fetch(new Request(origin+path,{method,headers:extra,...(body?{body:JSON.stringify(body)}:{})}),{clientAddress:'test-platform'});
+ assert.equal((await request('/api/auth/register','POST',{name:'Tester',email:address,agent_name:'Agent'},{Origin:origin,'Content-Type':'application/json'})).status,401);
+ let response=await request('/api/auth/register','POST',{name:'Tester',email:address,agent_name:'Agent'});assert.equal(response.status,201);assert.equal(response.headers.get('set-cookie'),null);
+ assert.equal((await (await request('/api/auth/session')).json()).authenticated,true);
+ assert.equal((await request('/api/studio/overview','GET',undefined,{...headers,'oai-authenticated-user-id':'another-subject'})).status,401);
+ assert.equal((await request('/api/studio/overview','GET',undefined,{...headers,'oai-authenticated-user-email':'someone@example.com'})).status,401);
+ assert.equal((await database.first('SELECT password_hash FROM ab_accounts')).password_hash,null);
+});

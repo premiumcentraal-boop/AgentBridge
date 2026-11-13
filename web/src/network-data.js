@@ -1,25 +1,27 @@
-// Paired country lines enter from opposite edges, meet, then reveal a call.
+// Overlapping country journeys share a minute-long score. Each has its own
+// meeting point; only its arriving lines can trigger its call confirmation.
 export const NETWORK_LOOP_SECONDS = 60;
 export const MAP_SIZE = { width: 1000, height: 720 };
-export const MEETING_POINT = [500, 360];
-export const BAND_WIDTH = 104;
-export const COUNTRY_RADIUS = 62;
-export const PAIR_INTERVAL_SECONDS = 5;
-export const APPROACH_SECONDS = 3.6;
-export const ACCELERATE_AT = 2.7;
+export const BAND_WIDTH = 76;
+export const COUNTRY_RADIUS = 50;
+export const PAIR_STAGGER_SECONDS = 3;
+export const SCENE_INTERVAL_SECONDS = 10;
+export const APPROACH_SECONDS = 8.4;
+export const ACCELERATE_AT = APPROACH_SECONDS * 0.75;
 export const GLIDE_PROGRESS = 0.6;
 export const GLIDE_EASING = [0.32, 0, 0.6, 0.6];
 // The initial slope matches the glide's ending velocity, then accelerates
 // into contact. There is no slowing or hesitation just before the join.
 export const JOIN_EASING = [0.3, 0.15, 0.8, 0.4];
 export const LINE_FADE_AT = APPROACH_SECONDS;
-export const LINE_CLEAR_AT = 3.88;
+export const LINE_CLEAR_AT = APPROACH_SECONDS + 1.3;
 export const CALL_REVEAL_AT = APPROACH_SECONDS;
-export const CALL_VISIBLE_AT = 3.8;
-export const CALL_SETTLE_AT = 3.98;
-export const CALL_FADE_AT = 4.28;
-export const EVENT_SECONDS = 4.72;
-export const SCENE_PHASE_SECONDS = 1.8;
+export const CALL_VISIBLE_AT = APPROACH_SECONDS + 0.22;
+export const CALL_SETTLE_AT = APPROACH_SECONDS + 0.42;
+export const CALL_FADE_AT = APPROACH_SECONDS + 1.12;
+export const EVENT_SECONDS = APPROACH_SECONDS + 1.65;
+// Open on a composed overlap, rather than waiting on an empty canvas.
+export const SCENE_PHASE_SECONDS = 7.5;
 export const COUNTRIES = {
   US: "United States",
   GB: "United Kingdom",
@@ -55,7 +57,7 @@ export function connectionGeometry(start, end, firstAxis = "x") {
   const incoming = corner.map((n, i) => Math.sign(n - start[i]));
   const outgoing = end.map((n, i) => Math.sign(n - corner[i]));
   const radius = Math.min(
-    105,
+    96,
     Math.abs(end[0] - start[0]) * 0.45,
     Math.abs(end[1] - start[1]) * 0.45,
   );
@@ -141,105 +143,136 @@ const palette = {
   cyan: "#25b9d6",
   gold: "#ffca2c",
 };
-const scenes = [
-  {
-    countries: ["US", "GB"],
+// Two complementary routes share a small station grid. Reflecting the same
+// geometry gives variety without drifting lanes, cramped elbows or stray joins.
+const layouts = {
+  across: {
     axis: "x",
-    offset: 160,
-    colours: [palette.rose, palette.cyan],
+    meeting: [700, 220],
+    entries: [
+      [-110, 220],
+      [1110, 620],
+    ],
+    third: [700, -110],
+    colours: [palette.rose, palette.orange, palette.cyan],
   },
-  {
-    countries: ["NL", "JP"],
+  upright: {
     axis: "y",
-    offset: -240,
-    colours: [palette.orange, palette.gold],
+    meeting: [300, 500],
+    entries: [
+      [300, -110],
+      [860, 830],
+    ],
+    third: [-110, 500],
+    colours: [palette.cyan, palette.gold, palette.rose],
+  },
+};
+const compositions = [
+  {
+    flipX: false,
+    flipY: false,
+    reverse: false,
+    countries: [
+      ["US", "GB"],
+      ["NL", "JP"],
+    ],
   },
   {
-    countries: ["FR", "DE"],
-    axis: "x",
-    offset: 0,
-    colours: [palette.cyan, palette.orange],
+    flipX: true,
+    flipY: false,
+    reverse: true,
+    countries: [
+      ["FR", "DE"],
+      ["SG", "AU"],
+    ],
   },
   {
-    countries: ["SG", "AU"],
-    axis: "y",
-    offset: 150,
-    colours: [palette.gold, palette.rose],
+    flipX: false,
+    flipY: true,
+    reverse: false,
+    countries: [
+      ["CA", "BR"],
+      ["SE", "IN"],
+    ],
   },
   {
-    countries: ["CA", "BR"],
-    axis: "x",
-    offset: -190,
-    colours: [palette.orange, palette.cyan],
+    flipX: true,
+    flipY: true,
+    reverse: true,
+    countries: [
+      ["CH", "AE", "NL"],
+      ["MX", "ZA"],
+    ],
   },
   {
-    countries: ["SE", "IN"],
-    axis: "y",
-    offset: 0,
-    colours: [palette.rose, palette.gold],
+    flipX: false,
+    flipY: false,
+    reverse: true,
+    countries: [
+      ["JP", "FR"],
+      ["US", "SG", "GB"],
+    ],
   },
   {
-    countries: ["CH", "AE"],
-    axis: "x",
-    offset: 100,
-    colours: [palette.cyan, palette.rose],
-  },
-  {
-    countries: ["MX", "ZA"],
-    axis: "y",
-    offset: -340,
-    colours: [palette.gold, palette.orange],
-  },
-  {
-    countries: ["US", "JP"],
-    axis: "x",
-    offset: 240,
-    colours: [palette.rose, palette.cyan],
-  },
-  {
-    countries: ["GB", "AU"],
-    axis: "y",
-    offset: 240,
-    colours: [palette.orange, palette.gold],
-  },
-  {
-    countries: ["NL", "SG"],
-    axis: "x",
-    offset: -90,
-    colours: [palette.cyan, palette.orange],
-  },
-  {
-    countries: ["BR", "IN"],
-    axis: "y",
-    offset: -110,
-    colours: [palette.gold, palette.rose],
+    flipX: true,
+    flipY: false,
+    reverse: false,
+    countries: [
+      ["AU", "NL"],
+      ["BR", "IN"],
+    ],
   },
 ];
+const scenes = compositions.flatMap((composition, index) => {
+  const reflect = ([x, y]) => [
+    composition.flipX ? MAP_SIZE.width - x : x,
+    composition.flipY ? MAP_SIZE.height - y : y,
+  ];
+  return (
+    composition.reverse
+      ? [layouts.upright, layouts.across]
+      : [layouts.across, layouts.upright]
+  ).map((layout, side) => {
+    const countries = composition.countries[side];
+    return {
+      countries,
+      axis: layout.axis,
+      colours: layout.colours,
+      meeting: reflect(layout.meeting),
+      entries: [
+        ...layout.entries,
+        ...(countries.length === 3 ? [layout.third] : []),
+      ].map(reflect),
+      startAt: index * SCENE_INTERVAL_SECONDS + side * PAIR_STAGGER_SECONDS,
+    };
+  });
+});
 const clamp = (n) => Math.min(1, Math.max(0, n));
-function flagClearanceTime(arm, clearance) {
+function flagClearanceTime(arms, clearance) {
   let lo = 0,
     hi = 1;
   for (let i = 0; i < 36; i++) {
     const t = (lo + hi) / 2;
-    if (
-      distance(
-        pointOnLeg(arm, approachProgress(t * APPROACH_SECONDS)),
-        MEETING_POINT,
-      ) > clearance
-    )
-      lo = t;
+    const points = arms.map((arm) =>
+      pointOnLeg(arm, approachProgress(t * APPROACH_SECONDS)),
+    );
+    const nearest = Math.min(
+      ...points.flatMap((point, index) =>
+        points.slice(index + 1).map((other) => distance(point, other)),
+      ),
+    );
+    if (nearest > clearance) lo = t;
     else hi = t;
   }
   return ((lo + hi) / 2) * APPROACH_SECONDS;
 }
 export const CONNECTION_PAIRS = scenes.map((scene, index) => {
-  const entry =
-    scene.axis === "x"
-      ? [-180, MEETING_POINT[1] + scene.offset]
-      : [MEETING_POINT[0] + scene.offset, -180];
-  const opposite = [MAP_SIZE.width - entry[0], MAP_SIZE.height - entry[1]];
-  const arms = [entry, opposite].map((start, side) => ({
-    ...connectionGeometry(start, MEETING_POINT, scene.axis),
+  const arms = scene.entries.map((start, side) => ({
+    ...connectionGeometry(
+      start,
+      scene.meeting,
+      side === 2 ? (scene.axis === "x" ? "y" : "x") : scene.axis,
+    ),
     id: `pair-${index}-${side}`,
     country: {
       code: scene.countries[side],
@@ -247,14 +280,13 @@ export const CONNECTION_PAIRS = scenes.map((scene, index) => {
     },
     colour: scene.colours[side],
   }));
-  const flagClearAt = flagClearanceTime(arms[0], COUNTRY_RADIUS + 2);
+  const flagClearAt = flagClearanceTime(arms, COUNTRY_RADIUS * 2 + 4);
   return {
     ...scene,
     id: "pair-" + index,
-    startAt: index * PAIR_INTERVAL_SECONDS,
     arms,
     flagFadeAt: Math.min(
-      flagClearanceTime(arms[0], COUNTRY_RADIUS * 1.8),
+      flagClearanceTime(arms, COUNTRY_RADIUS * 3.5),
       flagClearAt - 0.24,
     ),
     flagClearAt,
@@ -282,7 +314,7 @@ const normalized = (values) =>
 export const masterBegin = `-${SCENE_PHASE_SECONDS}s`;
 export const pairBegin = (pair) =>
   `-${round(modulo(SCENE_PHASE_SECONDS - pair.startAt, NETWORK_LOOP_SECONDS))}s`;
-export function approachAnimation() {
+export function approachAnimation(length = 1000) {
   return {
     keyTimes: normalized([
       0,
@@ -291,7 +323,9 @@ export function approachAnimation() {
       NETWORK_LOOP_SECONDS,
     ]),
     keyPoints: `0;${GLIDE_PROGRESS};1;1`,
-    widths: `0 2000;${GLIDE_PROGRESS * 1000} 2000;1000 2000;1000 2000`,
+    widths: [0, GLIDE_PROGRESS, 1, 1]
+      .map((progress) => `${progress * length} ${length * 2}`)
+      .join(";"),
     keySplines: [GLIDE_EASING.join(" "), JOIN_EASING.join(" "), "0 0 1 1"].join(
       ";",
     ),

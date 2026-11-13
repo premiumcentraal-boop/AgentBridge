@@ -3,8 +3,8 @@ import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { A } from "./context.jsx";
 import { Btn, Card, Icon, IconBtn, Pill, Wave } from "./ui.jsx";
 import { BotFace } from "./grok-ui.jsx";
-import { FocusCall, TranscriptPeek } from "./connection-hub.jsx";
-import { ActiveCallCard } from "./studio-navigation.jsx";
+import { FocusCall } from "./connection-hub.jsx";
+import { ActiveCallCard, SavedCallCard } from "./studio-navigation.jsx";
 import {
   CALL_COUNTRIES,
   CALL_LANGUAGES,
@@ -141,8 +141,17 @@ export function CaptureOptions({ value, onChange, compact = false }) {
     </div>
   );
 }
-function PlanDialog({ open, onClose, onSave, preferences, isDemo }) {
-  const id = useId();
+function PlanDialog({
+  open,
+  onClose,
+  onSave,
+  onArchive,
+  preferences,
+  initial,
+  isDemo,
+}) {
+  const id = useId(),
+    editing = Boolean(initial?.id);
   const [step, setStep] = useState(0),
     [value, setValue] = useState({
       label: "",
@@ -158,17 +167,19 @@ function PlanDialog({ open, onClose, onSave, preferences, isDemo }) {
     if (open) {
       setStep(0);
       setError("");
+      setSaving(false);
       setValue({
-        label: "",
-        country: "NL",
-        destination: "+31",
-        purpose: "",
-        permission: "ask",
-        capture: { ...preferences },
+        label: initial?.label || "",
+        country: initial?.country || "NL",
+        destination: initial?.destination || "+31",
+        purpose: initial?.purpose || "",
+        permission: initial?.permission || "ask",
+        capture: { ...DEFAULT_CAPTURE, ...preferences, ...initial?.capture },
       });
     }
-  }, [open]);
-  const set = (field, v) => setValue((s) => ({ ...s, [field]: v }));
+  }, [open, initial?.id, initial?.destination]);
+  const set = (field, next) =>
+    setValue((current) => ({ ...current, [field]: next }));
   const next = () => {
     const result = validateCallPlan(value);
     if (result.error) {
@@ -188,10 +199,10 @@ function PlanDialog({ open, onClose, onSave, preferences, isDemo }) {
     setSaving(true);
     setError("");
     try {
-      await onSave(result.value);
+      await onSave(result.value, initial?.id);
       onClose();
-    } catch (e) {
-      setError(e.message);
+    } catch (error) {
+      setError(error.message);
     } finally {
       setSaving(false);
     }
@@ -199,35 +210,40 @@ function PlanDialog({ open, onClose, onSave, preferences, isDemo }) {
   return (
     <Dialog
       isOpen={open}
-      onOpenChange={(v) => !v && onClose()}
+      onOpenChange={(value) => !value && onClose()}
       width={640}
-      className="tools-dialog"
-      aria-label="New call"
+      maxHeight="calc(100dvh - 32px)"
+      className="tools-dialog call-plan-editor"
+      aria-label={editing ? "Edit call plan" : "New call"}
     >
       <DialogHeader
         className="tools-dialog-heading"
-        title="New call"
-        onClose={onClose}
+        title={editing ? "Call details" : "New call"}
+        onOpenChange={onClose}
       />
       <form onSubmit={save} className="tools-dialog-body">
-        <div className="plan-steps">
-          <span className={step === 0 ? "selected" : ""}>01 · Destination</span>
-          <i />
-          <span className={step === 1 ? "selected" : ""}>
-            02 · Your choices
-          </span>
-        </div>
-        {step === 0 ? (
+        {!editing && (
+          <div className="plan-steps">
+            <span className={step === 0 ? "selected" : ""}>
+              01 · Destination
+            </span>
+            <i />
+            <span className={step === 1 ? "selected" : ""}>
+              02 · Call options
+            </span>
+          </div>
+        )}
+        {(step === 0 || editing) && (
           <>
             <label htmlFor={id + "-label"}>
               Call name
               <input
                 id={id + "-label"}
                 value={value.label}
-                onChange={(e) => set("label", e.target.value)}
+                onChange={(event) => set("label", event.target.value)}
                 maxLength={80}
-                placeholder="Amsterdam studio viewing"
-                autoFocus
+                placeholder="London studio"
+                required
               />
             </label>
             <div className="tools-form-grid">
@@ -236,20 +252,20 @@ function PlanDialog({ open, onClose, onSave, preferences, isDemo }) {
                 <select
                   id={id + "-country"}
                   value={value.country}
-                  onChange={(e) => {
-                    const c = CALL_COUNTRIES.find(
-                      (c) => c.code === e.target.value,
+                  onChange={(event) => {
+                    const country = CALL_COUNTRIES.find(
+                      (item) => item.code === event.target.value,
                     );
-                    setValue((v) => ({
-                      ...v,
-                      country: c.code,
-                      destination: "+" + c.prefix,
+                    setValue((current) => ({
+                      ...current,
+                      country: country.code,
+                      destination: "+" + country.prefix,
                     }));
                   }}
                 >
-                  {CALL_COUNTRIES.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.name} (+{c.prefix})
+                  {CALL_COUNTRIES.map((country) => (
+                    <option key={country.code} value={country.code}>
+                      {country.name} (+{country.prefix})
                     </option>
                   ))}
                 </select>
@@ -260,9 +276,10 @@ function PlanDialog({ open, onClose, onSave, preferences, isDemo }) {
                   id={id + "-destination"}
                   type="tel"
                   value={value.destination}
-                  onChange={(e) => set("destination", e.target.value)}
+                  onChange={(event) => set("destination", event.target.value)}
                   maxLength={24}
-                  placeholder="+31 20 123 4567"
+                  placeholder="+44 20 7946 0123"
+                  required
                 />
               </label>
             </div>
@@ -271,48 +288,46 @@ function PlanDialog({ open, onClose, onSave, preferences, isDemo }) {
               <textarea
                 id={id + "-purpose"}
                 value={value.purpose}
-                onChange={(e) => set("purpose", e.target.value)}
+                onChange={(event) => set("purpose", event.target.value)}
                 maxLength={500}
                 rows={3}
-                placeholder="Ask about available viewing times and get a reference."
+                placeholder="Add a short call brief."
               />
             </label>
-            <div className="tools-note">
-              <Icon name="globe" />
-              <p>
-                Country choices prepare a destination. Route availability and a
-                verified price must be checked before dialing.
-              </p>
-            </div>
           </>
-        ) : (
+        )}
+        {(step === 1 || editing) && (
           <>
-            <div className="plan-destination">
-              <span className="participant-avatar">{value.country}</span>
-              <div>
-                <strong>{value.label}</strong>
-                <small>
-                  {countryName(value.country)} · {value.destination}
-                </small>
+            {editing ? (
+              <h3 className="dialog-section-heading">Call options</h3>
+            ) : (
+              <div className="plan-destination">
+                <span className="participant-avatar">{value.country}</span>
+                <div>
+                  <strong>{value.label}</strong>
+                  <small>
+                    {countryName(value.country)} · {value.destination}
+                  </small>
+                </div>
+                <button
+                  type="button"
+                  className="text-action"
+                  onClick={() => setStep(0)}
+                >
+                  Edit
+                </button>
               </div>
-              <button
-                type="button"
-                className="text-action"
-                onClick={() => setStep(0)}
-              >
-                Edit
-              </button>
-            </div>
+            )}
             <CaptureOptions
               value={value.capture}
-              onChange={(v) => set("capture", v)}
+              onChange={(capture) => set("capture", capture)}
             />
             <label htmlFor={id + "-permission"}>
               Recording and transcription permission
               <select
                 id={id + "-permission"}
                 value={value.permission}
-                onChange={(e) => set("permission", e.target.value)}
+                onChange={(event) => set("permission", event.target.value)}
               >
                 <option value="ask">Ask before capture starts</option>
                 <option value="confirmed">
@@ -321,10 +336,30 @@ function PlanDialog({ open, onClose, onSave, preferences, isDemo }) {
               </select>
             </label>
             <p className="tools-fine">
-              This saves a call plan. It does not approve a carrier route, place
-              a call, request a callback or start capture.
+              Saves your preferences. Recording and transcription start only
+              after permission and a verified live connection.
             </p>
           </>
+        )}
+        {editing && (
+          <button
+            type="button"
+            className="number-text-action plan-archive-action"
+            disabled={saving}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                await onArchive(initial.id);
+                onClose();
+              } catch (error) {
+                setError(error.message);
+              } finally {
+                setSaving(false);
+              }
+            }}
+          >
+            Archive call plan
+          </button>
         )}
         {error && (
           <p className="tools-error" role="alert">
@@ -332,7 +367,8 @@ function PlanDialog({ open, onClose, onSave, preferences, isDemo }) {
           </p>
         )}
         <div className="tools-dialog-actions">
-          {step === 1 && (
+          <Btn label="Cancel" end={null} onClick={onClose} />
+          {step === 1 && !editing && (
             <Btn
               label="Back"
               end={null}
@@ -340,7 +376,7 @@ function PlanDialog({ open, onClose, onSave, preferences, isDemo }) {
               type="button"
             />
           )}
-          {step === 0 ? (
+          {step === 0 && !editing ? (
             <Btn
               label="Continue to options"
               primary
@@ -350,14 +386,12 @@ function PlanDialog({ open, onClose, onSave, preferences, isDemo }) {
           ) : (
             <Btn
               label={
-                saving
-                  ? "Saving…"
-                  : isDemo
-                    ? "Save call plan"
-                    : "Save call plan"
+                saving ? "Saving…" : editing ? "Save changes" : "Save call plan"
               }
               primary
               type="submit"
+              icon="check"
+              end={null}
               disabled={saving}
             />
           )}
@@ -392,6 +426,7 @@ export function JoinDialog({ open, onClose, onJoin, preferences }) {
   };
   return (
     <Dialog
+      maxHeight="calc(100dvh - 32px)"
       isOpen={open}
       onOpenChange={(v) => !v && onClose()}
       width={560}
@@ -401,7 +436,7 @@ export function JoinDialog({ open, onClose, onJoin, preferences }) {
       <DialogHeader
         className="tools-dialog-heading"
         title="Jump in"
-        onClose={onClose}
+        onOpenChange={onClose}
       />
       <form className="tools-dialog-body" onSubmit={join}>
         <div className="join-constellation">
@@ -477,7 +512,8 @@ export function JoinDialog({ open, onClose, onJoin, preferences }) {
           </p>
         )}
         <div className="tools-dialog-actions">
-          <Btn label="Join call" primary type="submit" icon="join" />
+          <Btn label="Cancel" end={null} onClick={onClose} />
+          <Btn label="Join call" primary type="submit" icon="join" end={null} />
         </div>
       </form>
     </Dialog>
@@ -488,6 +524,7 @@ function CapturePermission({ kind, onClose, onConfirm }) {
     [agreed, setAgreed] = useState(false);
   return (
     <Dialog
+      maxHeight="calc(100dvh - 32px)"
       isOpen={Boolean(kind)}
       onOpenChange={(v) => !v && onClose()}
       width={520}
@@ -497,7 +534,7 @@ function CapturePermission({ kind, onClose, onConfirm }) {
       <DialogHeader
         className="tools-dialog-heading"
         title="Your conversation. Your choice."
-        onClose={onClose}
+        onOpenChange={onClose}
       />
       <div className="tools-dialog-body">
         <p>
@@ -931,26 +968,64 @@ export function CallExtensions({
   setJoinOpen,
   onListen,
   onRoute,
+  onStartCall,
 }) {
   const preferences = snapshot.capture_preferences || DEFAULT_CAPTURE;
   const [planOpen, setPlanOpen] = useState(false),
-    [selected, setSelected] = useState(null),
+    [editingPlan, setEditingPlan] = useState(null),
     [captureRequest, setCaptureRequest] = useState(null),
     [allLines, setAllLines] = useState(false),
     [query, setQuery] = useState(""),
     [endConfirm, setEndConfirm] = useState(false);
   useEffect(() => {
-    setSelected(null);
+    setEditingPlan(null);
     setPlanOpen(false);
   }, [page]);
   const plans = (snapshot.call_plans || []).filter(
-    (p) =>
-      p.status === "draft" &&
-      [p.label, p.destination, countryName(p.country)]
-        .join(" ")
-        .toLowerCase()
-        .includes(query.toLowerCase()),
+    (plan) => plan.status === "draft",
   );
+  const connections = (snapshot.connections || []).filter(
+    (connection) => connection.status === "saved",
+  );
+  const savedCalls = [
+    ...plans.map((plan) => ({
+      key: "plan:" + plan.id,
+      label: plan.label,
+      destination: plan.destination,
+      country: plan.country,
+      plan,
+    })),
+    ...connections
+      .filter(
+        (connection) =>
+          !plans.some((plan) => plan.destination === connection.destination),
+      )
+      .map((connection) => ({
+        key: "connection:" + connection.id,
+        label: connection.label,
+        destination: connection.destination,
+        country: connection.country,
+      })),
+  ];
+  const visibleCalls = savedCalls.filter((item) =>
+    `${item.label} ${item.destination} ${countryName(item.country)}`
+      .toLowerCase()
+      .includes(query.trim().toLowerCase()),
+  );
+  const startNew = () => {
+    setEditingPlan(null);
+    setPlanOpen(true);
+  };
+  const openSaved = (item) => {
+    setEditingPlan(
+      item.plan || {
+        label: item.label,
+        destination: item.destination,
+        country: item.country,
+      },
+    );
+    setPlanOpen(true);
+  };
   const join = (v) => {
     onListen(v);
   };
@@ -976,15 +1051,11 @@ export function CallExtensions({
     <>
       {page === "calls" ? (
         <>
-          <Head eyebrow="INTERNATIONAL CALLING" title="Calls" description="">
-            <Btn
-              label="New call"
-              icon="plus"
-              primary
-              onClick={() => setPlanOpen(true)}
-            />
+          <Head title="Calls">
+            <Btn label="New call" icon="plus" primary onClick={startNew} />
           </Head>
-          <div className="hub-call-grid">
+          <section className="calls-live-section" aria-label="Live calls">
+            <h2>Live now</h2>
             <FocusCall
               call={call}
               isDemo={isDemo}
@@ -993,78 +1064,70 @@ export function CallExtensions({
               onRoute={onRoute}
               onRestart={onRestart}
             />
-            <TranscriptPeek call={call} isDemo={isDemo} navTo={navTo} />
-          </div>
-          <div className="tools-list-heading">
-            <div>
-              <span className="eyebrow">YOUR PREPARATION</span>
+          </section>
+          <section className="saved-calls-section" aria-label="Saved calls">
+            <div className="saved-calls-heading">
               <h2>
-                Call plans <small>{plans.length}</small>
+                Saved calls <small>{savedCalls.length}</small>
               </h2>
+              <label className="saved-calls-search">
+                <Icon name="search" size={18} />
+                <input
+                  type="search"
+                  aria-label="Search saved calls"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search names, countries or numbers"
+                />
+              </label>
             </div>
-            <label className="search-field">
-              <Icon name="search" />
-              <input
-                type="search"
-                aria-label="Search call plans"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Find a call plan"
-              />
-            </label>
-          </div>
-          {plans.length ? (
-            <div className="call-plan-list">
-              {plans.map((plan) => (
-                <Card key={plan.id} className="call-plan-row" padding={0}>
-                  <span className="participant-avatar">{plan.country}</span>
-                  <div>
-                    <strong>{plan.label}</strong>
-                    <small>
-                      {countryName(plan.country)} · {plan.destination}
-                    </small>
-                    <div className="plan-tags">
-                      <span>
-                        {plan.capture.recording
-                          ? "Recording requested"
-                          : "Recording off"}
-                      </span>
-                      <span>
-                        {plan.capture.transcription
-                          ? "Transcript requested"
-                          : "Transcript off"}
-                      </span>
-                    </div>
-                  </div>
-                  <Pill>Plan saved</Pill>
-                  <Btn
-                    label="Review plan"
-                    end="diagonal"
-                    onClick={() => setSelected(plan)}
+            {visibleCalls.length ? (
+              <div className="saved-call-list call-plan-list">
+                {visibleCalls.map((item) => (
+                  <SavedCallCard
+                    key={item.key}
+                    label={item.label}
+                    destination={item.destination}
+                    country={countryName(item.country)}
+                    isPlan={Boolean(item.plan)}
+                    onStart={
+                      onStartCall &&
+                      connections.some(
+                        (connection) =>
+                          connection.destination === item.destination,
+                      )
+                        ? () =>
+                            onStartCall(
+                              connections.find(
+                                (connection) =>
+                                  connection.destination === item.destination,
+                              ),
+                            )
+                        : undefined
+                    }
+                    current={
+                      call.active && call.destination === item.destination
+                    }
+                    anotherCall={
+                      call.active && call.destination !== item.destination
+                    }
+                    onOpen={() => openSaved(item)}
                   />
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="tools-empty-card">
-              <Icon name="globe" size={28} />
-              <h3>
-                {query
-                  ? "No matching call plans."
-                  : "A destination is a good beginning."}
-              </h3>
-              <p>
-                {query
-                  ? "Try a different name or number."
-                  : "Save an international call plan. Capture is optional, and nothing is dialed automatically."}
-              </p>
-              <Btn
-                label="Create a call plan"
-                onClick={() => setPlanOpen(true)}
-                end="plus"
-              />
-            </div>
-          )}
+                ))}
+              </div>
+            ) : (
+              <div className="tools-empty-card">
+                <Icon name="calls" size={28} />
+                <h3>{query ? "No matching calls" : "No saved calls"}</h3>
+                <p>
+                  {query
+                    ? "Try another name, country or number."
+                    : "Create a call or add a connection to keep it here."}
+                </p>
+                <Btn label="New call" onClick={startNew} icon="plus" />
+              </div>
+            )}
+          </section>
         </>
       ) : page === "memory" ? (
         <>
@@ -1301,6 +1364,7 @@ export function CallExtensions({
         </>
       )}
       <Dialog
+        maxHeight="calc(100dvh - 32px)"
         isOpen={endConfirm}
         onOpenChange={setEndConfirm}
         width={420}
@@ -1310,7 +1374,7 @@ export function CallExtensions({
         <DialogHeader
           className="tools-dialog-heading"
           title="End this call?"
-          onClose={() => setEndConfirm(false)}
+          onOpenChange={() => setEndConfirm(false)}
         />
         <div className="tools-dialog-body">
           <p>Ends the call for everyone.</p>
@@ -1336,6 +1400,8 @@ export function CallExtensions({
         open={planOpen}
         onClose={() => setPlanOpen(false)}
         onSave={onSavePlan}
+        onArchive={onArchivePlan}
+        initial={editingPlan}
         preferences={preferences}
         isDemo={isDemo}
       />
@@ -1353,94 +1419,6 @@ export function CallExtensions({
           onConfirm={confirm}
         />
       )}
-      <Dialog
-        isOpen={Boolean(selected)}
-        onOpenChange={(v) => !v && setSelected(null)}
-        width={560}
-        className="tools-dialog"
-        aria-label="Review international call plan"
-      >
-        <DialogHeader
-          className="tools-dialog-heading"
-          title={selected?.label || "Call plan"}
-          onClose={() => setSelected(null)}
-        />
-        {selected && (
-          <div className="tools-dialog-body">
-            <Pill>Saved plan · No call placed</Pill>
-            <h3>{countryName(selected.country)}</h3>
-            <p>{selected.destination}</p>
-            <p>{selected.purpose || "No call brief added."}</p>
-            <dl className="plan-review">
-              <div>
-                <dt>Recording</dt>
-                <dd>
-                  {selected.capture.recording
-                    ? "Requested after permission"
-                    : "Off"}
-                </dd>
-              </div>
-              <div>
-                <dt>Transcription</dt>
-                <dd>
-                  {selected.capture.transcription
-                    ? "Requested after permission"
-                    : "Off"}
-                </dd>
-              </div>
-              <div>
-                <dt>Permission</dt>
-                <dd>
-                  {selected.permission === "ask"
-                    ? "Ask before capture"
-                    : "Operator marked confirmed"}
-                </dd>
-              </div>
-              <div>
-                <dt>When you join</dt>
-                <dd>
-                  {selected.capture.join_method === "browser"
-                    ? "Browser"
-                    : "Phone callback"}
-                </dd>
-              </div>
-              <div>
-                <dt>Route and price</dt>
-                <dd>Verification required before dialing</dd>
-              </div>
-            </dl>
-            <div className="tools-note">
-              <Icon name="connection" />
-              <p>
-                Saved plans do not activate live calling. Connect an authorized
-                carrier and conference backend to place, capture or join a real
-                call.
-              </p>
-            </div>
-            <div className="tools-dialog-actions">
-              <Btn
-                label="Archive call plan"
-                end={null}
-                onClick={async () => {
-                  try {
-                    await onArchivePlan(selected.id);
-                    setSelected(null);
-                  } catch (e) {
-                    notify(e.message);
-                  }
-                }}
-              />
-              <A
-                to={isDemo ? navTo("call") : navTo("connection")}
-                className="text-action"
-              >
-                {isDemo ? "Explore the sample call" : "Review connection"}
-                <Icon name="arrow" size={14} />
-              </A>
-            </div>
-          </div>
-        )}
-      </Dialog>
     </>
   );
 }

@@ -278,3 +278,50 @@ Line drawing and flag movement share the same two-stage native SVG timeline.
 The phone, pulse and check share the contact time. Tests verify accelerating
 end velocity, velocity continuity at the glide transition and the absence of
 any call icon during every approach across two complete loops.
+
+## 2026-11-13: overlapping journeys and dispersed call connections
+
+The marketing animation restores the broad overlapping transit composition
+inspired by the earlier Humu and Travel Lines references. Thirty staggered
+journeys share a 60-second score. Four or five approach at once, crossing the
+canvas from opposite horizontal and vertical edges. Straight runs alternate
+with single rounded elbows; pink, orange, cyan and yellow stay bold and flat.
+
+Each journey has its own meeting coordinates, spread across the canvas instead
+of collecting in one central hub. Four occasional three-country arrivals join
+at their shared point, with a small three-participant badge and a three-way call
+label. Every arm of a journey arrives simultaneously; flags fade before their
+discs overlap. Only that contact triggers its phone pulse, check and confirmation.
+The final movement retains the continuous glide-to-acceleration easing.
+
+Newer journeys paint above older lines, flags and confirmations, with a thin
+background stroke separating crossings. Carry-over copies preserve that order
+at the minute seam. Native line drawing uses each actual path length, sharing
+the flag's motion timing without a per-frame JavaScript loop. Reduced-motion
+still, pause/play and off-screen suspension remain available.
+
+Geometry checks cover simultaneous two- and three-country arrival, dispersed
+joins, visible route crossings, attached flag heads, contact-only call states,
+continuous end acceleration and paint order over two loops. Sampled SVG frames
+were inspected in both themes. Live browser playback remains unverified because
+the supported managed browser helper is unavailable in this environment.
+
+## 2026-11-13: calmer, aligned route compositions
+
+The follow-up reduces simultaneous approaches to two, with 12 journeys per
+minute. Four fixed connection positions replace the jittered meeting points.
+Two complementary route shapes share aligned lanes and the same 96-unit corner
+radius; reflections and alternating departure order provide variety. Bands and
+country discs are slightly smaller, leaving more negative space. Two occasional
+three-country joins remain.
+
+Departures are spaced to keep visible flags from different journeys apart.
+Crossings occur briefly as an earlier journey fades, rather than filling most
+of the loop. New paths leave clear space around call confirmations, whose phone
+marks and labels are also smaller. Flags still travel on their own line heads,
+the final approach accelerates, and the call only appears after contact.
+
+Checks cover the two-journey limit, consistent station/corner geometry, spacing
+between travelling flags, clearance around call confirmations, and occasional
+crossings. Sampled SVG frames were reviewed in both themes; native browser
+playback remains unverified because the managed browser helper is unavailable.

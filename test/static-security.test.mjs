@@ -58,3 +58,7 @@ test('example Worker config ships with routing off and no secrets',async()=>{
   for(const secret of ['SIGNALWIRE_SIGNING_KEY"','SIGNALWIRE_API_TOKEN"','OWNER_APPROVAL_TOKEN_SHA256"','TWILIO_AUTH_TOKEN"'])
     assert.ok(!text.includes('"'+secret+':'),secret);
 });
+
+test('signup and sign-in have same-origin account access and stay out of framing and indexing',async()=>{
+ for(const page of ['signup/index.html','signin/index.html']){const html=await readFile(join(root,'dist',page),'utf8');assert.match(html,/connect-src 'self'/);assert.match(html,/name="robots" content="noindex,nofollow"/);}
+});
