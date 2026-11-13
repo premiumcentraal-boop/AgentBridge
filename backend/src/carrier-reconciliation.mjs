@@ -64,7 +64,22 @@ async function reconcile(row,env,fetchImpl){
   }catch{return failed('CARRIER_LOOKUP_UNAVAILABLE');}
   if(!isObj(inbound)||!isObj(listing)||!Array.isArray(listing.data))
     return failed('INCOMPLETE_CARRIER_LOGS');
-  if(isObj(listing.links)&&listing.links.next)return failed('PAGINATED_CARRIER_LOGS');
+  if(!isObj(listing.links)||typeof listing.links.self!=='string'||!listing.links.self||
+     typeof listing.links.first!=='string'||!listing.links.first)
+    return failed('INCOMPLETE_CARRIER_PAGINATION');
+  if(listing.links.next!==null&&listing.links.next!==undefined)
+    return failed('PAGINATED_CARRIER_LOGS');
+  // A full page without a next cursor cannot prove the provider did not truncate
+  // the response at its advertised page_size. Never unlock from that ambiguity.
+  if(listing.data.length>=1000)return failed('INCOMPLETE_CARRIER_PAGINATION');
+  // Never infer a complete carrier ledger from malformed entries or repeated
+  // segment identifiers: either could conceal another billable outbound leg.
+  const ids=new Set();
+  for(const entry of listing.data){
+    if(!isObj(entry)||typeof entry.id!=='string'||!entry.id||ids.has(entry.id))
+      return failed('AMBIGUOUS_CARRIER_LOG_ENTRIES');
+    ids.add(entry.id);
+  }
   if(inbound.id!==row.provider_segment_id)return failed('INBOUND_LOG_MISMATCH');
   if(inbound.direction!=='inbound'||inbound.to!==env.US_BRIDGE_DID)
     return failed('INBOUND_LOG_MISMATCH');
@@ -75,8 +90,9 @@ async function reconcile(row,env,fetchImpl){
   // Multiple children might be additional billable legs: manual review required.
   if(children.length!==1)return failed('UNVERIFIED_OUTBOUND_LEGS');
   const child=children[0];
-  if(typeof child.id!=='string'||!child.id||child.id===inbound.id||
-     !OUTBOUND_DIRECTIONS.has(child.direction)||child.to!==row.destination)
+  if(!UUID.test(child.id||'')||child.id===inbound.id||
+     !OUTBOUND_DIRECTIONS.has(child.direction)||child.from!==env.US_BRIDGE_DID||
+     child.to!==row.destination)
     return failed('OUTBOUND_LOG_MISMATCH');
   if(!OUTBOUND_TERMINAL.has(child.status))return failed('OUTBOUND_CARRIER_NOT_TERMINAL');
   if(!safeMoney(child.charge))return failed('OUTBOUND_CHARGE_UNKNOWN');

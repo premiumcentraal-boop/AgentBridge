@@ -539,3 +539,35 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Exact-head Actions run 43269796633 failed 1/168 tests: the original PIN flow fixture deliberately changed the inbound caller number but the helper-generated PIN callback used the default caller. New strict carrier-identity binding correctly rejected that callback, so the expected second PIN attempt did not occur (1 vs 2 at line 82).
 - Corrected the ordinary successful-flow fixture to use the same caller on both signed callbacks. The dedicated identity-drift regression still asserts mismatched caller/segment hang up before consuming attempts or creating legs.
 - This is a test-only correction; no routing flags, provider configuration, paid calls or deployment changes. Recheck exact-head CI; SignalWire segment semantics and real D1 behavior remain unverified.
+
+## 2026-11-12 — SignalWire Voice Logs outbound identity verification (draft PR, unmerged)
+- Review of `fetchCarrierReconciliation()` found that the reconciler accepted a terminal outbound child log with the expected parent/destination and charges even when the outbound `from` number was absent or different from the configured bridge DID, and accepted arbitrary nonempty child IDs. This could falsely treat unrelated or malformed provider evidence as sufficient to release a connecting reservation.
+- Require the child Voice Log `from` to equal the configured US bridge DID and its segment `id` to be a UUID. Add offline negative regressions for wrong/missing origin and malformed segment ID while retaining documented successful carrier-log fixtures.
+- This is a conservative fail-closed change: a provider using a different legitimate outbound caller ID will now remain locked pending manual review. Provider-specific real log semantics, Cloudflare D1 reconciliation, carrier approval and actual prices remain unverified. No routing flags, calls, purchases, payments, merges or deployments changed. Exact-head CI and independent review required.
+
+
+## 2026-11-12 — PR #42 exact-head CI regression follow-up (unmerged)
+- GitHub Actions Quality gate run 43300486040 on c9ecf435 failed 1 of 178 Node tests: `backend/test/owner-force-unlock.test.mjs` expected successful read-only carrier reconciliation (HTTP 200) but its synthetic outbound child Voice Log omitted `from`; the stricter identity guard correctly returned a locked 409. The secret-scan job passed.
+- Updated only that successful owner-reconciliation test fixture to include `from:DID`, matching the same configured bridge number required by the reconciler. Existing negative cases for absent/mismatched outbound origin remain unchanged, preserving fail-closed behavior.
+- Source routing logic, paid-routing flags and manual unlock policy are unchanged. Re-run exact-head CI before claiming success; real SignalWire Voice Logs semantics and D1 behavior remain unverified. No calls, purchases, payments, merges or deployments.
+
+## 2026-11-12 — Fail-closed Voice Logs pagination completeness (draft PR #42)
+- Identified that absent or malformed `links` metadata was treated as a complete list, permitting a truncated carrier response with one expected child to unlock despite unknown additional billable legs.
+- Require documented nonempty `links.self` and `links.first` fields before trusting a Voice Logs list; continue denying any `links.next` pagination. Added offline missing/malformed metadata regressions and complete-link defaults for synthetic fixtures.
+- Conservative availability tradeoff: undocumented provider response shapes stay locked for owner investigation. Exact-head CI and real SignalWire response validation required. No calls, routing activation, provider resources, merges or deployment.
+
+
+## 2026-11-13 — Full-page Voice Logs truncation guard (draft PR #42, unmerged)
+- A Voice Logs list containing exactly 1,000 entries (the requested `page_size`) could previously pass reconciliation if the provider omitted `links.next`, despite uncertainty whether the response had been truncated at the page boundary. This could hide additional billable child legs and falsely release a connecting reservation.
+- The read-only reconciler now conservatively rejects `listing.data.length >= 1000` with `INCOMPLETE_CARRIER_PAGINATION`, even when the expected child is present and no continuation link exists. Added an offline boundary regression contrasting a 1,000-entry ambiguous page against a 999-entry complete page.
+- This is a narrow fail-closed improvement, **not** proof that 999-entry responses are exhaustive or that SignalWire pagination is authoritative. Bounded exhaustive pagination, provider fixtures, real carrier contract verification and independent D1 review remain pending. Exact-head CI pending at commit time; local git clone blocked by DNS. No calls, purchases, routing flags, payments, merges or deployments.
+
+## 2026-11-13 — Ambiguous Voice Logs ledger entries (draft PR #42, unmerged)
+- Found that the reconciler silently ignored malformed non-object entries and did not reject repeated Voice Log IDs. A seemingly valid single child alongside such entries could be treated as complete provider evidence despite ambiguity about additional billable legs.
+- Require every returned list entry to be an object with a nonempty unique ID before unlocking; reject malformed or duplicate records with `AMBIGUOUS_CARRIER_LOG_ENTRIES`. Added negative regression cases for null, scalar, missing ID and duplicate segment IDs, plus a distinct unrelated-entry success case.
+- This is an offline fail-closed defense; real SignalWire pagination/identity semantics and D1 reconciliation remain unverified. Exact-head CI pending. No paid routing, calls, purchases, secrets, merges or deployments.
+
+## 2026-11-13 — Reject malformed falsey Voice Logs continuation cursors (draft PR #42)
+- Tightened fail-closed pagination validation: only absent or explicit null `links.next` is terminal; false, zero and object cursors no longer bypass the pagination guard.
+- Added offline regression inputs for these malformed cursor shapes. A non-null cursor remains untrusted and never triggers a follow-up fetch or unlock.
+- Previous exact-head `f432ae2` Quality gate #43359731037 passed before this change. New commits require exact-head CI. Real SignalWire response semantics and D1 validation remain manual release gates; no calls, routing activation, deployment or merges.

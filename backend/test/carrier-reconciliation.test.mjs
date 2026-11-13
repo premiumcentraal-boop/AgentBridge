@@ -13,8 +13,10 @@ const row={provider_segment_id:SEG,provider_call_id:CALL,created_at:1800000000,
 const env={US_BRIDGE_DID:DID,SIGNALWIRE_SPACE:'example-space',
   SIGNALWIRE_PROJECT_ID:PROJECT,SIGNALWIRE_VOICE_API_TOKEN:SECRET};
 const inbound={id:SEG,status:'completed',direction:'inbound',to:DID,charge:0.01};
-const child={id:CHILD,parent_id:SEG,direction:'outbound',to:DEST,status:'completed',charge:0.02};
-function provider(inRow=inbound,children=[child],links={}){
+const child={id:CHILD,parent_id:SEG,direction:'outbound',from:DID,to:DEST,status:'completed',charge:0.02};
+const COMPLETE_LINKS={self:'https://example-space.signalwire.com/api/voice/logs?page_size=1000',
+  first:'https://example-space.signalwire.com/api/voice/logs?page_size=1000'};
+function provider(inRow=inbound,children=[child],links=COMPLETE_LINKS){
   const calls=[];
   const fetchImpl=async(url,options)=>{
     calls.push({url,options});
@@ -55,9 +57,15 @@ test('fail closed on stale, mismatched, multiple or paginated voice logs',async(
     provider({...inbound,status:'completed',to:'+12025550144'}),
     provider(inbound,[{...child,status:'ringing'}]),
     provider(inbound,[{...child,to:'+12125550155'}]),
+    provider(inbound,[{...child,from:'+13125550111'}]),
+    provider(inbound,[{...child,from:null}]),
+    provider(inbound,[{...child,id:'not-a-uuid'}]),
     provider(inbound,[]),
     provider(inbound,[child,{...child,id:'68313c74-b321-4c08-a3ea-7123449130ab'}]),
-    provider(inbound,[child],{next:'opaque-page-token'}),
+    provider(inbound,[child],{...COMPLETE_LINKS,next:'opaque-page-token'}),
+    provider(inbound,[child],{...COMPLETE_LINKS,next:0}),
+    provider(inbound,[child],{...COMPLETE_LINKS,next:false}),
+    provider(inbound,[child],{...COMPLETE_LINKS,next:{}}),
     provider({...inbound,charge:'1.00'}),
     provider(inbound,[{...child,charge:99}])
   ];
@@ -65,6 +73,36 @@ test('fail closed on stale, mismatched, multiple or paginated voice logs',async(
     const r=await fetchCarrierReconciliation(row,env,p.fetchImpl);
     assert.equal(r.ok,false,'unexpected unlock from mismatched carrier logs: '+JSON.stringify(r));
   }
+});
+test('missing or malformed pagination metadata cannot prove exhaustive child legs',async()=>{
+  for(const links of [null,{}, {next:null}, {self:'x'}, {first:'x'},
+    {self:'',first:'x'}, {self:'x',first:''}]){
+    const p=provider(inbound,[child],links);
+    const result=await fetchCarrierReconciliation(row,env,p.fetchImpl);
+    assert.equal(result.code,'INCOMPLETE_CARRIER_PAGINATION',JSON.stringify({links,result}));
+  }
+});
+test('full Voice Logs page without continuation remains locked even with expected child',async()=>{
+  const unrelated=Array.from({length:999},(_,i)=>({
+    id:'unrelated-'+i,parent_id:null,direction:'outbound',to:'+13125550100'
+  }));
+  const full=provider(inbound,[child,...unrelated],COMPLETE_LINKS);
+  const denied=await fetchCarrierReconciliation(row,env,full.fetchImpl);
+  assert.equal(denied.code,'INCOMPLETE_CARRIER_PAGINATION');
+  assert.equal(denied.ok,false);
+  // The conservative boundary must not reject an otherwise valid smaller page.
+  const smaller=provider(inbound,[child,...unrelated.slice(1)],COMPLETE_LINKS);
+  const accepted=await fetchCarrierReconciliation(row,env,smaller.fetchImpl);
+  assert.equal(accepted.ok,true,JSON.stringify(accepted));
+});
+test('malformed and duplicate carrier entries fail closed',async()=>{
+  const other={...child,id:'78313c74-b321-4c08-a3ea-7123449130ab',parent_id:null};
+  for(const entries of [[child,null],[child,7],[child,{}],[child,child],[child,other,other]]){
+    const result=await fetchCarrierReconciliation(row,env,provider(inbound,entries).fetchImpl);
+    assert.equal(result.code,'AMBIGUOUS_CARRIER_LOG_ENTRIES');
+  }
+  const valid=await fetchCarrierReconciliation(row,env,provider(inbound,[child,other]).fetchImpl);
+  assert.equal(valid.ok,true);
 });
 test('actual charges above reservation cap never unlock',async()=>{
   const p=provider({...inbound,charge:0.03},[{...child,charge:0.03}]);
@@ -122,6 +160,9 @@ test('missing or unexpected documented fields stay locked with a specific code, 
   const drop=(o,k)=>{const c={...o};delete c[k];return c;};
   const cases=[
     [provider(drop(docInbound,'status'),[docChild],docLinks),'INBOUND_CARRIER_NOT_TERMINAL'],
+    [provider(docInbound,[drop(docChild,'from')],docLinks),'OUTBOUND_LOG_MISMATCH'],
+    [provider(docInbound,[{...docChild,from:'+13125550111'}],docLinks),'OUTBOUND_LOG_MISMATCH'],
+    [provider(docInbound,[{...docChild,id:'not-a-uuid'}],docLinks),'OUTBOUND_LOG_MISMATCH'],
     [provider({...docInbound,status:'ending'},[docChild],docLinks),'INBOUND_CARRIER_NOT_TERMINAL'],
     [provider(drop(docInbound,'charge'),[docChild],docLinks),'INBOUND_CHARGE_UNKNOWN'],
     [provider(drop(docInbound,'to'),[docChild],docLinks),'INBOUND_LOG_MISMATCH'],
