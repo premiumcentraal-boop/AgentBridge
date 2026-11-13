@@ -601,3 +601,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 ## 2026-11-13 — CI correction for decimal parser regex (draft PR #49)
 - Exact-head Quality gate #43426087591 failed 11/194 Node tests: the new decimal parser regex had accidentally doubled JavaScript backslashes, causing valid numeric charges to return `RECONCILIATION_ERROR` instead of a verified cent total. The secret scan passed.
 - Corrected the regex to match decimal digits and literal decimal points using single regex escapes; no routing policy or safety gate changed. Re-run exact-head CI before claiming successful full verification.
+
+## 2026-11-13 — Inbound carrier parent-link integrity (draft PR #49)
+- Reviewed the exact-head reconciliation implementation and found that inbound detail/list comparisons did not verify `parent_id`, and a terminal inbound record could itself claim to be a child of another segment. This weakens confidence in the two-leg billing graph.
+- Require the two independent reads to agree on inbound parentage, and require the inbound segment to be a root (`parent_id` null or absent). Mismatches keep the reservation locked with existing fail-closed codes.
+- Added offline regression cases for contradictory parent IDs and non-root inbound segments. This is an intentionally conservative safety check; provider contract and legitimate edge cases remain subject to issue #50.
+- No live provider calls, routing activation, payments, merge or deployment. Exact-head CI verification required for this commit.
