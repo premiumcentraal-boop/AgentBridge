@@ -71,10 +71,10 @@ async function reconcile(row,env,fetchImpl){
     if(raw===null)return null;
     try{return JSON.parse(raw);}catch{return null;}
   };
+  const q=new URL(prefix);
   let inbound,listing;
   try{
     inbound=await get(prefix+'/'+row.provider_segment_id);
-    const q=new URL(prefix);
     q.searchParams.set('created_after',new Date((row.created_at-120)*1000).toISOString());
     q.searchParams.set('page_size','1000');
     listing=await get(q.toString(),MAX_LIST_RESPONSE);
