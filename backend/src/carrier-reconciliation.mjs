@@ -119,9 +119,12 @@ async function reconcile(row,env,fetchImpl){
   // segment identifiers: either could conceal another billable outbound leg.
   const ids=new Set();
   for(const entry of listing.data){
-    if(!isObj(entry)||typeof entry.id!=='string'||!entry.id||ids.has(entry.id))
+    if(!isObj(entry)||typeof entry.id!=='string'||!entry.id||
+       ids.has(entry.id.toLowerCase()))
       return failed('AMBIGUOUS_CARRIER_LOG_ENTRIES');
-    ids.add(entry.id);
+    // UUID identifiers are case-insensitive; mixed-case duplicates must not
+    // masquerade as distinct provider segments in the billing ledger.
+    ids.add(entry.id.toLowerCase());
   }
   // The detail endpoint and list endpoint are independent reads. If the list
   // includes the inbound segment, contradictory terminal state or charges must
