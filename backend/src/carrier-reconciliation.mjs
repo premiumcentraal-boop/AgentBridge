@@ -93,6 +93,11 @@ async function reconcile(row,env,fetchImpl){
       if(url.protocol!=='https:'||url.origin!==new URL(prefix).origin||
          url.pathname!==new URL(prefix).pathname||url.username||url.password||url.hash)
         return false;
+      // Unknown query filters/cursors can silently narrow the provider ledger.
+      // Only the exact request filters and optional first-page marker are safe.
+      for(const key of url.searchParams.keys()){
+        if(key!=='page_number'&&key!=='page_size'&&key!=='created_after')return false;
+      }
       const pages=url.searchParams.getAll('page_number');
       // A link with the right origin/path but a different query window or page
       // size cannot attest to completeness of the requested first page.
