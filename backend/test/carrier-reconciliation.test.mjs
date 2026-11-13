@@ -246,3 +246,16 @@ test('fractional-cent charges never undercount the reservation cap',async()=>{
     }
   }
 });
+
+test('rejects inbound segment with a parent carrier leg',async()=>{
+  const parent='78313c74-b321-4c08-a3ea-7123449130ab';
+  const nested={...inbound,parent_id:parent};
+  const result=await fetchCarrierReconciliation(row,env,provider(nested,[{...nested},child]).fetchImpl);
+  assert.equal(result.code,'INBOUND_LOG_MISMATCH');
+});
+test('rejects contradictory inbound parent linkage across detail and list',async()=>{
+  const root={...inbound,parent_id:null};
+  const listed={...root,parent_id:'78313c74-b321-4c08-a3ea-7123449130ab'};
+  const result=await fetchCarrierReconciliation(row,env,provider(root,[listed,child]).fetchImpl);
+  assert.equal(result.code,'CONFLICTING_INBOUND_CARRIER_LOGS');
+});
