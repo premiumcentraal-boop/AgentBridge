@@ -308,6 +308,13 @@ test('pagination metadata cannot falsely claim a complete first-page ledger',asy
     {...COMPLETE_LINKS,first:base+'?page_number=2'},
     {...COMPLETE_LINKS,self:base+'?page_number=0&page_number=1'},
     {...COMPLETE_LINKS,self:base+'?page_size=1'},
+    // A same-origin first-page URL with an extra filter/cursor is not proof
+    // of a complete ledger, even if the known filters are otherwise correct.
+    {...COMPLETE_LINKS,self:base+'?page_size=1000&status=completed'},
+    {...COMPLETE_LINKS,first:base+'?page_number=0&page_token=next'},
+    {...COMPLETE_LINKS,self:base+'?page=2'},
+    {...COMPLETE_LINKS,first:base+'?created_before=2020-01-01'},
+    {...COMPLETE_LINKS,self:base+'?page_size=1000&to=%2B12125550100'},
     {...COMPLETE_LINKS,first:base+'?page_size=1000&page_size=1000'},
     {...COMPLETE_LINKS,self:base+'?created_after=2020-01-01T00%3A00%3A00Z'},
     {...COMPLETE_LINKS,first:base+'?created_after=2020-01-01T00%3A00%3A00Z&created_after=2020-01-01T00%3A00%3A00Z'},
