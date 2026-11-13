@@ -32,6 +32,23 @@ function safeMoney(value){
   return typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=1000;
 }
 function isObj(x){return x!==null&&typeof x==='object'&&!Array.isArray(x);}
+// Exact decimal arithmetic for the finite, nonnegative provider dollar values.
+// Number.toString() gives the shortest round-trippable decimal, including exponents.
+function decimalCents(value){
+  const match=/^(\\d+)(?:\\.(\\d+))?(?:e([+-]?\\d+))?$/i.exec(String(value));
+  if(!match)throw Error('invalid carrier charge');
+  const digits=BigInt(match[1]+(match[2]||''));
+  const scale=(match[2]||'').length-Number(match[3]||0);
+  return scale>0
+    ? [digits*100n,10n**BigInt(scale)]
+    : [digits*100n*10n**BigInt(-scale),1n];
+}
+function ceilCarrierCents(a,b){
+  const [an,ad]=decimalCents(a),[bn,bd]=decimalCents(b);
+  const numerator=an*bd+bn*ad,denominator=ad*bd;
+  return Number((numerator+denominator-1n)/denominator);
+}
+
 export async function fetchCarrierReconciliation(row,env,fetchImpl=fetch){
   try{return await reconcile(row,env,fetchImpl);}
   catch{return failed('RECONCILIATION_ERROR');}
@@ -114,7 +131,10 @@ async function reconcile(row,env,fetchImpl){
     return failed('UNVERIFIED_NESTED_OUTBOUND_LEGS');
   if(!OUTBOUND_TERMINAL.has(child.status))return failed('OUTBOUND_CARRIER_NOT_TERMINAL');
   if(!safeMoney(child.charge))return failed('OUTBOUND_CHARGE_UNKNOWN');
-  const total=Math.ceil(Math.round((inbound.charge+child.charge)*1e6)/1e4);
+  // Convert each provider charge's decimal representation to an exact rational
+  // number of cents. Binary float addition or rounding to four decimal places
+  // can undercount a positive fraction of a cent at a cap boundary.
+  const total=ceilCarrierCents(inbound.charge,child.charge);
   if(total>row.max_cost_cents)return failed('ACTUAL_CHARGE_EXCEEDS_RESERVED_CAP');
   return {ok:true,inbound_segment_id:inbound.id,outbound_segment_id:child.id,
     outbound_status:child.status,actual_cost_cents:total,
