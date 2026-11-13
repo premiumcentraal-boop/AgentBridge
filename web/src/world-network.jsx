@@ -6,7 +6,6 @@ import {
   PAINT_LAYERS,
   STILL_CONNECTIONS,
   MAP_SIZE,
-  MEETING_POINT,
   BAND_WIDTH,
   COUNTRY_RADIUS,
   NETWORK_LOOP_SECONDS,
@@ -79,14 +78,14 @@ function CountryCircle({ arm, pair, prefix, still }) {
       >
         <use
           href={"#" + prefix + "-flag-" + arm.country.code}
-          x="-50"
-          y="-50"
-          width="100"
-          height="100"
+          x="-44"
+          y="-44"
+          width="88"
+          height="88"
         />
       </g>
       <circle
-        r="50"
+        r="44"
         fill="none"
         stroke="#14241b"
         strokeOpacity=".08"
@@ -103,7 +102,8 @@ function ConnectedCall({ pair, still }) {
     <g
       className="world-call-connection"
       data-countries={pair.countries.join("-")}
-      transform={`translate(${MEETING_POINT.join(" ")})`}
+      data-participant-count={pair.arms.length}
+      transform={`translate(${pair.meeting.join(" ")})`}
       opacity={still ? still.callOpacity : 0}
     >
       {!still && <Fade timeline={timeline} begin={pairBegin(pair)} />}
@@ -172,6 +172,20 @@ function ConnectedCall({ pair, still }) {
             />
           )}
         </path>
+        {pair.arms.length === 3 && (
+          <g className="world-group-call" transform="translate(-43 39)">
+            <circle r="17" fill="#e8f9ef" />
+            <text
+              textAnchor="middle"
+              y="6"
+              fill="#128051"
+              fontSize="19"
+              fontWeight="650"
+            >
+              3
+            </text>
+          </g>
+        )}
         <text
           className="world-call-label"
           textAnchor="middle"
@@ -180,7 +194,7 @@ function ConnectedCall({ pair, still }) {
           fontSize="25"
           fontWeight="500"
         >
-          Call connected
+          {pair.arms.length === 3 ? "3-way call connected" : "Call connected"}
         </text>
       </g>
     </g>
@@ -197,6 +211,8 @@ function PairScene({ layer, prefix, still }) {
       data-pair={pair.id}
       data-copy={layer.previous ? "previous" : "current"}
       data-start-at={pair.startAt}
+      data-meeting={pair.meeting.join(" ")}
+      data-participant-count={pair.arms.length}
       opacity={still ? 1 : 0}
     >
       {!still && (
@@ -217,28 +233,44 @@ function PairScene({ layer, prefix, still }) {
       >
         {!still && <Fade timeline={lineAnimation()} begin={pairBegin(pair)} />}
         {pair.arms.map((arm) => (
-          <path
+          <g
             key={arm.id}
-            d={arm.path}
-            pathLength="1000"
-            fill="none"
-            stroke={arm.colour}
-            strokeWidth={BAND_WIDTH}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeDasharray={still ? `${still.progress * 1000} 2000` : "0 2000"}
-            className="world-band"
+            strokeDasharray={
+              still
+                ? `${still.progress * arm.length} ${arm.length * 2}`
+                : `0 ${arm.length * 2}`
+            }
+            className="world-route-arm"
             data-arm={arm.id}
-            data-turns={arm.turns}
           >
             {!still && (
               <animate
                 attributeName="stroke-dasharray"
-                values={motion.widths}
+                values={approachAnimation(arm.length).widths}
                 {...timing(motion, pairBegin(pair))}
               />
             )}
-          </path>
+            <path
+              className="world-crossing-clearance"
+              d={arm.path}
+              fill="none"
+              stroke="var(--page)"
+              strokeWidth={BAND_WIDTH + 12}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              className="world-band"
+              data-arm={arm.id}
+              data-turns={arm.turns}
+              d={arm.path}
+              fill="none"
+              stroke={arm.colour}
+              strokeWidth={BAND_WIDTH}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </g>
         ))}
         {pair.arms.map((arm) => (
           <CountryCircle
@@ -264,17 +296,18 @@ const Scene = memo(function Scene({ prefix, svgRef }) {
       aria-labelledby={prefix + "-title " + prefix + "-description"}
       data-loop-seconds={NETWORK_LOOP_SECONDS}
       data-pair-count={CONNECTION_PAIRS.length}
-      data-sequence="edge-to-call"
+      data-sequence="overlapping-edge-to-call"
     >
       <title id={prefix + "-title"}>Connect agents worldwide</title>
       <desc id={prefix + "-description"}>
-        Pairs of bold coloured lines with country flags enter from opposite
-        edges and accelerate into contact at the centre. Only that contact
-        triggers a green phone pulse and an animated check mark as the country
-        lines fade. The confirmation clears before the next pair approaches. New
-        connections always appear above older ones, including when the
-        sixty-second loop repeats. This animation illustrates connection and is
-        not live call activity.
+        Several bold coloured country routes cross over and under one another,
+        arriving from opposite edges. Their flags travel with the line heads.
+        Each journey accelerates into its own meeting point across the canvas;
+        occasional three-country arrivals become three-way calls. Only contact
+        triggers that journey’s green phone pulse, check mark and confirmation
+        as its lines fade. The newest routes appear above older ones, including
+        at the sixty-second loop boundary. This is an illustration, not live
+        call activity.
       </desc>
       <defs>
         {flagDefinitions(prefix).map((flag) => (
@@ -288,7 +321,7 @@ const Scene = memo(function Scene({ prefix, svgRef }) {
           </symbol>
         ))}
         <clipPath id={prefix + "-country-disc"}>
-          <circle r="50" />
+          <circle r="44" />
         </clipPath>
         {CONNECTION_PAIRS.flatMap((pair) =>
           pair.arms.map((arm) => (
@@ -369,7 +402,7 @@ export function WorldNetwork() {
         <Scene prefix={prefix} svgRef={svgRef} />
       </div>
       <div className="world-map-footer">
-        <span>Two countries. One connection.</span>
+        <span>Many routes. One connected world.</span>
         <IconBtn
           label={
             paused ? "Play connection animation" : "Pause connection animation"

@@ -1,25 +1,26 @@
-// Paired country lines enter from opposite edges, meet, then reveal a call.
+// Overlapping country journeys share a minute-long score. Each has its own
+// meeting point; only its arriving lines can trigger its call confirmation.
 export const NETWORK_LOOP_SECONDS = 60;
 export const MAP_SIZE = { width: 1000, height: 720 };
-export const MEETING_POINT = [500, 360];
-export const BAND_WIDTH = 104;
-export const COUNTRY_RADIUS = 62;
-export const PAIR_INTERVAL_SECONDS = 5;
-export const APPROACH_SECONDS = 3.6;
-export const ACCELERATE_AT = 2.7;
+export const BAND_WIDTH = 88;
+export const COUNTRY_RADIUS = 54;
+export const PAIR_INTERVAL_SECONDS = 2;
+export const APPROACH_SECONDS = 9.6;
+export const ACCELERATE_AT = APPROACH_SECONDS * 0.75;
 export const GLIDE_PROGRESS = 0.6;
 export const GLIDE_EASING = [0.32, 0, 0.6, 0.6];
 // The initial slope matches the glide's ending velocity, then accelerates
 // into contact. There is no slowing or hesitation just before the join.
 export const JOIN_EASING = [0.3, 0.15, 0.8, 0.4];
 export const LINE_FADE_AT = APPROACH_SECONDS;
-export const LINE_CLEAR_AT = 3.88;
+export const LINE_CLEAR_AT = APPROACH_SECONDS + 0.35;
 export const CALL_REVEAL_AT = APPROACH_SECONDS;
-export const CALL_VISIBLE_AT = 3.8;
-export const CALL_SETTLE_AT = 3.98;
-export const CALL_FADE_AT = 4.28;
-export const EVENT_SECONDS = 4.72;
-export const SCENE_PHASE_SECONDS = 1.8;
+export const CALL_VISIBLE_AT = APPROACH_SECONDS + 0.22;
+export const CALL_SETTLE_AT = APPROACH_SECONDS + 0.42;
+export const CALL_FADE_AT = APPROACH_SECONDS + 1.12;
+export const EVENT_SECONDS = APPROACH_SECONDS + 1.65;
+// Open on a composed overlap, rather than waiting on an empty canvas.
+export const SCENE_PHASE_SECONDS = 7.5;
 export const COUNTRIES = {
   US: "United States",
   GB: "United Kingdom",
@@ -141,120 +142,121 @@ const palette = {
   cyan: "#25b9d6",
   gold: "#ffca2c",
 };
+// Opposite edges, alternating elbows and dispersed joins preserve the broad
+// transit-line composition. A third, perpendicular arrival is occasional.
 const scenes = [
+  { countries: ["US", "GB"], meeting: [270, 185], axis: "x", offset: 165 },
+  { countries: ["NL", "JP"], meeting: [745, 485], axis: "y", offset: -210 },
+  { countries: ["FR", "DE"], meeting: [730, 205], axis: "x", offset: 0 },
   {
-    countries: ["US", "GB"],
-    axis: "x",
-    offset: 160,
-    colours: [palette.rose, palette.cyan],
-  },
-  {
-    countries: ["NL", "JP"],
+    countries: ["SG", "AU", "IN"],
+    meeting: [260, 490],
     axis: "y",
-    offset: -240,
-    colours: [palette.orange, palette.gold],
+    offset: 175,
   },
+  { countries: ["CA", "BR"], meeting: [510, 345], axis: "x", offset: -190 },
+  { countries: ["SE", "IN"], meeting: [300, 200], axis: "y", offset: 0 },
+  { countries: ["CH", "AE"], meeting: [720, 520], axis: "x", offset: 140 },
+  { countries: ["MX", "ZA"], meeting: [765, 220], axis: "y", offset: -240 },
+  { countries: ["US", "JP"], meeting: [230, 485], axis: "x", offset: -160 },
+  { countries: ["GB", "AU", "CA"], meeting: [505, 320], axis: "y", offset: 0 },
+  { countries: ["NL", "SG"], meeting: [290, 220], axis: "x", offset: 165 },
+  { countries: ["BR", "IN"], meeting: [725, 480], axis: "y", offset: -220 },
+  { countries: ["DE", "CA"], meeting: [740, 175], axis: "x", offset: 0 },
+  { countries: ["ZA", "SE"], meeting: [265, 515], axis: "y", offset: 205 },
+  { countries: ["AE", "FR"], meeting: [500, 350], axis: "x", offset: 180 },
+  { countries: ["JP", "CH"], meeting: [310, 190], axis: "y", offset: -190 },
   {
-    countries: ["FR", "DE"],
+    countries: ["MX", "GB", "NL"],
+    meeting: [735, 500],
     axis: "x",
-    offset: 0,
-    colours: [palette.cyan, palette.orange],
+    offset: -160,
   },
+  { countries: ["SG", "US"], meeting: [700, 215], axis: "y", offset: 0 },
+  { countries: ["BR", "DE"], meeting: [245, 480], axis: "x", offset: 170 },
+  { countries: ["IN", "AE"], meeting: [500, 335], axis: "y", offset: -210 },
+  { countries: ["AU", "ZA"], meeting: [275, 205], axis: "x", offset: 0 },
+  { countries: ["CA", "MX"], meeting: [750, 505], axis: "y", offset: 195 },
   {
-    countries: ["SG", "AU"],
-    axis: "y",
-    offset: 150,
-    colours: [palette.gold, palette.rose],
-  },
-  {
-    countries: ["CA", "BR"],
+    countries: ["SE", "FR", "JP"],
+    meeting: [755, 195],
     axis: "x",
-    offset: -190,
-    colours: [palette.orange, palette.cyan],
+    offset: 155,
   },
-  {
-    countries: ["SE", "IN"],
-    axis: "y",
-    offset: 0,
-    colours: [palette.rose, palette.gold],
-  },
-  {
-    countries: ["CH", "AE"],
-    axis: "x",
-    offset: 100,
-    colours: [palette.cyan, palette.rose],
-  },
-  {
-    countries: ["MX", "ZA"],
-    axis: "y",
-    offset: -340,
-    colours: [palette.gold, palette.orange],
-  },
-  {
-    countries: ["US", "JP"],
-    axis: "x",
-    offset: 240,
-    colours: [palette.rose, palette.cyan],
-  },
-  {
-    countries: ["GB", "AU"],
-    axis: "y",
-    offset: 240,
-    colours: [palette.orange, palette.gold],
-  },
-  {
-    countries: ["NL", "SG"],
-    axis: "x",
-    offset: -90,
-    colours: [palette.cyan, palette.orange],
-  },
-  {
-    countries: ["BR", "IN"],
-    axis: "y",
-    offset: -110,
-    colours: [palette.gold, palette.rose],
-  },
+  { countries: ["CH", "NL"], meeting: [260, 510], axis: "y", offset: 0 },
+  { countries: ["US", "SG"], meeting: [505, 350], axis: "y", offset: -185 },
+  { countries: ["NL", "GB"], meeting: [285, 195], axis: "x", offset: 150 },
+  { countries: ["FR", "BR"], meeting: [740, 510], axis: "y", offset: 0 },
+  { countries: ["CA", "IN"], meeting: [730, 215], axis: "x", offset: -170 },
+  { countries: ["JP", "AE"], meeting: [260, 500], axis: "y", offset: 175 },
+  { countries: ["DE", "MX"], meeting: [500, 340], axis: "x", offset: 0 },
 ];
 const clamp = (n) => Math.min(1, Math.max(0, n));
-function flagClearanceTime(arm, clearance) {
+const insideEdge = (n, extent) => Math.max(85, Math.min(extent - 85, n));
+function flagClearanceTime(arms, clearance) {
   let lo = 0,
     hi = 1;
   for (let i = 0; i < 36; i++) {
     const t = (lo + hi) / 2;
-    if (
-      distance(
-        pointOnLeg(arm, approachProgress(t * APPROACH_SECONDS)),
-        MEETING_POINT,
-      ) > clearance
-    )
-      lo = t;
+    const points = arms.map((arm) =>
+      pointOnLeg(arm, approachProgress(t * APPROACH_SECONDS)),
+    );
+    const nearest = Math.min(
+      ...points.flatMap((point, index) =>
+        points.slice(index + 1).map((other) => distance(point, other)),
+      ),
+    );
+    if (nearest > clearance) lo = t;
     else hi = t;
   }
   return ((lo + hi) / 2) * APPROACH_SECONDS;
 }
 export const CONNECTION_PAIRS = scenes.map((scene, index) => {
-  const entry =
+  const [x, y] = scene.meeting;
+  const entries =
     scene.axis === "x"
-      ? [-180, MEETING_POINT[1] + scene.offset]
-      : [MEETING_POINT[0] + scene.offset, -180];
-  const opposite = [MAP_SIZE.width - entry[0], MAP_SIZE.height - entry[1]];
-  const arms = [entry, opposite].map((start, side) => ({
-    ...connectionGeometry(start, MEETING_POINT, scene.axis),
+      ? [
+          [-95, insideEdge(y + scene.offset, MAP_SIZE.height)],
+          [1095, insideEdge(y - scene.offset, MAP_SIZE.height)],
+        ]
+      : [
+          [insideEdge(x + scene.offset, MAP_SIZE.width), -95],
+          [insideEdge(x - scene.offset, MAP_SIZE.width), 815],
+        ];
+  if (scene.countries.length === 3)
+    entries.push(
+      scene.axis === "x"
+        ? [
+            scene.offset ? insideEdge(x + 240, MAP_SIZE.width) : x,
+            index % 2 ? -95 : 815,
+          ]
+        : [
+            index % 2 ? 1095 : -95,
+            scene.offset ? insideEdge(y - 200, MAP_SIZE.height) : y,
+          ],
+    );
+  const colours = Object.values(palette);
+  const arms = entries.map((start, side) => ({
+    ...connectionGeometry(
+      start,
+      scene.meeting,
+      side === 2 ? (scene.axis === "x" ? "y" : "x") : scene.axis,
+    ),
     id: `pair-${index}-${side}`,
     country: {
       code: scene.countries[side],
       name: COUNTRIES[scene.countries[side]],
     },
-    colour: scene.colours[side],
+    colour: colours[(index + side * 2 + (side === 2 ? 1 : 0)) % colours.length],
   }));
-  const flagClearAt = flagClearanceTime(arms[0], COUNTRY_RADIUS + 2);
+  const flagClearAt = flagClearanceTime(arms, COUNTRY_RADIUS * 2 + 4);
   return {
     ...scene,
     id: "pair-" + index,
     startAt: index * PAIR_INTERVAL_SECONDS,
     arms,
     flagFadeAt: Math.min(
-      flagClearanceTime(arms[0], COUNTRY_RADIUS * 1.8),
+      flagClearanceTime(arms, COUNTRY_RADIUS * 3.5),
       flagClearAt - 0.24,
     ),
     flagClearAt,
@@ -282,7 +284,7 @@ const normalized = (values) =>
 export const masterBegin = `-${SCENE_PHASE_SECONDS}s`;
 export const pairBegin = (pair) =>
   `-${round(modulo(SCENE_PHASE_SECONDS - pair.startAt, NETWORK_LOOP_SECONDS))}s`;
-export function approachAnimation() {
+export function approachAnimation(length = 1000) {
   return {
     keyTimes: normalized([
       0,
@@ -291,7 +293,9 @@ export function approachAnimation() {
       NETWORK_LOOP_SECONDS,
     ]),
     keyPoints: `0;${GLIDE_PROGRESS};1;1`,
-    widths: `0 2000;${GLIDE_PROGRESS * 1000} 2000;1000 2000;1000 2000`,
+    widths: [0, GLIDE_PROGRESS, 1, 1]
+      .map((progress) => `${progress * length} ${length * 2}`)
+      .join(";"),
     keySplines: [GLIDE_EASING.join(" "), JOIN_EASING.join(" "), "0 0 1 1"].join(
       ";",
     ),

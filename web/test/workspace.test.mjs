@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { JSDOM, VirtualConsole } from "jsdom";
+import { PAINT_LAYERS, STILL_CONNECTIONS } from "../src/network-data.js";
 
 // A DOM integration check, not browser/layout QA. Exercise the same bundled
 // React/Astryx application shipped in the portable review artifact.
@@ -163,19 +164,19 @@ test("working preview navigates real pages and keeps call state in the floating 
     "60",
   );
   const svg = document.querySelector(".world-network-svg");
-  assert.equal(svg.dataset.sequence, "edge-to-call");
-  assert.equal(svg.dataset.pairCount, "12");
+  assert.equal(svg.dataset.sequence, "overlapping-edge-to-call");
+  assert.equal(svg.dataset.pairCount, "30");
   const layers = document.querySelectorAll(
     ".world-moving-scene > .world-pair-layer",
   );
-  assert.equal(layers.length, 12);
+  assert.equal(layers.length, PAINT_LAYERS.length);
   assert.equal(
     document.querySelectorAll(
       '.world-moving-scene > .world-pair-layer[data-copy="current"]',
     ).length,
-    12,
+    30,
   );
-  assert.equal(document.querySelectorAll(".world-approach-path").length, 24);
+  assert.equal(document.querySelectorAll(".world-approach-path").length, 64);
   let currentLayer = false,
     previousStart = -1;
   for (const layer of layers) {
@@ -188,7 +189,11 @@ test("working preview navigates real pages and keeps call state in the floating 
     );
     assert.match(
       layer.querySelector(".world-call-label").textContent,
-      /Call connected/,
+      /(?:Call|3-way call) connected/,
+    );
+    assert.equal(
+      layer.querySelector(".world-call-connection").getAttribute("transform"),
+      `translate(${layer.dataset.meeting})`,
     );
     if (layer.dataset.copy === "current") {
       currentLayer = true;
@@ -207,7 +212,9 @@ test("working preview navigates real pages and keeps call state in the floating 
       ),
     );
     const travellers = layer.querySelectorAll(".world-country-traveller");
-    assert.equal(travellers.length, 2);
+    assert.equal(travellers.length, Number(layer.dataset.participantCount));
+    if (travellers.length === 3)
+      assert.ok(layer.querySelector(".world-group-call"));
     for (const traveller of travellers) {
       const motion = traveller.querySelector("animateMotion");
       const path = document.querySelector(
@@ -218,7 +225,13 @@ test("working preview navigates real pages and keeps call state in the floating 
         `.world-band[data-arm="${traveller.dataset.arm}"]`,
       );
       assert.equal(path.getAttribute("d"), band.getAttribute("d"));
-      const drawing = band.querySelector("animate");
+      const drawing = band.parentElement.querySelector("animate");
+      assert.equal(
+        band.parentElement
+          .querySelector(".world-crossing-clearance")
+          .getAttribute("d"),
+        path.getAttribute("d"),
+      );
       for (const attribute of ["begin", "dur", "keyTimes", "keySplines"])
         assert.equal(
           motion.getAttribute(attribute),
@@ -234,7 +247,7 @@ test("working preview navigates real pages and keeps call state in the floating 
     0,
   );
   for (const band of document.querySelectorAll(".world-band")) {
-    assert.ok(Number(band.getAttribute("stroke-width")) >= 100);
+    assert.ok(Number(band.getAttribute("stroke-width")) >= 80);
     assert.ok(Number(band.dataset.turns) <= 1);
   }
   named(document, "Pause connection animation").click();
@@ -505,7 +518,7 @@ test("the portable review links to signup without pretending to create a server 
   );
 });
 
-test("reduced motion starts with approaching flags and no early call, with an explicit play override", async (t) => {
+test("reduced motion shows the same composed crossings and only completed calls, with a play override", async (t) => {
   const { dom, document, errors, requests } = setup(
     "file:///AgentBridge-Working-Website.html",
     true,
@@ -520,17 +533,29 @@ test("reduced motion starts with approaching flags and no early call, with an ex
     "false",
   );
   const still = document.querySelector(".world-static-scene");
-  assert.equal(still.querySelectorAll(".world-pair-static").length, 1);
+  assert.equal(
+    still.querySelectorAll(".world-pair-static").length,
+    STILL_CONNECTIONS.length,
+  );
   assert.equal(
     still.querySelectorAll("animate, animateMotion, animateTransform").length,
     0,
   );
-  assert.equal(
-    still.querySelectorAll('.world-call-connection[opacity="1"]').length,
-    0,
+  for (const layer of still.querySelectorAll(".world-pair-static")) {
+    const state = STILL_CONNECTIONS.find(
+      (state) => state.pair.id === layer.dataset.pair,
+    );
+    assert.equal(
+      Number(
+        layer.querySelector(".world-call-connection").getAttribute("opacity"),
+      ),
+      state.callOpacity,
+    );
+    if (state.progress < 1) assert.equal(state.callOpacity, 0);
+  }
+  assert.ok(
+    still.querySelectorAll('.world-country-lines[opacity="1"]').length >= 2,
   );
-  assert.ok(still.querySelector('.world-call-connection[opacity="0"]'));
-  assert.ok(still.querySelector('.world-country-lines[opacity="1"]'));
   named(document, "Play connection animation").click();
   await pause(30);
   assert.equal(
