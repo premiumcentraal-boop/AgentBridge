@@ -133,6 +133,7 @@ async function reconcile(row,env,fetchImpl){
   if(!listedInbound)return failed('INBOUND_MISSING_FROM_CARRIER_LIST');
   if(
     listedInbound.direction!==inbound.direction||
+    listedInbound.from!==inbound.from||
     listedInbound.to!==inbound.to||
     listedInbound.status!==inbound.status||
     listedInbound.charge!==inbound.charge||
