@@ -108,6 +108,10 @@ async function reconcile(row,env,fetchImpl){
      !OUTBOUND_DIRECTIONS.has(child.direction)||child.from!==env.US_BRIDGE_DID||
      child.to!==row.destination)
     return failed('OUTBOUND_LOG_MISMATCH');
+  // A terminal direct B-leg does not prove there were no downstream billable
+  // legs. Any listed child of that B-leg makes the two-leg ledger incomplete.
+  if(listing.data.some(entry=>entry.parent_id===child.id))
+    return failed('UNVERIFIED_NESTED_OUTBOUND_LEGS');
   if(!OUTBOUND_TERMINAL.has(child.status))return failed('OUTBOUND_CARRIER_NOT_TERMINAL');
   if(!safeMoney(child.charge))return failed('OUTBOUND_CHARGE_UNKNOWN');
   const total=Math.ceil(Math.round((inbound.charge+child.charge)*1e6)/1e4);
