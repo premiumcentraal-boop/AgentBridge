@@ -9,7 +9,7 @@ import {
   PAINT_LAYERS,
   APPROACH_SECONDS,
   ACCELERATE_AT,
-  PAIR_INTERVAL_SECONDS,
+  SCENE_INTERVAL_SECONDS,
   approachProgress,
   LINE_CLEAR_AT,
   CALL_REVEAL_AT,
@@ -54,20 +54,25 @@ function validTimeline(animation, key = "values") {
 }
 test("overlapping two- and three-country journeys join at dispersed points from opposite edges", () => {
   assert.equal(NETWORK_LOOP_SECONDS, 60);
-  assert.equal(CONNECTION_PAIRS.length, 30);
+  assert.equal(CONNECTION_PAIRS.length, 12);
   assert.equal(new Set(CONNECTION_PAIRS.flatMap((p) => p.countries)).size, 16);
-  assert.ok(BAND_WIDTH >= 80);
+  assert.ok(BAND_WIDTH >= 70 && BAND_WIDTH <= 80);
   assert.equal(
     CONNECTION_PAIRS.filter((pair) => pair.arms.length === 3).length,
-    4,
+    2,
   );
   assert.equal(
     new Set(CONNECTION_PAIRS.map((pair) => pair.meeting.join())).size,
-    30,
+    4,
   );
-  assert.ok(Math.min(...CONNECTION_PAIRS.map((pair) => pair.meeting[0])) < 300);
-  assert.ok(Math.max(...CONNECTION_PAIRS.map((pair) => pair.meeting[0])) > 700);
-  assert.ok(Math.min(...CONNECTION_PAIRS.map((pair) => pair.meeting[1])) < 220);
+  assert.deepEqual(
+    [...new Set(CONNECTION_PAIRS.map((pair) => pair.meeting[0]))].sort(),
+    [300, 700],
+  );
+  assert.deepEqual(
+    [...new Set(CONNECTION_PAIRS.map((pair) => pair.meeting[1]))].sort(),
+    [220, 500],
+  );
   assert.ok(Math.max(...CONNECTION_PAIRS.map((pair) => pair.meeting[1])) > 480);
   assert.ok(
     CONNECTION_PAIRS.some((p) => p.axis === "x") &&
@@ -77,8 +82,15 @@ test("overlapping two- and three-country journeys join at dispersed points from 
     const [a, b] = pair.arms;
     assert.ok(outside(a.start) && outside(b.start));
     if (pair.axis === "x")
-      assert.ok(a.start[0] < 0 && b.start[0] > MAP_SIZE.width);
-    else assert.ok(a.start[1] < 0 && b.start[1] > MAP_SIZE.height);
+      assert.ok(
+        Math.min(a.start[0], b.start[0]) < 0 &&
+          Math.max(a.start[0], b.start[0]) > MAP_SIZE.width,
+      );
+    else
+      assert.ok(
+        Math.min(a.start[1], b.start[1]) < 0 &&
+          Math.max(a.start[1], b.start[1]) > MAP_SIZE.height,
+      );
     assert.equal(pair.countries.length, pair.arms.length);
     assert.equal(
       new Set(pair.arms.map((arm) => arm.colour)).size,
@@ -89,6 +101,7 @@ test("overlapping two- and three-country journeys join at dispersed points from 
       assert.ok(outside(arm.start));
       assert.ok(arm.turns === 0 || arm.turns === 1);
       assert.equal((arm.path.match(/A/g) || []).length, arm.turns);
+      if (arm.turns) near(arm.radius, 96);
     }
     const arrival = pairStateAt(pair, APPROACH_SECONDS);
     for (const point of arrival.points) samePoint(point, pair.meeting);
@@ -96,7 +109,7 @@ test("overlapping two- and three-country journeys join at dispersed points from 
 });
 test("each journey triggers its own call only after every country arrives, with no colliding flag discs", () => {
   assert.equal(CALL_REVEAL_AT, APPROACH_SECONDS);
-  assert.ok(EVENT_SECONDS > PAIR_INTERVAL_SECONDS * 3);
+  assert.ok(APPROACH_SECONDS < SCENE_INTERVAL_SECONDS);
   for (const pair of CONNECTION_PAIRS) {
     assert.ok(
       pair.flagFadeAt < pair.flagClearAt && pair.flagClearAt < APPROACH_SECONDS,
@@ -197,9 +210,9 @@ test("the final approach accelerates smoothly into contact without an intermedia
     velocity(APPROACH_SECONDS - 0.01) > velocity(ACCELERATE_AT + 0.01) * 4,
   );
 });
-test("several journeys overlap continuously and newest routes stay on top through the minute seam", () => {
-  assert.equal(PAINT_LAYERS.filter((layer) => !layer.previous).length, 30);
-  assert.equal(PAINT_LAYERS.filter((layer) => layer.previous).length, 5);
+test("at most two journeys approach together and newest routes stay on top through the minute seam", () => {
+  assert.equal(PAINT_LAYERS.filter((layer) => !layer.previous).length, 12);
+  assert.equal(PAINT_LAYERS.filter((layer) => layer.previous).length, 2);
   for (const layer of PAINT_LAYERS) validTimeline(layerAnimation(layer));
   const samples = [];
   for (let seconds = 0; seconds < 120; seconds += 0.125) samples.push(seconds);
@@ -211,8 +224,10 @@ test("several journeys overlap continuously and newest routes stay on top throug
   );
   for (const seconds of samples) {
     const painted = networkStateAt(seconds);
-    assert.ok(painted.length >= 5 && painted.length <= 6);
-    assert.ok(painted.filter((state) => state.progress < 1).length >= 4);
+    assert.ok(painted.length >= 1 && painted.length <= 3);
+    const approaching = painted.filter((state) => state.progress < 1);
+    assert.ok(approaching.length >= 1 && approaching.length <= 2);
+    assert.ok(approaching.flatMap((state) => state.pair.arms).length <= 5);
     assert.equal(
       new Set(painted.map((state) => state.pair.id)).size,
       painted.length,
@@ -259,7 +274,7 @@ test("several journeys overlap continuously and newest routes stay on top throug
   }
 });
 
-test("different active journeys visibly cross before reaching their separate connection points", () => {
+test("occasional crossings leave breathing room between flags and keep call confirmations clear", () => {
   const cross = (a, b) => a[0] * b[1] - a[1] * b[0];
   const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
   const inside = ([x, y]) =>
@@ -280,17 +295,49 @@ test("different active journeys visibly cross before reaching their separate con
     );
   }
   let crossingMoments = 0;
+  const crossingPairs = new Set();
   for (let time = 0; time < NETWORK_LOOP_SECONDS; time += 0.5) {
-    const routes = networkStateAt(time).filter(
-      (state) => state.lineOpacity > 0.9,
-    );
+    const states = networkStateAt(time);
+    const routes = states.filter((state) => state.lineOpacity > 0.1);
+    const flags = states
+      .filter((state) => state.flagOpacity > 0.1)
+      .flatMap((state) =>
+        state.points
+          .filter(
+            ([x, y]) =>
+              x > COUNTRY_RADIUS &&
+              x < MAP_SIZE.width - COUNTRY_RADIUS &&
+              y > COUNTRY_RADIUS &&
+              y < MAP_SIZE.height - COUNTRY_RADIUS,
+          )
+          .map((point) => ({ point, pair: state.pair.id })),
+      );
+    for (let i = 0; i < flags.length; i++)
+      for (let j = i + 1; j < flags.length; j++)
+        if (flags[i].pair !== flags[j].pair)
+          assert.ok(
+            Math.hypot(...sub(flags[i].point, flags[j].point)) >=
+              COUNTRY_RADIUS * 2 + 30,
+            "different journeys need room between their country flags",
+          );
+    for (const call of states.filter((state) => state.callOpacity > 0.1))
+      for (const newer of routes.filter(
+        (state) => state.launchedAt > call.launchedAt,
+      ))
+        for (const arm of newer.pair.arms)
+          for (let n = 0; n <= 50; n++)
+            assert.ok(
+              Math.hypot(
+                ...sub(
+                  pointOnLeg(arm, (newer.progress * n) / 50),
+                  call.pair.meeting,
+                ),
+              ) > 130,
+              "new routes must leave a clear area around an existing call confirmation",
+            );
     let crosses = false;
     for (let i = 0; i < routes.length; i++)
       for (let j = i + 1; j < routes.length; j++) {
-        assert.ok(
-          Math.hypot(...sub(routes[i].pair.meeting, routes[j].pair.meeting)) >
-            180,
-        );
         for (const a of routes[i].pair.arms)
           for (const b of routes[j].pair.arms) {
             const aa = Array.from({ length: 25 }, (_, n) =>
@@ -304,11 +351,18 @@ test("different active journeys visibly cross before reaching their separate con
                 crosses ||= intersect(aa[m - 1], aa[m], bb[n - 1], bb[n]);
           }
       }
-    if (crosses) crossingMoments++;
+    if (crosses) {
+      crossingMoments++;
+      routes.forEach((state) => crossingPairs.add(state.pair.id));
+    }
   }
   assert.ok(
-    crossingMoments >= 60,
-    "the visible score must have overlapping subway crossings for at least half its duration; found " +
+    crossingMoments > 0 && crossingMoments < 60,
+    "crossings should be occasional, with clear intervals between them; found " +
       crossingMoments,
+  );
+  assert.ok(
+    crossingPairs.size >= 4,
+    "crossings need variation across more than one composition",
   );
 });
