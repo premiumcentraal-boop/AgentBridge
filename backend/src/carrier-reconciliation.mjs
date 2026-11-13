@@ -84,7 +84,11 @@ async function reconcile(row,env,fetchImpl){
   // includes the inbound segment, contradictory terminal state or charges must
   // never be treated as verified evidence for releasing a reservation.
   const listedInbound=listing.data.find(x=>x.id===inbound.id);
-  if(listedInbound&&(
+  // The list is the only evidence used to count all legs. If it omits the
+  // inbound segment, we cannot establish that the query covers this call.
+  // Never release a lock using a list that might be incomplete or stale.
+  if(!listedInbound)return failed('INBOUND_MISSING_FROM_CARRIER_LIST');
+  if(
     listedInbound.direction!==inbound.direction||
     listedInbound.to!==inbound.to||
     listedInbound.status!==inbound.status||
