@@ -48,6 +48,12 @@ design/**
 !server/
 server/**
 !server/*.mjs
+!server/accounts/
+!server/accounts/*.mjs
+!server/accounts/migrations/
+!server/accounts/migrations/*.sql
+!server/accounts/migrations/meta/
+!server/accounts/migrations/meta/*.json
 !backend/
 backend/**
 !backend/src/

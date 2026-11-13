@@ -14,13 +14,16 @@
     "build:site": "node scripts/build-site.mjs",
     "setup:web": "npm --prefix web ci --ignore-scripts --no-audit --no-fund",
     "test:web": "node --test web/test/*.test.mjs",
-    "ci": "npm run check && npm test && npm run build:site && npm run test:site && npm run test:web",
+    "ci": "npm run check && npm test && npm run build:site && npm run build:account-demo && npm run test:site && npm run test:web && npm run test:account-demo",
     "test:site": "node --test test/site-audit.test.mjs",
     "signalwire:check": "node scripts/check-signalwire.mjs",
     "test:local-mcp": "npm --prefix local-mcp test",
     "setup:local-mcp": "bash scripts/setup-local-mcp.sh",
     "mcp:local": "node local-mcp/server.mjs",
-    "d1:preflight": "node scripts/d1-migration-preflight.mjs"
+    "d1:preflight": "node scripts/d1-migration-preflight.mjs",
+    "build:account-demo": "node scripts/build-account-demo.mjs",
+    "test:account-demo": "node --test test/account-worker.test.mjs",
+    "demo:invite": "node scripts/demo-invite.mjs"
   },
   "engines": {
     "node": ">=22.13"

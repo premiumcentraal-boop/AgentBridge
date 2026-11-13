@@ -483,50 +483,21 @@ test("public navigation keeps a native top-level studio link across the CSP boun
   );
 });
 
-test("homepage leads to a separate signup page while its form preview keeps personal details off the network", async (t) => {
-  const { dom, window, document, errors, requests } = setup(
-    "https://agentbridge-preview.test/",
-  );
+test("the portable review links to signup without pretending to create a server account", async (t) => {
+  const { dom, document, errors, requests } = setup();
   t.after(() => dom.window.close());
   await waitFor(() => document.title.includes("connect agents worldwide"));
-  const primary = document.querySelector(
-    '.gb-hero-actions a[href="#/signup/"]',
-  );
-  assert.ok(primary, "Primary action must open signup");
-  assert.match(primary.textContent, /Sign me up/);
-  assert.ok(document.querySelector('.gb-hero-actions a[href="#/studio/"]'));
-  assert.equal(document.querySelectorAll(".landing-conversation li").length, 3);
+  const signup = document.querySelector('.gb-hero-actions a[href="#/signup/"]');
+  assert.ok(signup);
+  signup.click();
+  await waitFor(() => document.querySelector(".account-offline"));
+  assert.equal(document.querySelector(".signup-card form"), null);
   assert.match(
-    document.querySelector(".landing-conversation").textContent,
-    /Your agent.*London studio.*Your agent/s,
+    document.querySelector(".account-offline").textContent,
+    /Accounts need the online demo/,
   );
-  primary.click();
-  await waitFor(() => document.querySelector(".signup-card form"));
-  const form = document.querySelector(".signup-card form");
-  const name = form.querySelector('input[name="name"]');
-  const email = form.querySelector('input[name="email"]');
-  assert.equal(form.checkValidity(), false);
-  change(window, name, "Review user");
-  change(window, email, "review@example.test");
-  await waitFor(() => form.checkValidity());
-  form.dispatchEvent(
-    new window.Event("submit", { bubbles: true, cancelable: true }),
-  );
-  await waitFor(() => document.querySelector(".signup-confirmation"));
-  assert.match(
-    document.querySelector(".signup-confirmation").textContent,
-    /No request has been sent and no account has been created/,
-  );
-  named(document, "Edit signup details").click();
-  await waitFor(() =>
-    document.querySelector('.signup-card input[name="email"]'),
-  );
-  assert.equal(
-    document.querySelector('.signup-card input[name="email"]').value,
-    "review@example.test",
-  );
-  assert.equal(window.location.hash, "#/signup/");
-  assert.equal(window.localStorage.length, 0);
+  named(document, "Open the sample studio", "a").click();
+  await waitFor(() => document.querySelector(".workspace-shell"));
   assert.deepEqual(requests, []);
   assert.deepEqual(
     errors.map((error) => error.message),

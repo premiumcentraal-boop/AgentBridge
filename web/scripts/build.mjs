@@ -49,7 +49,7 @@ const revision = createHash("sha256")
 const defaultCsp =
   "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; upgrade-insecure-requests";
 for (const path of WEB_PAGES) {
-  const privatePage = path.startsWith("/studio/") || path.startsWith("/app/");
+  const privatePage = path.startsWith("/studio/") || path.startsWith("/app/") || ["/signup/", "/signin/"].includes(path);
   const policy = privatePage
     ? defaultCsp.replace("connect-src 'none'", "connect-src 'self'")
     : defaultCsp;

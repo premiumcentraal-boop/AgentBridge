@@ -1,8 +1,12 @@
 import http from 'node:http';
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
-import { resolve, extname, sep } from 'node:path';
+import { resolve, extname, sep, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Readable } from 'node:stream';
+import { createAccountService } from './accounts/service.mjs';
+import { openAccountDatabase } from './accounts/node-database.mjs';
+import { nodePasswords } from './accounts/passwords.mjs';
 import { openStore } from './store.mjs';
 import { inspectIntegration } from './integration.mjs';
 import { validateCallPlan, validateCapture } from '../shared/call-plans.mjs';
@@ -14,7 +18,10 @@ const PUBLIC_CSP = STUDIO_CSP.replace("connect-src 'self'", "connect-src 'none'"
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml' };
 const digest = text => createHash('sha256').update(text).digest();
 
-export function createApp({ env = process.env, store = openStore(env.STUDIO_DATABASE_PATH || resolve(ROOT, 'data/studio.sqlite')), fetcher } = {}) {
+export function createApp({ env = process.env, store = openStore(env.STUDIO_DATABASE_PATH || resolve(ROOT, 'data/studio.sqlite')), fetcher, accountDatabase } = {}) {
+  const customerMode = Boolean(env.DEMO_TESTER_EMAIL);
+  const customerDatabase = customerMode ? accountDatabase || openAccountDatabase(env.STUDIO_ACCOUNT_DATABASE_PATH || resolve(dirname(env.STUDIO_DATABASE_PATH || resolve(ROOT,'data/studio.sqlite')), 'accounts.sqlite')) : null;
+  const customerAPI = createAccountService({ database: customerDatabase, testerEmail: env.DEMO_TESTER_EMAIL, publicOrigin: env.STUDIO_PUBLIC_ORIGIN || 'https://agentbridge.victor.ceo', passwords: nodePasswords, signupInviteHash: env.DEMO_SIGNUP_INVITE_SHA256 });
   const sessions = new Map(), attempts = new Map();
   const keyHash = /^[a-f0-9]{64}$/.test(env.STUDIO_ACCESS_KEY_SHA256 || '') ? Buffer.from(env.STUDIO_ACCESS_KEY_SHA256, 'hex') : null;
   const isDev = env.STUDIO_DEV_MODE === 'true' && env.NODE_ENV !== 'production';
@@ -29,7 +36,7 @@ export function createApp({ env = process.env, store = openStore(env.STUDIO_DATA
   const server = http.createServer(async (req, res) => {
     let pathname;
     try { pathname = decodeURIComponent(new URL(req.url, 'http://local').pathname); } catch { res.writeHead(400).end(); return; }
-    const privatePath = pathname.startsWith('/api/') || pathname.startsWith('/studio') || pathname.startsWith('/app');
+    const privatePath = pathname.startsWith('/api/') || pathname.startsWith('/studio') || pathname.startsWith('/app') || /^\/(signup|signin)(?:\/|$)/.test(pathname);
     res.setHeader('Content-Security-Policy', privatePath ? STUDIO_CSP : PUBLIC_CSP);
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -55,7 +62,15 @@ export function createApp({ env = process.env, store = openStore(env.STUDIO_DATA
       return data;
     }
     try {
-      if (pathname === '/health' && ['GET','HEAD'].includes(req.method)) return json(200, { service: 'agentbridge-studio', mode: 'prototype', routing_enabled: false });
+      if (pathname.startsWith('/api/auth/') || (customerMode && pathname.startsWith('/api/studio/'))) {
+        const headers = new Headers();
+        for (const [key, value] of Object.entries(req.headers)) if (value !== undefined) headers.set(key, Array.isArray(value) ? value.join(', ') : value);
+        const request = new Request(new URL(req.url, env.STUDIO_PUBLIC_ORIGIN || 'https://agentbridge.victor.ceo'), { method: req.method, headers, ...(!['GET','HEAD'].includes(req.method) ? { body: Readable.toWeb(req), duplex: 'half' } : {}) });
+        const response = await customerAPI.fetch(request, { clientAddress: req.socket.remoteAddress });
+        if (response) { res.writeHead(response.status, Object.fromEntries(response.headers)); res.end(Buffer.from(await response.arrayBuffer())); return; }
+      }
+      if (customerMode && (pathname.startsWith('/studio/demo/') || pathname === '/app' || pathname === '/app/')) { res.writeHead(302,{Location:pathname.startsWith('/studio/demo/')?'/studio/'+pathname.slice('/studio/demo/'.length):'/studio/'});res.end();return; }
+      if (pathname === '/health' && ['GET','HEAD'].includes(req.method)) return json(200, { service: 'agentbridge-studio', mode: customerMode ? 'account-demo' : 'prototype', accounts_configured: customerMode, routing_enabled: false });
       if (pathname.startsWith('/api/')) {
         // Prevent cross-origin session changes, including CSRF via a framed product.
         if (!['GET','HEAD'].includes(req.method)) {
@@ -150,7 +165,8 @@ export function createApp({ env = process.env, store = openStore(env.STUDIO_DATA
       try {
         const info = await stat(file);
         if (!info.isFile()) { res.writeHead(302, { Location: pathname + '/' }); res.end(); return; }
-        const content = await readFile(file), type = MIME[extname(file)] || 'application/octet-stream';
+        let content = await readFile(file); const type = MIME[extname(file)] || 'application/octet-stream';
+        if(customerMode && extname(file)==='.html') content=Buffer.from(content.toString('utf8').replace('id="foundation-root"','id="foundation-root" data-account-demo="true"'));
         res.writeHead(200, { 'Content-Type': type, 'Content-Length': content.length, 'Cache-Control': privatePath ? 'no-store' : extname(file) === '.html' ? 'no-cache' : 'public, max-age=3600' });
         res.end(req.method === 'HEAD' ? undefined : content);
       } catch { return fail(404, 'NOT_FOUND', 'Page not found.'); }
@@ -161,7 +177,7 @@ export function createApp({ env = process.env, store = openStore(env.STUDIO_DATA
   });
   server.requestTimeout = 15_000;
   server.headersTimeout = 10_000;
-  server.on('close', () => store.close());
+  server.on('close', () => { store.close(); customerDatabase?.close?.(); });
   return server;
 }
 

@@ -43,6 +43,7 @@ export function NumberWorkspace({
   call,
   navTo,
   onOpenCall,
+  onStartCall,
   onBuy,
   onAdd,
   onEdit,
@@ -403,6 +404,21 @@ export function NumberWorkspace({
                   </div>
                 </div>
                 <div className="connection-record-actions">
+                  {onStartCall && (
+                    <Btn
+                      label={
+                        call.active && call.destination === link.destination
+                          ? "Open call"
+                          : "Start demo call"
+                      }
+                      icon="calls"
+                      end={null}
+                      disabled={
+                        call.active && call.destination !== link.destination
+                      }
+                      onClick={() => onStartCall(link)}
+                    />
+                  )}
                   <Btn
                     label="Open connection"
                     aria-label={"Edit " + link.label}
