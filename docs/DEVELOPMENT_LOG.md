@@ -566,3 +566,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Found that the reconciler silently ignored malformed non-object entries and did not reject repeated Voice Log IDs. A seemingly valid single child alongside such entries could be treated as complete provider evidence despite ambiguity about additional billable legs.
 - Require every returned list entry to be an object with a nonempty unique ID before unlocking; reject malformed or duplicate records with `AMBIGUOUS_CARRIER_LOG_ENTRIES`. Added negative regression cases for null, scalar, missing ID and duplicate segment IDs, plus a distinct unrelated-entry success case.
 - This is an offline fail-closed defense; real SignalWire pagination/identity semantics and D1 reconciliation remain unverified. Exact-head CI pending. No paid routing, calls, purchases, secrets, merges or deployments.
+
+## 2026-11-13 — Reject malformed falsey Voice Logs continuation cursors (draft PR #42)
+- Tightened fail-closed pagination validation: only absent or explicit null `links.next` is terminal; false, zero and object cursors no longer bypass the pagination guard.
+- Added offline regression inputs for these malformed cursor shapes. A non-null cursor remains untrusted and never triggers a follow-up fetch or unlock.
+- Previous exact-head `f432ae2` Quality gate #43359731037 passed before this change. New commits require exact-head CI. Real SignalWire response semantics and D1 validation remain manual release gates; no calls, routing activation, deployment or merges.
