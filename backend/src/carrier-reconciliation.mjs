@@ -129,7 +129,8 @@ async function reconcile(row,env,fetchImpl){
   // The detail endpoint and list endpoint are independent reads. If the list
   // includes the inbound segment, contradictory terminal state or charges must
   // never be treated as verified evidence for releasing a reservation.
-  const listedInbound=listing.data.find(x=>x.id===inbound.id);
+  const sameUuid=(a,b)=>typeof a==='string'&&typeof b==='string'&&UUID.test(a)&&UUID.test(b)&&a.toLowerCase()===b.toLowerCase();
+  const listedInbound=listing.data.find(x=>sameUuid(x.id,inbound.id));
   // The list is the only evidence used to count all legs. If it omits the
   // inbound segment, we cannot establish that the query covers this call.
   // Never release a lock using a list that might be incomplete or stale.
@@ -142,7 +143,7 @@ async function reconcile(row,env,fetchImpl){
     listedInbound.charge!==inbound.charge||
     listedInbound.parent_id!==inbound.parent_id)
     return failed('CONFLICTING_INBOUND_CARRIER_LOGS');
-  if(inbound.id!==row.provider_segment_id)return failed('INBOUND_LOG_MISMATCH');
+  if(!sameUuid(inbound.id,row.provider_segment_id))return failed('INBOUND_LOG_MISMATCH');
   // A root inbound segment must not itself be a child of another billable leg.
   if(inbound.parent_id!==null&&inbound.parent_id!==undefined)
     return failed('INBOUND_LOG_MISMATCH');
@@ -150,18 +151,18 @@ async function reconcile(row,env,fetchImpl){
     return failed('INBOUND_LOG_MISMATCH');
   if(!INBOUND_TERMINAL.has(inbound.status))return failed('INBOUND_CARRIER_NOT_TERMINAL');
   if(!safeMoney(inbound.charge))return failed('INBOUND_CHARGE_UNKNOWN');
-  const children=listing.data.filter(x=>isObj(x)&&x.parent_id===inbound.id);
+  const children=listing.data.filter(x=>isObj(x)&&sameUuid(x.parent_id,inbound.id));
   // Exactly one outbound leg is expected in this one-destination trial.
   // Multiple children might be additional billable legs: manual review required.
   if(children.length!==1)return failed('UNVERIFIED_OUTBOUND_LEGS');
   const child=children[0];
-  if(!UUID.test(child.id||'')||child.id===inbound.id||
+  if(!UUID.test(child.id||'')||sameUuid(child.id,inbound.id)||
      !OUTBOUND_DIRECTIONS.has(child.direction)||child.from!==env.US_BRIDGE_DID||
      child.to!==row.destination)
     return failed('OUTBOUND_LOG_MISMATCH');
   // A terminal direct B-leg does not prove there were no downstream billable
   // legs. Any listed child of that B-leg makes the two-leg ledger incomplete.
-  if(listing.data.some(entry=>entry.parent_id===child.id))
+  if(listing.data.some(entry=>sameUuid(entry.parent_id,child.id)))
     return failed('UNVERIFIED_NESTED_OUTBOUND_LEGS');
   if(!OUTBOUND_TERMINAL.has(child.status))return failed('OUTBOUND_CARRIER_NOT_TERMINAL');
   if(!safeMoney(child.charge))return failed('OUTBOUND_CHARGE_UNKNOWN');
