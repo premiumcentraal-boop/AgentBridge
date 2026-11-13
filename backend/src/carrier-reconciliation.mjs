@@ -92,7 +92,7 @@ async function reconcile(row,env,fetchImpl){
     listedInbound.direction!==inbound.direction||
     listedInbound.to!==inbound.to||
     listedInbound.status!==inbound.status||
-    listedInbound.charge!==inbound.charge))
+    listedInbound.charge!==inbound.charge)
     return failed('CONFLICTING_INBOUND_CARRIER_LOGS');
   if(inbound.id!==row.provider_segment_id)return failed('INBOUND_LOG_MISMATCH');
   if(inbound.direction!=='inbound'||inbound.to!==env.US_BRIDGE_DID)
