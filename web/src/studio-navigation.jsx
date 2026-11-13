@@ -149,7 +149,16 @@ export function ActiveCallCard({
   );
 }
 
-export function SavedCallCard({ label, destination, country, onOpen, isPlan }) {
+export function SavedCallCard({
+  label,
+  destination,
+  country,
+  onOpen,
+  isPlan,
+  onStart,
+  current,
+  anotherCall,
+}) {
   return (
     <article className="active-call-card saved-call-card">
       <button
@@ -169,6 +178,17 @@ export function SavedCallCard({ label, destination, country, onOpen, isPlan }) {
         <StateTag state="idle">Ready</StateTag>
         <DirectionArrow />
       </button>
+      {onStart && (
+        <div className="saved-call-actions">
+          <Btn
+            label={current ? "Open call" : "Start demo call"}
+            icon="calls"
+            end={null}
+            disabled={anotherCall}
+            onClick={onStart}
+          />
+        </div>
+      )}
     </article>
   );
 }

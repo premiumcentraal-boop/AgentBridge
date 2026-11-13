@@ -968,6 +968,7 @@ export function CallExtensions({
   setJoinOpen,
   onListen,
   onRoute,
+  onStartCall,
 }) {
   const preferences = snapshot.capture_preferences || DEFAULT_CAPTURE;
   const [planOpen, setPlanOpen] = useState(false),
@@ -1089,6 +1090,27 @@ export function CallExtensions({
                     destination={item.destination}
                     country={countryName(item.country)}
                     isPlan={Boolean(item.plan)}
+                    onStart={
+                      onStartCall &&
+                      connections.some(
+                        (connection) =>
+                          connection.destination === item.destination,
+                      )
+                        ? () =>
+                            onStartCall(
+                              connections.find(
+                                (connection) =>
+                                  connection.destination === item.destination,
+                              ),
+                            )
+                        : undefined
+                    }
+                    current={
+                      call.active && call.destination === item.destination
+                    }
+                    anotherCall={
+                      call.active && call.destination !== item.destination
+                    }
                     onOpen={() => openSaved(item)}
                   />
                 ))}

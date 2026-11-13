@@ -13,6 +13,7 @@ export const NAV = [
 export const PUBLIC_PAGES = [
   "/",
   "/signup/",
+  "/signin/",
   "/features/",
   "/international-calling/",
   "/call-memory/",
@@ -153,7 +154,8 @@ export const SAMPLE_EVENTS = [
   },
 ];
 export const TITLES = {
-  "/signup/": "Get started with AgentBridge | Early access",
+  "/signup/": "Create account | AgentBridge",
+  "/signin/": "Sign in | AgentBridge",
   "/features/": "Calling, memory & joining | AgentBridge",
   "/international-calling/": "International calling | AgentBridge",
   "/call-memory/": "Optional recording & transcription | AgentBridge",

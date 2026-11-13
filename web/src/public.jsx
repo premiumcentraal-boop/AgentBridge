@@ -74,6 +74,7 @@ export function PublicShell({ children, mode, setMode }) {
             label="Sign me up"
             primary
             href={href("/signup/")}
+            target="_top"
             onClick={(e) => link(e, "/signup/")}
             end="arrow"
           />

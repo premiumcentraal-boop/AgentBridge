@@ -13,17 +13,23 @@ import {
 import { Studio } from "./studio.jsx";
 import { Features, FeaturePage } from "./features.jsx";
 import { TITLES } from "./data.js";
-import { Signup } from "./signup.jsx";
+import { Signup, Signin } from "./signup.jsx";
 function Pages() {
-  const { path, offline } = useRoute();
+  const { path, offline, accountDemo } = useRoute();
   const [mode, setMode] = useState("dark");
   const studio = path.startsWith("/studio/") || path.startsWith("/app/");
+  const localDemo =
+    offline ||
+    (!accountDemo &&
+      (path.startsWith("/studio/demo/") || path.startsWith("/app/")));
   useEffect(() => {
     if (!studio) document.title = TITLES[path] || TITLES["/"];
   }, [path]);
   const page =
     path === "/signup/" ? (
       <Signup />
+    ) : path === "/signin/" ? (
+      <Signin />
     ) : path === "/features/" ? (
       <Features />
     ) : path === "/international-calling/" ? (
@@ -48,18 +54,10 @@ function Pages() {
       <div className="foundation-app" data-mode={mode}>
         {studio ? (
           <Studio
-            key={String(
-              offline ||
-                path.startsWith("/studio/demo/") ||
-                path.startsWith("/app/"),
-            )}
+            key={String(localDemo)}
             mode={mode}
             setMode={setMode}
-            isDemo={
-              offline ||
-              path.startsWith("/studio/demo/") ||
-              path.startsWith("/app/")
-            }
+            isDemo={localDemo}
           />
         ) : (
           <PublicShell mode={mode} setMode={setMode}>
@@ -70,9 +68,19 @@ function Pages() {
     </Theme>
   );
 }
-export default function App({ initialPath = "/", base = "", offline = false }) {
+export default function App({
+  initialPath = "/",
+  base = "",
+  offline = false,
+  accountDemo = false,
+}) {
   return (
-    <RouterProvider initialPath={initialPath} base={base} offline={offline}>
+    <RouterProvider
+      initialPath={initialPath}
+      base={base}
+      offline={offline}
+      accountDemo={accountDemo}
+    >
       <Pages />
     </RouterProvider>
   );

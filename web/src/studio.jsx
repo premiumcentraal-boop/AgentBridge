@@ -24,6 +24,11 @@ import {
   Loop,
 } from "./ui.jsx";
 import { CallExtensions, SAMPLE_CALL } from "./call-tools.jsx";
+import {
+  AccountAuth,
+  AccountProfile,
+  accountRequest,
+} from "./account-auth.jsx";
 import { StudioSearch } from "./studio-search.jsx";
 import { DEFAULT_CAPTURE, CALL_COUNTRIES } from "../../shared/call-plans.mjs";
 import { BotFace } from "./grok-ui.jsx";
@@ -59,7 +64,7 @@ const uuid = () =>
     ? crypto.randomUUID()
     : `draft-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 export function Studio({ mode, setMode, isDemo }) {
-  const { path, base, offline, href, link, go } = useRoute();
+  const { path, base, offline, accountDemo, href, link, go } = useRoute();
   const studioBase = isDemo ? "/studio/demo/" : "/studio/";
   const current =
     path.replace(/^\/(?:studio\/(?:demo\/)?|app\/)/, "").split("/")[0] ||
@@ -94,6 +99,11 @@ export function Studio({ mode, setMode, isDemo }) {
     configured: true,
     loading: !isDemo,
   });
+  const sandbox = isDemo || session.sandbox === true;
+  const persistentDemo = !isDemo && session.sandbox === true;
+  const accountHydrated = useRef(false),
+    callSynced = useRef(""),
+    callQueue = useRef(Promise.resolve());
   const [compact, setCompact] = useState(false),
     [mobileOpen, setMobileOpen] = useState(false),
     [joinOpen, setJoinOpen] = useState(false);
@@ -141,8 +151,10 @@ export function Studio({ mode, setMode, isDemo }) {
     const data = await response.json();
     if (!response.ok) {
       if (response.status === 401 && endpoint !== "session") {
+        accountHydrated.current = false;
         setSession((s) => ({ ...s, authenticated: false }));
         setSnapshot(empty());
+        setCall({ active: false, elapsed: 0 });
         setNumberEditorOpen(false);
         setNumberConnection(null);
         setBuyNumberOpen(false);
@@ -164,7 +176,14 @@ export function Studio({ mode, setMode, isDemo }) {
         setSession({ ...data, loading: false });
         if (data.authenticated) {
           const state = await api("overview");
-          if (alive) setSnapshot(state);
+          if (alive) {
+            setSnapshot(state);
+            if (data.sandbox && state.demo_call) {
+              callSynced.current = JSON.stringify(callPayload(state.demo_call));
+              setCall(state.demo_call);
+              accountHydrated.current = true;
+            }
+          }
         }
       } catch {
         if (alive)
@@ -181,19 +200,66 @@ export function Studio({ mode, setMode, isDemo }) {
     };
   }, [isDemo]);
   useEffect(() => {
-    if (!isDemo || !call.active) return;
+    if (!sandbox || !call.active) return;
     const timer = setInterval(
       () => setCall((c) => ({ ...c, elapsed: c.elapsed + 1 })),
       1000,
     );
     return () => clearInterval(timer);
-  }, [isDemo, call.active]);
+  }, [sandbox, call.active]);
   useEffect(
     () => () => {
       clearTimeout(toastTimer.current);
     },
     [],
   );
+  function callPayload(current) {
+    return {
+      call_id: current.id,
+      active: Boolean(current.active),
+      muted: Boolean(current.muted),
+      joined: Boolean(current.joined),
+      userMuted: current.userMuted !== false,
+      recording: Boolean(current.recording),
+      transcription: Boolean(current.transcription),
+      recordingPaused: Boolean(current.recordingPaused),
+      capturePermission: Boolean(current.capturePermission),
+      ...(current.proposedRoute?.id
+        ? { proposed_route_id: current.proposedRoute.id }
+        : {}),
+    };
+  }
+  const callSignature = JSON.stringify(callPayload(call));
+  useEffect(() => {
+    if (
+      !persistentDemo ||
+      !accountHydrated.current ||
+      !call.id ||
+      callSignature === callSynced.current
+    )
+      return;
+    const payload = callPayload(call);
+    callQueue.current = callQueue.current
+      .catch(() => {})
+      .then(async () => {
+        if (!accountHydrated.current) return;
+        await api("demo-call", {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+        callSynced.current = JSON.stringify(payload);
+      })
+      .catch(async (error) => {
+        notify(error.message);
+        try {
+          const state = await api("overview");
+          if (state.demo_call) {
+            callSynced.current = JSON.stringify(callPayload(state.demo_call));
+            setCall(state.demo_call);
+          }
+        } catch {}
+      });
+  }, [persistentDemo, callSignature]);
   const previousPath = useRef(path);
   useEffect(() => {
     if (previousPath.current !== path) {
@@ -315,6 +381,23 @@ export function Studio({ mode, setMode, isDemo }) {
     }
   };
   const saveNumberOrder = async (value, candidate) => {
+    if (persistentDemo) {
+      const result = await api("number-orders", {
+        method: "POST",
+        body: JSON.stringify({ ...value, candidate }),
+      });
+      await refresh();
+      setNumberConnection(
+        numberConnection && !numberConnection.id
+          ? { ...numberConnection, routing_number_id: result.number.id }
+          : null,
+      );
+      setSelectedRoutingNumber(result.number.id);
+      setNumberEditorOpen(true);
+      notify("Demo number added. Connect a destination.");
+      return;
+    }
+
     if (isDemo) {
       if (!candidate || !/^\+1[2-9][0-9]{2}55501[0-9]{2}$/.test(candidate))
         throw new Error("Choose an available number.");
@@ -531,22 +614,25 @@ export function Studio({ mode, setMode, isDemo }) {
   };
   const signout = async () => {
     try {
-      await api("session", { method: "DELETE" });
+      await callQueue.current.catch(() => {});
+      accountHydrated.current = false;
+      const result = await api("session", { method: "DELETE" });
       setSession((s) => ({ ...s, authenticated: false }));
       setSnapshot(empty());
       setCall({ active: false, muted: false, elapsed: 0 });
       setNumberEditorOpen(false);
       setNumberConnection(null);
       setBuyNumberOpen(false);
+      if (result.redirect) location.assign(result.redirect);
     } catch (error) {
       notify(error.message);
     }
   };
   const toggleMute = () => {
-    if (isDemo) setCall((c) => ({ ...c, muted: !c.muted }));
+    if (sandbox) setCall((c) => ({ ...c, muted: !c.muted }));
   };
   const endCall = () => {
-    if (isDemo) {
+    if (sandbox) {
       samplePlayAttempt.current++;
       if (call.listening) sampleAudioRef.current?.pause();
       setCall((c) => ({
@@ -572,7 +658,7 @@ export function Studio({ mode, setMode, isDemo }) {
     setRoutingOpen(true);
   };
   const listenToSample = async (options = {}) => {
-    if (!isDemo || !call.active || !sampleAudioRef.current) return;
+    if (!sandbox || !call.active || !sampleAudioRef.current) return;
     const audio = sampleAudioRef.current;
     const attempt = ++samplePlayAttempt.current;
     try {
@@ -617,7 +703,54 @@ export function Studio({ mode, setMode, isDemo }) {
     },
     [],
   );
+  const startDemoCall = async (connection) => {
+    if (call.active) {
+      if (call.destination === connection.destination) returnCall();
+      else notify("End the current demo call first.");
+      return;
+    }
+    try {
+      if (persistentDemo) {
+        const result = await api("demo-call/start", {
+          method: "POST",
+          body: JSON.stringify({ connection_id: connection.id }),
+        });
+        callSynced.current = JSON.stringify(callPayload(result.call));
+        setCall(result.call);
+        await refresh();
+      } else {
+        const number = snapshot.routing_numbers.find(
+          (number) => number.id === connection.routing_number_id,
+        );
+        setCall({
+          id: "fixture-call",
+          active: true,
+          label: connection.label,
+          destination: connection.destination,
+          routing_number: number?.e164,
+          elapsed: 0,
+          muted: false,
+          joined: false,
+          userMuted: true,
+          recording: false,
+          transcription: false,
+        });
+      }
+      returnCall();
+    } catch (error) {
+      notify(error.message);
+    }
+  };
   const restartCall = () => {
+    if (persistentDemo) {
+      const connection = snapshot.connections.find(
+        (connection) =>
+          connection.id === call.connection_id && connection.status === "saved",
+      );
+      if (connection) startDemoCall(connection);
+      else go(studioBase + "connections/");
+      return;
+    }
     if (isDemo) {
       setCall({
         active: true,
@@ -632,6 +765,8 @@ export function Studio({ mode, setMode, isDemo }) {
       returnCall();
     }
   };
+  if (!session.authenticated && (accountDemo || session.auth_method))
+    return <AccountAuth embedded />;
   if (!session.authenticated)
     return (
       <AccessPage
@@ -797,7 +932,9 @@ export function Studio({ mode, setMode, isDemo }) {
             if (mobile) setMobileOpen(false);
           }}
         >
-          <span className="studio-account-avatar">V</span>
+          <span className="studio-account-avatar">
+            {session.account?.name?.slice(0, 1).toUpperCase() || "V"}
+          </span>
           <span className="studio-nav-text">Account</span>
         </A>
       </div>
@@ -832,6 +969,7 @@ export function Studio({ mode, setMode, isDemo }) {
             <A to="/" className="text-action">
               Product page <Icon name="diagonal" size={13} />
             </A>
+            {persistentDemo && <span className="account-demo-badge">Demo</span>}
             <StudioSearch
               snapshot={snapshot}
               call={call}
@@ -849,7 +987,7 @@ export function Studio({ mode, setMode, isDemo }) {
             <CallExtensions
               page={page}
               snapshot={snapshot}
-              isDemo={isDemo}
+              isDemo={sandbox}
               call={call}
               setCall={setCall}
               onMute={toggleMute}
@@ -864,6 +1002,7 @@ export function Studio({ mode, setMode, isDemo }) {
               setJoinOpen={setJoinOpen}
               onListen={listenToSample}
               onRoute={reviewRouting}
+              onStartCall={sandbox ? startDemoCall : undefined}
             />
           ) : ["overview", "numbers", "connections", "routes"].includes(
               page,
@@ -875,8 +1014,9 @@ export function Studio({ mode, setMode, isDemo }) {
               call={call}
               navTo={navTo}
               onOpenCall={openCall}
+              onStartCall={sandbox ? startDemoCall : undefined}
               transcript={
-                isDemo && call.transcription ? SAMPLE_CALL.transcript : []
+                sandbox && call.transcription ? SAMPLE_CALL.transcript : []
               }
               recentConnections={connectionRecency}
               initialSearch={
@@ -922,7 +1062,7 @@ export function Studio({ mode, setMode, isDemo }) {
               integration={integration}
               checking={checking}
               check={check}
-              isDemo={isDemo}
+              isDemo={sandbox}
             />
           ) : page === "activity" ? (
             <Activity events={snapshot.events} />
@@ -934,6 +1074,18 @@ export function Studio({ mode, setMode, isDemo }) {
               save={saveGuidance}
               exportData={exportData}
               signout={signout}
+              account={session.account}
+              saveAccount={async (value) => {
+                const result = await accountRequest("account", {
+                  method: "PATCH",
+                  body: JSON.stringify(value),
+                });
+                setSession((current) => ({
+                  ...current,
+                  account: result.account,
+                }));
+                notify("Account saved.");
+              }}
               isDemo={isDemo}
             />
           ) : (
@@ -958,7 +1110,7 @@ export function Studio({ mode, setMode, isDemo }) {
       />
       <BuyNumberDialog
         open={buyNumberOpen}
-        isDemo={isDemo}
+        isDemo={sandbox}
         onClose={() => setBuyNumberOpen(false)}
         onSave={saveNumberOrder}
         numbers={snapshot.routing_numbers || []}
@@ -969,14 +1121,14 @@ export function Studio({ mode, setMode, isDemo }) {
         connections={snapshot.connections}
         numbers={snapshot.routing_numbers}
         call={call}
-        isDemo={isDemo}
+        isDemo={sandbox}
         onClose={() => setRoutingOpen(false)}
         onSave={(route) => {
           setConnectionRecency((current) => ({
             ...current,
             [route.id]: Date.now(),
           }));
-          if (isDemo)
+          if (sandbox)
             setCall((c) => ({
               ...c,
               proposedRoute: {
@@ -986,10 +1138,12 @@ export function Studio({ mode, setMode, isDemo }) {
                 routing_number_id: route.routing_number_id,
               },
             }));
-          notify(isDemo ? "Routing choice saved." : "Routing choice reviewed.");
+          notify(
+            sandbox ? "Routing choice saved." : "Routing choice reviewed.",
+          );
         }}
       />
-      {isDemo && (
+      {sandbox && (
         <div className="sample-listen-dock" hidden={!call.listening}>
           <BotFace
             size={40}
@@ -1213,6 +1367,8 @@ function Activity({ events }) {
   );
 }
 function Settings({
+  account,
+  saveAccount,
   snapshot,
   mode,
   setMode,
@@ -1226,6 +1382,7 @@ function Settings({
     [error, setError] = useState("");
   return (
     <>
+      {account && <AccountProfile account={account} onSave={saveAccount} />}
       <PageHead eyebrow="" title="Settings" description="" />
       <div className="studio-data-source">
         <span>Data source</span>
