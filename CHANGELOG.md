@@ -1,5 +1,37 @@
 # Changelog
 
+## v1.2.0 — 2026-11-12
+
+AgentBridge v1.2.0 improves the studio, adds invited single-tester accounts, reworks the worldwide animation and tightens carrier reconciliation. Routing and calling stay **off by default**. No new path places calls, buys numbers or charges anyone.
+
+### Added
+- **Studio search and navigation (#43, #44).** This adds:
+  - Global studio search, and "Buy a number" and "Connect a destination" shortcuts.
+  - Country filters.
+  - A Connections list you can expand and search.
+  - Call cards that expand without starting playback.
+  - Dialogs with visible Close and Cancel buttons.
+  - A single horizontal shortcut rail.
+  - Saved calls you can edit.
+- **Single-tester accounts (#45).** An invited customer can sign up and use a persistent demo workspace with their own numbers, connections, call plans, preferences and simulated call state.
+  - On Railway this uses email and password signup, scrypt password hashes and durable HttpOnly sessions. The accounts live in a separate SQLite database next to the studio database on `/data`.
+  - It is off unless `DEMO_TESTER_EMAIL` is set. Signup can require an invite matching `DEMO_SIGNUP_INVITE_SHA256`.
+
+### Changed
+- **Worldwide animation (#46, #47).** The marketing animation now runs 12 journeys a minute with at most two approaching at once. They use aligned lanes and fixed connection points, and smaller flags and badges.
+
+### Security
+- **Stricter carrier reconciliation (#42).** The read-only SignalWire Voice Logs reconciler now releases a reservation only if all of these hold:
+  - The outbound child leg comes from the bridge DID and has a UUID segment ID.
+  - Pagination is complete: `links.self` and `links.first` are present, there is no `next` cursor, and the page isn't full.
+  - Entry IDs are well formed and unique.
+  - In every other case the reservation stays locked for owner review.
+- **Caller-proof modes are unchanged.** `dtmf_pin` is the default. `capped_caller_id` and `any_caller` remain owner opt-ins behind their risk-accepted flags.
+
+### Upgrade notes
+- There is no new Cloudflare D1 migration in this release. Migration `0005` from v1.1.0 still has to be applied before the next Worker deploy.
+- The account database migrates itself at startup and creates its tables only if they are missing.
+
 ## v1.1.0 — 2026-11-10
 
 AgentBridge v1.1.0 adds the redesigned product site and the two-number calling studio, and hardens SignalWire callback handling. It is still a private, owner-operated US pilot. Routing and calling remain **off by default**, and no new path can place a call, buy a number, or charge anyone.
