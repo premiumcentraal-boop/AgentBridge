@@ -94,7 +94,13 @@ async function reconcile(row,env,fetchImpl){
          url.pathname!==new URL(prefix).pathname||url.username||url.password||url.hash)
         return false;
       const pages=url.searchParams.getAll('page_number');
-      return pages.length<=1&&(pages.length===0||pages[0]==='0');
+      // A link with the right origin/path but a different query window or page
+      // size cannot attest to completeness of the requested first page.
+      const sizes=url.searchParams.getAll('page_size');
+      const starts=url.searchParams.getAll('created_after');
+      return pages.length<=1&&(pages.length===0||pages[0]==='0')&&
+        sizes.length<=1&&(sizes.length===0||sizes[0]==='1000')&&
+        starts.length<=1&&(starts.length===0||starts[0]===q.searchParams.get('created_after'));
     }catch{return false;}
   };
   if(!isFirstPageLink(listing.links.self)||!isFirstPageLink(listing.links.first))
