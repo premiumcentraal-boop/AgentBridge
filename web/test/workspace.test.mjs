@@ -164,8 +164,8 @@ test("working preview navigates real pages and keeps call state in the floating 
     "60",
   );
   const svg = document.querySelector(".world-network-svg");
-  assert.equal(svg.dataset.sequence, "overlapping-edge-to-call");
-  assert.equal(svg.dataset.pairCount, "30");
+  assert.equal(svg.dataset.sequence, "composed-edge-to-call");
+  assert.equal(svg.dataset.pairCount, "12");
   const layers = document.querySelectorAll(
     ".world-moving-scene > .world-pair-layer",
   );
@@ -174,9 +174,9 @@ test("working preview navigates real pages and keeps call state in the floating 
     document.querySelectorAll(
       '.world-moving-scene > .world-pair-layer[data-copy="current"]',
     ).length,
-    30,
+    12,
   );
-  assert.equal(document.querySelectorAll(".world-approach-path").length, 64);
+  assert.equal(document.querySelectorAll(".world-approach-path").length, 26);
   let currentLayer = false,
     previousStart = -1;
   for (const layer of layers) {
@@ -247,7 +247,7 @@ test("working preview navigates real pages and keeps call state in the floating 
     0,
   );
   for (const band of document.querySelectorAll(".world-band")) {
-    assert.ok(Number(band.getAttribute("stroke-width")) >= 80);
+    assert.ok(Number(band.getAttribute("stroke-width")) >= 70);
     assert.ok(Number(band.dataset.turns) <= 1);
   }
   named(document, "Pause connection animation").click();

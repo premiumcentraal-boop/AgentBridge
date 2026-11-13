@@ -2,10 +2,11 @@
 // meeting point; only its arriving lines can trigger its call confirmation.
 export const NETWORK_LOOP_SECONDS = 60;
 export const MAP_SIZE = { width: 1000, height: 720 };
-export const BAND_WIDTH = 88;
-export const COUNTRY_RADIUS = 54;
-export const PAIR_INTERVAL_SECONDS = 2;
-export const APPROACH_SECONDS = 9.6;
+export const BAND_WIDTH = 76;
+export const COUNTRY_RADIUS = 50;
+export const PAIR_STAGGER_SECONDS = 3;
+export const SCENE_INTERVAL_SECONDS = 10;
+export const APPROACH_SECONDS = 8.4;
 export const ACCELERATE_AT = APPROACH_SECONDS * 0.75;
 export const GLIDE_PROGRESS = 0.6;
 export const GLIDE_EASING = [0.32, 0, 0.6, 0.6];
@@ -13,7 +14,7 @@ export const GLIDE_EASING = [0.32, 0, 0.6, 0.6];
 // into contact. There is no slowing or hesitation just before the join.
 export const JOIN_EASING = [0.3, 0.15, 0.8, 0.4];
 export const LINE_FADE_AT = APPROACH_SECONDS;
-export const LINE_CLEAR_AT = APPROACH_SECONDS + 0.35;
+export const LINE_CLEAR_AT = APPROACH_SECONDS + 1.3;
 export const CALL_REVEAL_AT = APPROACH_SECONDS;
 export const CALL_VISIBLE_AT = APPROACH_SECONDS + 0.22;
 export const CALL_SETTLE_AT = APPROACH_SECONDS + 0.42;
@@ -56,7 +57,7 @@ export function connectionGeometry(start, end, firstAxis = "x") {
   const incoming = corner.map((n, i) => Math.sign(n - start[i]));
   const outgoing = end.map((n, i) => Math.sign(n - corner[i]));
   const radius = Math.min(
-    105,
+    96,
     Math.abs(end[0] - start[0]) * 0.45,
     Math.abs(end[1] - start[1]) * 0.45,
   );
@@ -142,57 +143,111 @@ const palette = {
   cyan: "#25b9d6",
   gold: "#ffca2c",
 };
-// Opposite edges, alternating elbows and dispersed joins preserve the broad
-// transit-line composition. A third, perpendicular arrival is occasional.
-const scenes = [
-  { countries: ["US", "GB"], meeting: [270, 185], axis: "x", offset: 165 },
-  { countries: ["NL", "JP"], meeting: [745, 485], axis: "y", offset: -210 },
-  { countries: ["FR", "DE"], meeting: [730, 205], axis: "x", offset: 0 },
-  {
-    countries: ["SG", "AU", "IN"],
-    meeting: [260, 490],
+// Two complementary routes share a small station grid. Reflecting the same
+// geometry gives variety without drifting lanes, cramped elbows or stray joins.
+const layouts = {
+  across: {
+    axis: "x",
+    meeting: [700, 220],
+    entries: [
+      [-110, 220],
+      [1110, 620],
+    ],
+    third: [700, -110],
+    colours: [palette.rose, palette.orange, palette.cyan],
+  },
+  upright: {
     axis: "y",
-    offset: 175,
+    meeting: [300, 500],
+    entries: [
+      [300, -110],
+      [860, 830],
+    ],
+    third: [-110, 500],
+    colours: [palette.cyan, palette.gold, palette.rose],
   },
-  { countries: ["CA", "BR"], meeting: [510, 345], axis: "x", offset: -190 },
-  { countries: ["SE", "IN"], meeting: [300, 200], axis: "y", offset: 0 },
-  { countries: ["CH", "AE"], meeting: [720, 520], axis: "x", offset: 140 },
-  { countries: ["MX", "ZA"], meeting: [765, 220], axis: "y", offset: -240 },
-  { countries: ["US", "JP"], meeting: [230, 485], axis: "x", offset: -160 },
-  { countries: ["GB", "AU", "CA"], meeting: [505, 320], axis: "y", offset: 0 },
-  { countries: ["NL", "SG"], meeting: [290, 220], axis: "x", offset: 165 },
-  { countries: ["BR", "IN"], meeting: [725, 480], axis: "y", offset: -220 },
-  { countries: ["DE", "CA"], meeting: [740, 175], axis: "x", offset: 0 },
-  { countries: ["ZA", "SE"], meeting: [265, 515], axis: "y", offset: 205 },
-  { countries: ["AE", "FR"], meeting: [500, 350], axis: "x", offset: 180 },
-  { countries: ["JP", "CH"], meeting: [310, 190], axis: "y", offset: -190 },
+};
+const compositions = [
   {
-    countries: ["MX", "GB", "NL"],
-    meeting: [735, 500],
-    axis: "x",
-    offset: -160,
+    flipX: false,
+    flipY: false,
+    reverse: false,
+    countries: [
+      ["US", "GB"],
+      ["NL", "JP"],
+    ],
   },
-  { countries: ["SG", "US"], meeting: [700, 215], axis: "y", offset: 0 },
-  { countries: ["BR", "DE"], meeting: [245, 480], axis: "x", offset: 170 },
-  { countries: ["IN", "AE"], meeting: [500, 335], axis: "y", offset: -210 },
-  { countries: ["AU", "ZA"], meeting: [275, 205], axis: "x", offset: 0 },
-  { countries: ["CA", "MX"], meeting: [750, 505], axis: "y", offset: 195 },
   {
-    countries: ["SE", "FR", "JP"],
-    meeting: [755, 195],
-    axis: "x",
-    offset: 155,
+    flipX: true,
+    flipY: false,
+    reverse: true,
+    countries: [
+      ["FR", "DE"],
+      ["SG", "AU"],
+    ],
   },
-  { countries: ["CH", "NL"], meeting: [260, 510], axis: "y", offset: 0 },
-  { countries: ["US", "SG"], meeting: [505, 350], axis: "y", offset: -185 },
-  { countries: ["NL", "GB"], meeting: [285, 195], axis: "x", offset: 150 },
-  { countries: ["FR", "BR"], meeting: [740, 510], axis: "y", offset: 0 },
-  { countries: ["CA", "IN"], meeting: [730, 215], axis: "x", offset: -170 },
-  { countries: ["JP", "AE"], meeting: [260, 500], axis: "y", offset: 175 },
-  { countries: ["DE", "MX"], meeting: [500, 340], axis: "x", offset: 0 },
+  {
+    flipX: false,
+    flipY: true,
+    reverse: false,
+    countries: [
+      ["CA", "BR"],
+      ["SE", "IN"],
+    ],
+  },
+  {
+    flipX: true,
+    flipY: true,
+    reverse: true,
+    countries: [
+      ["CH", "AE", "NL"],
+      ["MX", "ZA"],
+    ],
+  },
+  {
+    flipX: false,
+    flipY: false,
+    reverse: true,
+    countries: [
+      ["JP", "FR"],
+      ["US", "SG", "GB"],
+    ],
+  },
+  {
+    flipX: true,
+    flipY: false,
+    reverse: false,
+    countries: [
+      ["AU", "NL"],
+      ["BR", "IN"],
+    ],
+  },
 ];
+const scenes = compositions.flatMap((composition, index) => {
+  const reflect = ([x, y]) => [
+    composition.flipX ? MAP_SIZE.width - x : x,
+    composition.flipY ? MAP_SIZE.height - y : y,
+  ];
+  return (
+    composition.reverse
+      ? [layouts.upright, layouts.across]
+      : [layouts.across, layouts.upright]
+  ).map((layout, side) => {
+    const countries = composition.countries[side];
+    return {
+      countries,
+      axis: layout.axis,
+      colours: layout.colours,
+      meeting: reflect(layout.meeting),
+      entries: [
+        ...layout.entries,
+        ...(countries.length === 3 ? [layout.third] : []),
+      ].map(reflect),
+      startAt: index * SCENE_INTERVAL_SECONDS + side * PAIR_STAGGER_SECONDS,
+    };
+  });
+});
 const clamp = (n) => Math.min(1, Math.max(0, n));
-const insideEdge = (n, extent) => Math.max(85, Math.min(extent - 85, n));
 function flagClearanceTime(arms, clearance) {
   let lo = 0,
     hi = 1;
@@ -212,31 +267,7 @@ function flagClearanceTime(arms, clearance) {
   return ((lo + hi) / 2) * APPROACH_SECONDS;
 }
 export const CONNECTION_PAIRS = scenes.map((scene, index) => {
-  const [x, y] = scene.meeting;
-  const entries =
-    scene.axis === "x"
-      ? [
-          [-95, insideEdge(y + scene.offset, MAP_SIZE.height)],
-          [1095, insideEdge(y - scene.offset, MAP_SIZE.height)],
-        ]
-      : [
-          [insideEdge(x + scene.offset, MAP_SIZE.width), -95],
-          [insideEdge(x - scene.offset, MAP_SIZE.width), 815],
-        ];
-  if (scene.countries.length === 3)
-    entries.push(
-      scene.axis === "x"
-        ? [
-            scene.offset ? insideEdge(x + 240, MAP_SIZE.width) : x,
-            index % 2 ? -95 : 815,
-          ]
-        : [
-            index % 2 ? 1095 : -95,
-            scene.offset ? insideEdge(y - 200, MAP_SIZE.height) : y,
-          ],
-    );
-  const colours = Object.values(palette);
-  const arms = entries.map((start, side) => ({
+  const arms = scene.entries.map((start, side) => ({
     ...connectionGeometry(
       start,
       scene.meeting,
@@ -247,13 +278,12 @@ export const CONNECTION_PAIRS = scenes.map((scene, index) => {
       code: scene.countries[side],
       name: COUNTRIES[scene.countries[side]],
     },
-    colour: colours[(index + side * 2 + (side === 2 ? 1 : 0)) % colours.length],
+    colour: scene.colours[side],
   }));
   const flagClearAt = flagClearanceTime(arms, COUNTRY_RADIUS * 2 + 4);
   return {
     ...scene,
     id: "pair-" + index,
-    startAt: index * PAIR_INTERVAL_SECONDS,
     arms,
     flagFadeAt: Math.min(
       flagClearanceTime(arms, COUNTRY_RADIUS * 3.5),

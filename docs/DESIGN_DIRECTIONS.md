@@ -305,3 +305,23 @@ joins, visible route crossings, attached flag heads, contact-only call states,
 continuous end acceleration and paint order over two loops. Sampled SVG frames
 were inspected in both themes. Live browser playback remains unverified because
 the supported managed browser helper is unavailable in this environment.
+
+## 2026-11-13: calmer, aligned route compositions
+
+The follow-up reduces simultaneous approaches to two, with 12 journeys per
+minute. Four fixed connection positions replace the jittered meeting points.
+Two complementary route shapes share aligned lanes and the same 96-unit corner
+radius; reflections and alternating departure order provide variety. Bands and
+country discs are slightly smaller, leaving more negative space. Two occasional
+three-country joins remain.
+
+Departures are spaced to keep visible flags from different journeys apart.
+Crossings occur briefly as an earlier journey fades, rather than filling most
+of the loop. New paths leave clear space around call confirmations, whose phone
+marks and labels are also smaller. Flags still travel on their own line heads,
+the final approach accelerates, and the call only appears after contact.
+
+Checks cover the two-journey limit, consistent station/corner geometry, spacing
+between travelling flags, clearance around call confirmations, and occasional
+crossings. Sampled SVG frames were reviewed in both themes; native browser
+playback remains unverified because the managed browser helper is unavailable.

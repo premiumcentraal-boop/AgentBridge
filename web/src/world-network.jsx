@@ -78,14 +78,14 @@ function CountryCircle({ arm, pair, prefix, still }) {
       >
         <use
           href={"#" + prefix + "-flag-" + arm.country.code}
-          x="-44"
-          y="-44"
-          width="88"
-          height="88"
+          x="-40"
+          y="-40"
+          width="80"
+          height="80"
         />
       </g>
       <circle
-        r="44"
+        r="40"
         fill="none"
         stroke="#14241b"
         strokeOpacity=".08"
@@ -124,7 +124,7 @@ function ConnectedCall({ pair, still }) {
               {...timing(contact, pairBegin(pair))}
             />
           )}
-          <circle r="58" fill="none" stroke="#25bc79" strokeWidth="4" />
+          <circle r="48" fill="none" stroke="#25bc79" strokeWidth="3" />
         </g>
       </g>
       <g
@@ -139,9 +139,9 @@ function ConnectedCall({ pair, still }) {
             {...timing(timeline, pairBegin(pair))}
           />
         )}
-        <circle r="76" fill="#25bc79" fillOpacity=".11" />
-        <circle r="58" fill="#25bc79" />
-        <g transform="translate(-26 -26) scale(2.2)">
+        <circle r="64" fill="#25bc79" fillOpacity=".11" />
+        <circle r="48" fill="#25bc79" />
+        <g transform="translate(-22 -22) scale(1.9)">
           <path
             d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"
             fill="none"
@@ -151,10 +151,10 @@ function ConnectedCall({ pair, still }) {
             strokeLinejoin="round"
           />
         </g>
-        <circle cx="42" cy="-39" r="15" fill="#e8f9ef" />
+        <circle cx="34" cy="-33" r="13" fill="#e8f9ef" />
         <path
           className="world-call-check"
-          d="M35-39l5 5 9-10"
+          d="M27-33l5 5 9-10"
           pathLength="1"
           strokeDasharray="1"
           strokeDashoffset={still ? still.checkOffset : 1}
@@ -173,13 +173,13 @@ function ConnectedCall({ pair, still }) {
           )}
         </path>
         {pair.arms.length === 3 && (
-          <g className="world-group-call" transform="translate(-43 39)">
-            <circle r="17" fill="#e8f9ef" />
+          <g className="world-group-call" transform="translate(-36 33)">
+            <circle r="15" fill="#e8f9ef" />
             <text
               textAnchor="middle"
               y="6"
               fill="#128051"
-              fontSize="19"
+              fontSize="17"
               fontWeight="650"
             >
               3
@@ -189,9 +189,9 @@ function ConnectedCall({ pair, still }) {
         <text
           className="world-call-label"
           textAnchor="middle"
-          y="112"
+          y="94"
           fill="#c5ead5"
-          fontSize="25"
+          fontSize="24"
           fontWeight="500"
         >
           {pair.arms.length === 3 ? "3-way call connected" : "Call connected"}
@@ -296,18 +296,17 @@ const Scene = memo(function Scene({ prefix, svgRef }) {
       aria-labelledby={prefix + "-title " + prefix + "-description"}
       data-loop-seconds={NETWORK_LOOP_SECONDS}
       data-pair-count={CONNECTION_PAIRS.length}
-      data-sequence="overlapping-edge-to-call"
+      data-sequence="composed-edge-to-call"
     >
       <title id={prefix + "-title"}>Connect agents worldwide</title>
       <desc id={prefix + "-description"}>
-        Several bold coloured country routes cross over and under one another,
-        arriving from opposite edges. Their flags travel with the line heads.
-        Each journey accelerates into its own meeting point across the canvas;
-        occasional three-country arrivals become three-way calls. Only contact
-        triggers that journey’s green phone pulse, check mark and confirmation
-        as its lines fade. The newest routes appear above older ones, including
-        at the sixty-second loop boundary. This is an illustration, not live
-        call activity.
+        Two coordinated country journeys travel along aligned lanes, with
+        occasional crossings and room between their flags. Straight lines and
+        consistent rounded turns lead into four spaced connection points.
+        Occasional three-country arrivals become three-way calls. Only contact
+        triggers each journey’s green phone, check mark and confirmation as its
+        lines fade. Newer routes appear above older ones throughout the
+        sixty-second loop. This is an illustration, not live call activity.
       </desc>
       <defs>
         {flagDefinitions(prefix).map((flag) => (
@@ -321,7 +320,7 @@ const Scene = memo(function Scene({ prefix, svgRef }) {
           </symbol>
         ))}
         <clipPath id={prefix + "-country-disc"}>
-          <circle r="44" />
+          <circle r="40" />
         </clipPath>
         {CONNECTION_PAIRS.flatMap((pair) =>
           pair.arms.map((arm) => (
