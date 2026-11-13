@@ -597,3 +597,7 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Found that rounding the binary-float sum of provider charges to four decimal dollar places before applying the cent ceiling can undercount fractional-cent charges. For example, $0.01 + $0.000000001 is strictly above one cent, but the previous formula returned one cent, potentially bypassing a one-cent reservation cap.
 - Replaced the rounding step with exact rational decimal arithmetic derived from each finite nonnegative provider number's shortest round-trippable decimal representation. Added six regression cases including exponent notation, zero, the 0.1+0.2 float trap, and cap rejection one cent below the exact ceiling.
 - Standalone arithmetic verification: Node v22.16.0, six cases passed. Full repository CI and independent SignalWire billing semantics remain pending; draft PR unmerged, paid routing default-deny. No calls, carrier resources, payments, secrets, merges or deployments.
+
+## 2026-11-13 — CI correction for decimal parser regex (draft PR #49)
+- Exact-head Quality gate #43426087591 failed 11/194 Node tests: the new decimal parser regex had accidentally doubled JavaScript backslashes, causing valid numeric charges to return `RECONCILIATION_ERROR` instead of a verified cent total. The secret scan passed.
+- Corrected the regex to match decimal digits and literal decimal points using single regex escapes; no routing policy or safety gate changed. Re-run exact-head CI before claiming successful full verification.
