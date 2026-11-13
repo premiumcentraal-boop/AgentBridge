@@ -628,3 +628,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Source review after successful exact-head Quality gate #43472928340 found that first-page pagination links were checked for origin/path/page number but not for contradictory `page_size` or `created_after` filters. Metadata could claim a different query window while being accepted as evidence of completeness.
 - Reconciliation now rejects explicitly mismatched or duplicate `page_size` and `created_after` values in self/first links, while accepting omitted optional metadata and matching values. Added negative and positive synthetic regression cases. The provider's actual pagination contract remains unverified; no continuation links are followed.
 - New exact-head CI must pass before review. No routing enablement, carrier calls, purchases, payments, secrets, merges or deployment.
+
+
+## 2026-11-13 — Fix pagination filter scope regression (draft PR #49, not merged)
+- Exact-head Quality gate #43482384129 on `f99e1a0` failed 2 of 199 Node tests: matching `created_after` metadata was rejected with `INCOMPLETE_CARRIER_PAGINATION`, and owner reconciliation returned HTTP 409 rather than 200. Secret scan succeeded.
+- Root cause: `q` (the requested Voice Logs URL) was declared inside the fetch `try` block, but referenced by the subsequent pagination-link validator. The validator caught the resulting `ReferenceError` and incorrectly treated every link containing `created_after` as invalid. Moved `q` into the enclosing reconciliation scope; the pre-existing positive `created_after` and owner integration tests exercise this path, while mismatched filters remain rejected.
+- This is a source fix awaiting exact-head CI; it does not establish real provider pagination semantics, D1 readiness, or safe paid routing. No calls, purchases, payments, secrets, deployment or merges.
