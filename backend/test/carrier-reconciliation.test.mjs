@@ -79,6 +79,19 @@ test('missing or malformed pagination metadata cannot prove exhaustive child leg
     assert.equal(result.code,'INCOMPLETE_CARRIER_PAGINATION',JSON.stringify({links,result}));
   }
 });
+test('full Voice Logs page without continuation remains locked even with expected child',async()=>{
+  const unrelated=Array.from({length:999},(_,i)=>({
+    id:'unrelated-'+i,parent_id:null,direction:'outbound',to:'+13125550100'
+  }));
+  const full=provider(inbound,[child,...unrelated],COMPLETE_LINKS);
+  const denied=await fetchCarrierReconciliation(row,env,full.fetchImpl);
+  assert.equal(denied.code,'INCOMPLETE_CARRIER_PAGINATION');
+  assert.equal(denied.ok,false);
+  // The conservative boundary must not reject an otherwise valid smaller page.
+  const smaller=provider(inbound,[child,...unrelated.slice(1)],COMPLETE_LINKS);
+  const accepted=await fetchCarrierReconciliation(row,env,smaller.fetchImpl);
+  assert.equal(accepted.ok,true,JSON.stringify(accepted));
+});
 test('actual charges above reservation cap never unlock',async()=>{
   const p=provider({...inbound,charge:0.03},[{...child,charge:0.03}]);
   const r=await fetchCarrierReconciliation({...row,max_cost_cents:3},env,p.fetchImpl);
