@@ -225,3 +225,24 @@ test('contradictory inbound detail and list evidence never unlocks a reservation
   assert.equal(omitted.ok,false);
   assert.equal(omitted.code,'INBOUND_MISSING_FROM_CARRIER_LIST');
 });
+
+test('fractional-cent charges never undercount the reservation cap',async()=>{
+  // 1.0000001 cents must be billed as 2 cents, not rounded down to 1.
+  for(const [a,b,expected] of [
+    [0.01,0.000000001,2],
+    [0.005,0.005000001,2],
+    [0.1,0.2,30],
+    [0.0045,0.0085,2],
+    [0,0,0],
+    [1e-7,0,1]
+  ]){
+    const p=provider({...inbound,charge:a},[{...child,charge:b}]);
+    const result=await fetchCarrierReconciliation({...row,max_cost_cents:expected},env,p.fetchImpl);
+    assert.equal(result.ok,true,JSON.stringify({a,b,result}));
+    assert.equal(result.actual_cost_cents,expected,JSON.stringify({a,b,result}));
+    if(expected>0){
+      const denied=await fetchCarrierReconciliation({...row,max_cost_cents:expected-1},env,p.fetchImpl);
+      assert.equal(denied.code,'ACTUAL_CHARGE_EXCEEDS_RESERVED_CAP',JSON.stringify({a,b,denied}));
+    }
+  }
+});
