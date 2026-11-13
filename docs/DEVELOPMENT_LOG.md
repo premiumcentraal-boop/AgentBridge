@@ -555,3 +555,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Identified that absent or malformed `links` metadata was treated as a complete list, permitting a truncated carrier response with one expected child to unlock despite unknown additional billable legs.
 - Require documented nonempty `links.self` and `links.first` fields before trusting a Voice Logs list; continue denying any `links.next` pagination. Added offline missing/malformed metadata regressions and complete-link defaults for synthetic fixtures.
 - Conservative availability tradeoff: undocumented provider response shapes stay locked for owner investigation. Exact-head CI and real SignalWire response validation required. No calls, routing activation, provider resources, merges or deployment.
+
+
+## 2026-11-13 — Full-page Voice Logs truncation guard (draft PR #42, unmerged)
+- A Voice Logs list containing exactly 1,000 entries (the requested `page_size`) could previously pass reconciliation if the provider omitted `links.next`, despite uncertainty whether the response had been truncated at the page boundary. This could hide additional billable child legs and falsely release a connecting reservation.
+- The read-only reconciler now conservatively rejects `listing.data.length >= 1000` with `INCOMPLETE_CARRIER_PAGINATION`, even when the expected child is present and no continuation link exists. Added an offline boundary regression contrasting a 1,000-entry ambiguous page against a 999-entry complete page.
+- This is a narrow fail-closed improvement, **not** proof that 999-entry responses are exhaustive or that SignalWire pagination is authoritative. Bounded exhaustive pagination, provider fixtures, real carrier contract verification and independent D1 review remain pending. Exact-head CI pending at commit time; local git clone blocked by DNS. No calls, purchases, routing flags, payments, merges or deployments.
