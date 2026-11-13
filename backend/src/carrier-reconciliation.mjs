@@ -67,7 +67,8 @@ async function reconcile(row,env,fetchImpl){
   if(!isObj(listing.links)||typeof listing.links.self!=='string'||!listing.links.self||
      typeof listing.links.first!=='string'||!listing.links.first)
     return failed('INCOMPLETE_CARRIER_PAGINATION');
-  if(listing.links.next)return failed('PAGINATED_CARRIER_LOGS');
+  if(listing.links.next!==null&&listing.links.next!==undefined)
+    return failed('PAGINATED_CARRIER_LOGS');
   // A full page without a next cursor cannot prove the provider did not truncate
   // the response at its advertised page_size. Never unlock from that ambiguity.
   if(listing.data.length>=1000)return failed('INCOMPLETE_CARRIER_PAGINATION');
