@@ -1,5 +1,10 @@
 # Real single-tester demo
 
+The tester can also opt into [SignalWire development testing](SIGNALWIRE_LIVE_TESTING.md)
+with an encrypted, customer-supplied provider token. The demo behavior described
+below stays separate and remains the default. Real provider actions only occur
+through the explicitly enabled live-testing workspace and confirmed actions.
+
 AgentBridge now has a server-backed account mode. Signup creates exactly one
 account and a private workspace. Numbers, connections, saved call plans, capture
 and join preferences, profile changes, activity and simulated call state are API

@@ -21,7 +21,7 @@ const digest = text => createHash('sha256').update(text).digest();
 export function createApp({ env = process.env, store = openStore(env.STUDIO_DATABASE_PATH || resolve(ROOT, 'data/studio.sqlite')), fetcher, accountDatabase } = {}) {
   const customerMode = Boolean(env.DEMO_TESTER_EMAIL);
   const customerDatabase = customerMode ? accountDatabase || openAccountDatabase(env.STUDIO_ACCOUNT_DATABASE_PATH || resolve(dirname(env.STUDIO_DATABASE_PATH || resolve(ROOT,'data/studio.sqlite')), 'accounts.sqlite')) : null;
-  const customerAPI = createAccountService({ database: customerDatabase, testerEmail: env.DEMO_TESTER_EMAIL, publicOrigin: env.STUDIO_PUBLIC_ORIGIN || 'https://agentbridge.victor.ceo', passwords: nodePasswords, signupInviteHash: env.DEMO_SIGNUP_INVITE_SHA256 });
+  const customerAPI = createAccountService({ database: customerDatabase, testerEmail: env.DEMO_TESTER_EMAIL, publicOrigin: env.STUDIO_PUBLIC_ORIGIN || 'https://agentbridge.victor.ceo', passwords: nodePasswords, signupInviteHash: env.DEMO_SIGNUP_INVITE_SHA256, vaultKey:env.PROVIDER_CREDENTIALS_KEY,fetcher });
   const sessions = new Map(), attempts = new Map();
   const keyHash = /^[a-f0-9]{64}$/.test(env.STUDIO_ACCESS_KEY_SHA256 || '') ? Buffer.from(env.STUDIO_ACCESS_KEY_SHA256, 'hex') : null;
   const isDev = env.STUDIO_DEV_MODE === 'true' && env.NODE_ENV !== 'production';

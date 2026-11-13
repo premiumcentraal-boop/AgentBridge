@@ -24,6 +24,7 @@ import {
   Loop,
 } from "./ui.jsx";
 import { CallExtensions, SAMPLE_CALL } from "./call-tools.jsx";
+import { SignalWireSettings, LiveWorkspace } from "./provider-live.jsx";
 import {
   AccountAuth,
   AccountProfile,
@@ -99,8 +100,9 @@ export function Studio({ mode, setMode, isDemo }) {
     configured: true,
     loading: !isDemo,
   });
-  const sandbox = isDemo || session.sandbox === true;
-  const persistentDemo = !isDemo && session.sandbox === true;
+  const liveMode = !isDemo && session.provider_live_enabled === true;
+  const sandbox = !liveMode && (isDemo || session.sandbox === true);
+  const persistentDemo = !liveMode && !isDemo && session.sandbox === true;
   const accountHydrated = useRef(false),
     callSynced = useRef(""),
     callQueue = useRef(Promise.resolve());
@@ -175,10 +177,16 @@ export function Studio({ mode, setMode, isDemo }) {
         if (!alive) return;
         setSession({ ...data, loading: false });
         if (data.authenticated) {
-          const state = await api("overview");
+          const state = await api(
+            data.provider_live_enabled ? "live/overview" : "overview",
+          );
           if (alive) {
-            setSnapshot(state);
-            if (data.sandbox && state.demo_call) {
+            setSnapshot({ ...empty(), ...state });
+            if (
+              data.sandbox &&
+              !data.provider_live_enabled &&
+              state.demo_call
+            ) {
               callSynced.current = JSON.stringify(callPayload(state.demo_call));
               setCall(state.demo_call);
               accountHydrated.current = true;
@@ -799,6 +807,18 @@ export function Studio({ mode, setMode, isDemo }) {
     setNumberEditorOpen(true);
   };
   const selectSearchResult = (entry) => {
+    if (liveMode) {
+      go(
+        navTo(
+          entry.action === "buy" || entry.action === "number"
+            ? "numbers"
+            : ["connect", "connection", "country"].includes(entry.action)
+              ? "connections"
+              : entry.page || "overview",
+        ),
+      );
+      return;
+    }
     if (entry.action === "buy") setBuyNumberOpen(true);
     else if (entry.action === "connect") beginConnection();
     else if (entry.action === "connection") editConnection(entry.record);
@@ -969,7 +989,11 @@ export function Studio({ mode, setMode, isDemo }) {
             <A to="/" className="text-action">
               Product page <Icon name="diagonal" size={13} />
             </A>
-            {persistentDemo && <span className="account-demo-badge">Demo</span>}
+            {(persistentDemo || liveMode) && (
+              <span className="account-demo-badge">
+                {liveMode ? "Live testing" : "Demo"}
+              </span>
+            )}
             <StudioSearch
               snapshot={snapshot}
               call={call}
@@ -983,7 +1007,40 @@ export function Studio({ mode, setMode, isDemo }) {
           </div>
         )}
         <main className="workspace-main" id="main" tabIndex={-1}>
-          {["calls", "memory", "call"].includes(page) ? (
+          {liveMode && page !== "design" ? (
+            <LiveWorkspace
+              page={page}
+              account={session.account}
+              onSignout={signout}
+              navTo={(target) => go(navTo(target))}
+              onModeChange={() => location.reload()}
+              onState={(state) => {
+                setSnapshot({ ...empty(), ...state });
+                const active = (state.calls || []).find(
+                  (c) => c.status === "in-progress" && !c.parent_call_id,
+                );
+                const route =
+                  active &&
+                  (state.connections || []).find(
+                    (c) => c.destination === active.to,
+                  );
+                setCall(
+                  active
+                    ? {
+                        ...active,
+                        active: true,
+                        label: route?.label || active.to,
+                        destination: active.to,
+                        routing_number: active.from,
+                        elapsed: active.duration,
+                        muted: false,
+                        joined: false,
+                      }
+                    : { active: false, elapsed: 0 },
+                );
+              }}
+            />
+          ) : ["calls", "memory", "call"].includes(page) ? (
             <CallExtensions
               page={page}
               snapshot={snapshot}
@@ -1075,6 +1132,7 @@ export function Studio({ mode, setMode, isDemo }) {
               exportData={exportData}
               signout={signout}
               account={session.account}
+              providerSettings={Boolean(session.account)}
               saveAccount={async (value) => {
                 const result = await accountRequest("account", {
                   method: "PATCH",
@@ -1368,6 +1426,7 @@ function Activity({ events }) {
 }
 function Settings({
   account,
+  providerSettings,
   saveAccount,
   snapshot,
   mode,
@@ -1382,6 +1441,7 @@ function Settings({
     [error, setError] = useState("");
   return (
     <>
+      {providerSettings && <SignalWireSettings />}
       {account && <AccountProfile account={account} onSave={saveAccount} />}
       <PageHead eyebrow="" title="Settings" description="" />
       <div className="studio-data-source">

@@ -1,5 +1,7 @@
 import { AccountError, deny, emptyWorkspace, publicAccount } from './model.mjs';
 import { workspaceRequest } from './workspace.mjs';
+import { manageProvider, providerSummary, publicProviderError } from './provider-control.mjs';
+import { liveWorkspaceRequest } from './live-workspace.mjs';
 
 const encode = new TextEncoder();
 const email = value => typeof value === 'string' ? value.trim().toLowerCase() : '';
@@ -25,7 +27,7 @@ export async function boundedAccountBody(request) {
   } catch (error) { if (error instanceof AccountError) throw error; deny(400, 'INVALID_BODY', 'Send a valid JSON object.'); }
   finally { reader.releaseLock(); }
 }
-export function createAccountService({ database, testerEmail, publicOrigin, passwords, platformIdentity = false, signupInviteHash }) {
+export function createAccountService({ database, testerEmail, publicOrigin, passwords, platformIdentity = false, signupInviteHash, vaultKey, fetcher }) {
   const allowedEmail = email(testerEmail), configured = validEmail(allowedEmail) && Boolean(database);
   const method = platformIdentity ? 'chatgpt' : 'password';
   const secure = !publicOrigin?.startsWith('http://127.0.0.1') && !publicOrigin?.startsWith('http://localhost');
@@ -76,7 +78,8 @@ export function createAccountService({ database, testerEmail, publicOrigin, pass
         if (route === 'session' && verb === 'GET') {
           const count = configured ? await database.first('SELECT COUNT(*) AS n FROM ab_accounts') : { n: 0 };
           const user = identity(request);
-          return json(200, { configured, authenticated: Boolean(current), account: publicAccount(current), sandbox: Boolean(current), mode: 'demo', auth_method: method, registration_available: configured && count.n === 0 && (platformIdentity || /^[a-f0-9]{64}$/.test(signupInviteHash || "")), invitation_required: !platformIdentity, account_exists: count.n > 0, verified_email: platformIdentity && user?.subject && user.email === allowedEmail ? user.email : undefined, signin_url: '/signin-with-chatgpt?return_to=%2Fstudio%2F', signout_url: '/signout-with-chatgpt?return_to=%2Fsignin%2F' });
+          const provider=current?await providerSummary(database,current.id,vaultKey):null;
+          return json(200, { configured, authenticated: Boolean(current), account: publicAccount(current), sandbox: Boolean(current), provider_live_enabled:provider?.live_enabled||false, mode: provider?.live_enabled?'live-testing':'demo', auth_method: method, registration_available: configured && count.n === 0 && (platformIdentity || /^[a-f0-9]{64}$/.test(signupInviteHash || "")), invitation_required: !platformIdentity, account_exists: count.n > 0, verified_email: platformIdentity && user?.subject && user.email === allowedEmail ? user.email : undefined, signin_url: '/signin-with-chatgpt?return_to=%2Fstudio%2F', signout_url: '/signout-with-chatgpt?return_to=%2Fsignin%2F' });
         }
         if (!configured) deny(503, 'SETUP_REQUIRED', 'The tester account service needs to be configured.');
         if (authPath && route === 'register' && verb === 'POST') {
@@ -116,6 +119,13 @@ export function createAccountService({ database, testerEmail, publicOrigin, pass
           return json(200, { ok: true, redirect: platformIdentity ? '/signout-with-chatgpt?return_to=%2Fsignin%2F' : '/signin/' }, { 'Set-Cookie': cookie('', 0) });
         }
         if (!current) deny(401, 'UNAUTHORIZED', 'Sign in to your AgentBridge account.');
+        if(studioPath&&(route.startsWith('provider/')||route.startsWith('live/'))) {
+          const args={database,account:current,path:route,method:verb,readBody:()=>boundedAccountBody(request),vaultKey,fetcher};
+          const result=route.startsWith('provider/')?await manageProvider(args):await liveWorkspaceRequest({...args,path:route.slice(5)});
+          if(result instanceof Response)return result;
+          if(result)return json(result.status,result.body);
+          deny(404,'NOT_FOUND','Provider endpoint not found.');
+        }
         if (authPath && route === 'account' && verb === 'PATCH') {
           const input = await boundedAccountBody(request); only(input, ['name', 'agent_name']);
           if (!named(input.name) || !named(input.agent_name)) deny(422, 'INVALID_PROFILE', 'Enter your name and agent name.');
@@ -128,6 +138,7 @@ export function createAccountService({ database, testerEmail, publicOrigin, pass
         }
         deny(404, 'NOT_FOUND', 'Endpoint not found.');
       } catch (error) {
+        error=publicProviderError(error);
         const status = error instanceof AccountError || error.status === 429 ? error.status : 500;
         return json(status, { error: { code: status === 500 ? 'INTERNAL_ERROR' : error.code, message: status === 500 ? 'The request could not be completed.' : error.message } });
       }
