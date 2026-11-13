@@ -102,6 +102,13 @@ test('malformed and duplicate carrier entries fail closed',async()=>{
     const result=await fetchCarrierReconciliation(row,env,provider(inbound,entries).fetchImpl);
     assert.equal(result.code,'AMBIGUOUS_CARRIER_LOG_ENTRIES');
   }
+  // A UUID's letter case does not make it a different provider segment.
+  const caseVariant=await fetchCarrierReconciliation(row,env,
+    provider(inbound,[child,{...child,id:CHILD.toUpperCase(),parent_id:null}]).fetchImpl);
+  assert.equal(caseVariant.code,'AMBIGUOUS_CARRIER_LOG_ENTRIES');
+  const inboundCaseVariant=await fetchCarrierReconciliation(row,env,
+    provider(inbound,[child,{...inbound,id:SEG.toUpperCase()}]).fetchImpl);
+  assert.equal(inboundCaseVariant.code,'AMBIGUOUS_CARRIER_LOG_ENTRIES');
   const valid=await fetchCarrierReconciliation(row,env,provider(inbound,[child,other]).fetchImpl);
   assert.equal(valid.ok,true);
 });
