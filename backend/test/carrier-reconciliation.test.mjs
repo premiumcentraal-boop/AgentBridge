@@ -92,6 +92,15 @@ test('full Voice Logs page without continuation remains locked even with expecte
   const accepted=await fetchCarrierReconciliation(row,env,smaller.fetchImpl);
   assert.equal(accepted.ok,true,JSON.stringify(accepted));
 });
+test('malformed and duplicate carrier entries fail closed',async()=>{
+  const other={...child,id:'78313c74-b321-4c08-a3ea-7123449130ab',parent_id:null};
+  for(const entries of [[child,null],[child,7],[child,{}],[child,child],[child,other,other]]){
+    const result=await fetchCarrierReconciliation(row,env,provider(inbound,entries).fetchImpl);
+    assert.equal(result.code,'AMBIGUOUS_CARRIER_LOG_ENTRIES');
+  }
+  const valid=await fetchCarrierReconciliation(row,env,provider(inbound,[child,other]).fetchImpl);
+  assert.equal(valid.ok,true);
+});
 test('actual charges above reservation cap never unlock',async()=>{
   const p=provider({...inbound,charge:0.03},[{...child,charge:0.03}]);
   const r=await fetchCarrierReconciliation({...row,max_cost_cents:3},env,p.fetchImpl);
