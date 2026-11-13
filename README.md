@@ -1,6 +1,24 @@
 # AgentBridge
 **connect agents worldwide**
 
+## SignalWire live development testing
+
+The private account studio supports an encrypted, customer-supplied SignalWire
+token. Open **Settings → SignalWire**, save and verify a project with Numbers and
+Voice permissions, then explicitly enable live testing. Demo records stay separate.
+
+Live testing connects real owned-number import, US voice-number search/purchase,
+destination pairing, forwarding activation/restoration, provider call status,
+test callbacks, transfers, hangup and consent-required recording controls. Paid
+actions require confirmation and durable request IDs. The host stores the token
+encrypted with its server-only `PROVIDER_CREDENTIALS_KEY`; keys never appear in
+browser storage, exports or public bundles.
+
+See [setup, provider contracts and exact verification boundaries](docs/SIGNALWIRE_LIVE_TESTING.md).
+Live transcription, browser listening and adding a third human to an existing
+call still require a separate public webhook/media service. The live interface
+keeps them unavailable and does not substitute sample audio or transcripts.
+
 ## Victor product page & control studio
 
 The new product experience is prepared for **agentbridge.victor.ceo**, with a dedicated
@@ -14,8 +32,9 @@ AgentBridge tab in the `victor-ceo` repository, following Meridian’s integrati
 - `npm start` — standalone Node service; persistent SQLite storage, no runtime dependencies.
 
 **Mobile preview:** [Open the working pages](https://agentbridge-worldwide.premiumcentraal.chatgpt.site).
-The preview is private to your ChatGPT account. Tap **Open studio** for the sample
-workspace. [Preview setup and limitations](docs/MOBILE_PREVIEW.md).
+The preview is private to your ChatGPT account. Tap **Open studio** for the
+single-tester account. A separate portable HTML file retains the browser-local
+sample. [Account setup](docs/TESTER_ACCOUNT.md).
 
 **Railway deployment:** [new service, volume, access key and custom domain setup](docs/RAILWAY_STUDIO.md).
 The Docker service does not load or expose the telephony Worker. New studio drafts
@@ -201,7 +220,7 @@ AgentBridge is a **telephone routing layer**, not a new voice agent, and not a m
 ### Website privacy and security posture
 The site uses local system fonts instead of third-party font downloads. Built HTML includes CSP and a no-referrer meta policy. On Railway, the Node server permits public product framing only by Victor and blocks all studio framing. On Cloudflare Pages, `_headers` supplies corresponding framing, sniffing and device-permission rules. GitHub Pages ignores `_headers`, so `frame-ancestors` and other header-only controls cannot be assumed on GitHub Pages. Current inline styles still require `style-src 'unsafe-inline'`. These policies secure the public static preview, **not** the telecom backend, which remains private-test-only.
 
-## Combined integration status (review branch)
+## Legacy operator integration status (separate from the account studio)
 The code now combines SignalWire's read-only BYO Project/DID preflight, hangup-only signed SWML endpoint, bounded Twilio and authenticated JSON body readers, strict one-use reservation expiration, and a private-test outbound default-deny switch. No number purchasing, public self-service key linking, live international call, or payment pathway has been enabled. For the SignalWire operator's setup, see [docs/SIGNALWIRE.md](docs/SIGNALWIRE.md); `npm run signalwire:check` only performs read-only inventory with credentials supplied privately in the environment.
 
 **Safety:** `PRIVATE_TEST_OUTBOUND_ENABLED` must remain unset (or any value other than the exact string `true`) on public servers. Even with this flag, caller ID alone is spoofable; production requires per-call cryptographic proof, durable callback replay protection, carrier-state reconciliation, spending caps, confirmed quotes, and platform permission checks. Expired or consumed reservations never supply a callable US access number through REST/MCP. Unknown Twilio completion statuses do not release active locks. SignalWire currently returns hangup-only SWML, not a chargeable connection. Grok Bot's native dialing is unverified.
@@ -215,7 +234,7 @@ The private MCP prototype now has three **read-only** tools for conversational n
 - **list_my_numbers** — checks whether **only that assigned DID** appears as voice-enabled in a privately configured SignalWire Project. It does not list other customer numbers or prove per-user carrier ownership.
 - **search_available_numbers** — searches up to five voice-capable US local number candidates by three-digit area code. Results have **no verified price and cannot be purchased**.
 
-These tools return structured JSON for future host-native cards and equivalent text for ordinary MCP hosts. Read [docs/CHAT_FIRST_MCP.md](docs/CHAT_FIRST_MCP.md) for private operator setup and the security architecture. A private D1-backed bearer-authenticated MCP endpoint can use these **read-only** number tools without configuring Twilio call forwarding; a customer credential vault, live Grok Bot connector interoperability, number purchasing, payments and chargeable routing are still **unimplemented and unverified**. A self-contained standards-based **MCP Apps read-only card** is included, but actual Grok Bot rendering and compatibility have not been tested. Never paste provider credentials into a model conversation. Only the server's secret manager can hold the SignalWire Project token.
+These tools return structured JSON for future host-native cards and equivalent text for ordinary MCP hosts. Read [docs/CHAT_FIRST_MCP.md](docs/CHAT_FIRST_MCP.md) for private operator setup and the security architecture. These **read-only MCP tools** do not expose the account studio's customer vault, purchasing or forwarding controls. Native Grok Bot connector interoperability and customer billing remain unverified. A self-contained standards-based **MCP Apps read-only card** is included, but actual Grok Bot rendering and compatibility have not been tested. Never paste provider credentials into a model conversation.
 
 ## Routing controls (local branch `routing-fixes`, OFF by default)
 Gated SignalWire routing, owner approval, destination/country/spend caps, DTMF PIN caller proof and a replay ledger are implemented and tested offline. Nothing routes unless the owner sets **both** `PRIVATE_TEST_OUTBOUND_ENABLED=true` and `SIGNALWIRE_CONNECT_ENABLED=true` and fills every placeholder. See [docs/ROUTING_PLAN.md](docs/ROUTING_PLAN.md). Not deployed; no live call verified.

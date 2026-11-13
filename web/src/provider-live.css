@@ -1,0 +1,449 @@
+.provider-settings {
+  padding: 26px;
+  max-width: 760px;
+  margin-bottom: 24px;
+}
+.provider-settings-heading,
+.live-card-heading,
+.live-page-heading,
+.live-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.provider-settings-heading > div {
+  flex: 1;
+}
+.provider-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: var(--panel-raised);
+  flex-shrink: 0;
+}
+.provider-settings h2 {
+  font-size: 23px;
+}
+.provider-settings p,
+.provider-muted {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+.provider-settings > p {
+  margin: 16px 0;
+}
+.provider-settings form,
+.live-provider-dialog form {
+  display: grid;
+  gap: 18px;
+}
+.provider-settings label,
+.live-provider-dialog label:not(.provider-consent) {
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+}
+.provider-settings input,
+.live-workspace input:not([type="radio"]):not([type="checkbox"]),
+.live-provider-dialog input:not([type="radio"]):not([type="checkbox"]),
+.live-provider-dialog select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--page-soft);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  min-height: 46px;
+  padding: 11px 13px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.provider-settings input:focus,
+.live-workspace input:focus,
+.live-provider-dialog input:focus,
+.live-provider-dialog select:focus {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.provider-settings small {
+  color: var(--quiet);
+}
+.provider-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+.provider-error {
+  padding: 13px 16px;
+  border: 1px solid #e0505040;
+  border-radius: 12px;
+  color: var(--fg);
+  background: #e050500a;
+  overflow-wrap: anywhere;
+}
+.provider-mode {
+  display: grid;
+  gap: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 22px;
+  margin-top: 24px;
+}
+.provider-mode strong {
+  font-size: 17px;
+}
+.provider-text-button {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  padding: 9px 0;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+.provider-tabs {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 20px;
+}
+.provider-tabs button {
+  flex: 1;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  padding: 12px;
+  color: var(--fg);
+  background: var(--page-soft);
+  font: inherit;
+  font-size: 13px;
+}
+.provider-tabs button[aria-pressed="true"] {
+  background: var(--silver);
+  color: var(--button-ink);
+}
+.provider-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+  margin-bottom: 22px;
+}
+.provider-number-list {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+.provider-number-list legend {
+  font-size: 14px;
+  padding-bottom: 12px;
+  font-weight: 600;
+}
+.live-provider-dialog .provider-number-list > label {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  border: 1px solid var(--line);
+  background: var(--page-soft);
+  border-radius: 12px;
+  padding: 13px;
+}
+.provider-number-list input {
+  width: 19px;
+  height: 19px;
+  flex-shrink: 0;
+  accent-color: var(--blue);
+}
+.provider-number-list strong,
+.provider-number-list small {
+  display: block;
+}
+.provider-number-list small {
+  color: var(--muted);
+  margin-top: 3px;
+  font-size: 12px;
+}
+.provider-consent {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 13px;
+  line-height: 1.6;
+  padding-block: 10px;
+}
+.provider-consent input {
+  width: 19px;
+  height: 19px;
+  flex-shrink: 0;
+  accent-color: var(--blue);
+  margin-top: 2px;
+}
+.live-workspace {
+  display: grid;
+  gap: 26px;
+  min-width: 0;
+}
+.live-workspace h1 {
+  font-size: 32px;
+}
+.live-workspace h2 {
+  font-size: 21px;
+}
+.live-workspace h3 {
+  font-size: 17px;
+  margin-top: 24px;
+}
+.live-mode-label {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  margin-bottom: 7px;
+}
+.live-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.live-shortcuts > button {
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+  color: var(--fg);
+  padding: 24px;
+  border-radius: 24px;
+  display: grid;
+  gap: 14px;
+  text-align: left;
+  font: inherit;
+  position: relative;
+  min-height: 164px;
+}
+.live-shortcuts strong {
+  font-size: 20px;
+  letter-spacing: -0.035em;
+}
+.live-shortcuts span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.live-shortcuts > button > svg:last-child {
+  position: absolute;
+  right: 22px;
+  top: 27px;
+}
+.live-connections-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.live-connection-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  padding: 24px;
+  min-width: 0;
+}
+.live-card-heading h2 {
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+.live-number-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin: 26px 0;
+}
+.live-number-pair small {
+  display: block;
+  color: var(--quiet);
+  font-size: 10px;
+  margin-bottom: 7px;
+}
+.live-number-pair strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.live-number {
+  display: block;
+  font-size: 23px;
+  margin-top: 24px;
+}
+.live-connection-card > .provider-muted {
+  margin-top: 20px;
+}
+.live-section-heading {
+  margin-bottom: 20px;
+}
+.live-section-heading > input {
+  max-width: 360px;
+}
+.live-call-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 15px;
+}
+.live-call-card {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--fg);
+  border-radius: 20px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 17px;
+  text-align: left;
+  font: inherit;
+  width: 100%;
+  min-width: 0;
+}
+.live-call-card > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+.live-call-card strong {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.live-call-card small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 4px;
+}
+.live-call-card > svg:last-child {
+  flex-shrink: 0;
+}
+.live-recording {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+  margin-top: 20px;
+}
+.live-recording > div:first-child {
+  display: flex;
+  gap: 15px;
+}
+.live-recording audio {
+  width: 100%;
+  margin-top: 15px;
+}
+.live-event {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+.live-event time {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 7px;
+}
+.live-transcript {
+  white-space: pre-wrap;
+  margin-top: 16px;
+}
+.live-review {
+  border: 1px solid var(--line-strong);
+  border-radius: 20px;
+  padding: 20px;
+}
+.live-review > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-top: 15px;
+}
+.live-review span {
+  font-size: 13px;
+}
+.live-footer-note {
+  font-size: 11px;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+.live-provider-dialog .tools-dialog-body {
+  overflow-y: auto;
+  max-height: calc(100dvh - 125px);
+  overscroll-behavior: contain;
+}
+@media (max-width: 900px) {
+  .live-connections-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .provider-settings {
+    padding: 20px;
+  }
+  .provider-settings-heading {
+    gap: 12px;
+  }
+  .provider-settings-heading h2 {
+    font-size: 20px;
+  }
+  .live-shortcuts {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .live-shortcuts > button {
+    padding: 18px;
+    min-height: 160px;
+    border-radius: 20px;
+  }
+  .live-shortcuts strong {
+    font-size: 17px;
+  }
+  .live-shortcuts span {
+    font-size: 11px;
+  }
+  .live-shortcuts > button > svg:last-child {
+    display: none;
+  }
+  .live-page-heading,
+  .live-section-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .live-page-heading h1 {
+    font-size: 28px;
+  }
+  .live-connection-card {
+    padding: 20px;
+  }
+  .live-call-card {
+    padding: 16px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .live-call-card .provider-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 13px;
+  }
+  .live-call-card > svg:last-child {
+    display: none;
+  }
+  .provider-tabs button {
+    font-size: 12px;
+    padding: 11px 8px;
+  }
+  .provider-search {
+    grid-template-columns: 1fr;
+  }
+  .provider-actions .ab-button {
+    flex: 1;
+    min-width: 110px;
+  }
+  .live-review > div {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
