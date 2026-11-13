@@ -84,6 +84,21 @@ async function reconcile(row,env,fetchImpl){
   if(!isObj(listing.links)||typeof listing.links.self!=='string'||!listing.links.self||
      typeof listing.links.first!=='string'||!listing.links.first)
     return failed('INCOMPLETE_CARRIER_PAGINATION');
+  // A short response is not proof of a complete first page when its own
+  // pagination links identify a different origin, endpoint or page. Never
+  // trust an arbitrary metadata URL as evidence of a complete call ledger.
+  const isFirstPageLink=value=>{
+    try{
+      const url=new URL(value);
+      if(url.protocol!=='https:'||url.origin!==new URL(prefix).origin||
+         url.pathname!==new URL(prefix).pathname||url.username||url.password||url.hash)
+        return false;
+      const pages=url.searchParams.getAll('page_number');
+      return pages.length<=1&&(pages.length===0||pages[0]==='0');
+    }catch{return false;}
+  };
+  if(!isFirstPageLink(listing.links.self)||!isFirstPageLink(listing.links.first))
+    return failed('INCOMPLETE_CARRIER_PAGINATION');
   if(listing.links.next!==null&&listing.links.next!==undefined)
     return failed('PAGINATED_CARRIER_LOGS');
   // A full page without a next cursor cannot prove the provider did not truncate
