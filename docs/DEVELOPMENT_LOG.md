@@ -581,3 +581,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Follow-up security review found that the detail endpoint could report a terminal inbound segment while the list omitted that segment entirely; a child-only listing was still sufficient to unlock. This does not prove that the list covers the relevant call or all of its legs.
 - Changed reconciliation to fail closed with `INBOUND_MISSING_FROM_CARRIER_LIST` unless the list explicitly contains the inbound segment, then compare detail/list status, direction, destination and charge. Updated fixtures to include the inbound segment by default and added a deliberate omission regression case.
 - Conservative behavior can retain locks during provider indexing delays; provider contract and live D1 remain unverified. Routing stays default-deny. No carrier calls, paid resources, secrets, merges or deployment.
+
+
+## 2026-11-13 — Owner force-unlock regression fixture follows inbound coverage requirement (draft PR #49)
+- Investigated exact-head GitHub Actions Quality gate #43386133441 on `9ae09e2`: syntax checks passed, but 191/192 Node tests passed. `backend/test/owner-force-unlock.test.mjs` expected HTTP 200 and received 409 because its mocked Voice Logs listing contained only the outbound child, violating the new fail-closed inbound-presence requirement.
+- Updated the positive owner reconciliation fixture to return both the inbound segment and the outbound child. This preserves the stricter production check and read-only GET behavior rather than weakening security for a test.
+- The fix requires fresh exact-head CI; real SignalWire list completeness, D1 and owner authorization remain manual verification gates. No routing enablement, calls, purchases, secrets, merges or deployment.
