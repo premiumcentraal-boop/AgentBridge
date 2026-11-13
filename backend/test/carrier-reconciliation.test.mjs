@@ -105,6 +105,21 @@ test('malformed and duplicate carrier entries fail closed',async()=>{
   const valid=await fetchCarrierReconciliation(row,env,provider(inbound,[child,other]).fetchImpl);
   assert.equal(valid.ok,true);
 });
+test('nested outbound carrier legs cannot be omitted from the billed two-leg total',async()=>{
+  const grandchild={id:'88313c74-b321-4c08-a3ea-7123449130ab',parent_id:CHILD,
+    direction:'outbound-dial',from:DEST,to:'+442079460000',status:'completed',charge:0.25};
+  for(const nested of [grandchild,{...grandchild,status:'in-progress'},
+    {...grandchild,charge:undefined}]){
+    const result=await fetchCarrierReconciliation(row,env,
+      provider(inbound,[child,nested]).fetchImpl);
+    assert.equal(result.ok,false,JSON.stringify(result));
+    assert.equal(result.code,'UNVERIFIED_NESTED_OUTBOUND_LEGS');
+  }
+  const unrelated={...grandchild,parent_id:'78313c74-b321-4c08-a3ea-7123449130ab'};
+  const result=await fetchCarrierReconciliation(row,env,
+    provider(inbound,[child,unrelated]).fetchImpl);
+  assert.equal(result.ok,true,JSON.stringify(result));
+});
 test('actual charges above reservation cap never unlock',async()=>{
   const p=provider({...inbound,charge:0.03},[{...child,charge:0.03}]);
   const r=await fetchCarrierReconciliation({...row,max_cost_cents:3},env,p.fetchImpl);
