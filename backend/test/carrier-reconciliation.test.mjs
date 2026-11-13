@@ -208,6 +208,7 @@ test('contradictory inbound detail and list evidence never unlocks a reservation
     {...listed,status:'ringing'},
     {...listed,charge:0.09},
     {...listed,to:'+13125550111'},
+    {...listed,from:'+12125550999'},
     {...listed,direction:'outbound'},
     {...listed,charge:undefined}
   ];
