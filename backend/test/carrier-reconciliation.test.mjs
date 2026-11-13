@@ -63,6 +63,9 @@ test('fail closed on stale, mismatched, multiple or paginated voice logs',async(
     provider(inbound,[]),
     provider(inbound,[child,{...child,id:'68313c74-b321-4c08-a3ea-7123449130ab'}]),
     provider(inbound,[child],{...COMPLETE_LINKS,next:'opaque-page-token'}),
+    provider(inbound,[child],{...COMPLETE_LINKS,next:0}),
+    provider(inbound,[child],{...COMPLETE_LINKS,next:false}),
+    provider(inbound,[child],{...COMPLETE_LINKS,next:{}}),
     provider({...inbound,charge:'1.00'}),
     provider(inbound,[{...child,charge:99}])
   ];
