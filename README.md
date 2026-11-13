@@ -56,17 +56,17 @@ work before JavaScript starts. The original `/design/` gallery remains available
 - `/studio/demo/{numbers,connections,routes,calls,memory,connection,activity,settings,call,design}/` — Matching demo pages
 - `/app/` — Compatibility link to the sample studio
 
-The main hero says **connect agents worldwide**, with a signup-first action, secondary studio entry and an interactive sample-agent widget showing a three-message agent/business exchange. The sample waveform animates with reduced-motion support. A separate worldwide section preserves pairs of bold coloured country
-lines enter from opposite edges, glide, then accelerate into the exact centre.
-Their flags travel with the advancing line heads, then dissolve before the
-circles overlap. Contact triggers a green pulse, a phone that pops into place
-and a check mark that draws on as the country lines fade. The brief **Call
-connected** confirmation clears before the next pair starts. Twelve pairings cover
-all 16 flags over a 60-second cycle, with straight or single-turn approaches.
-Every new pair paints above the older lines, flags and call icons, including at
-the loop seam. The scene respects reduced motion, offers pause/play, and stops
-when off screen or the tab is hidden. Reduced motion samples the same scene as a
-still, including before JavaScript starts, with no call icon before contact.
+The main hero says **connect agents worldwide**, with a signup-first action, secondary studio entry and an interactive sample-agent widget showing a three-message agent/business exchange. The sample waveform animates with reduced-motion support. A separate worldwide section shows overlapping bold country routes:
+30 staggered journeys cover all 16 flags over a 60-second cycle. Several move
+at once, crossing over and under one another before joining at dispersed points.
+Four journeys bring three countries together. Flags travel with the line heads
+through straight runs and single rounded turns; the final approach accelerates
+into contact. Only then do that journey's lines fade and its green phone, pulse
+and animated check appear. Three-way joins have a participant badge and label.
+New routes paint above older lines and icons, including at the loop seam, with
+a narrow background gap making crossings readable. The scene respects reduced
+motion, offers pause/play, and stops when off screen or the tab is hidden.
+Reduced motion samples the same composition with no call before its own contact.
 Flags are local SVG symbols from the
 MIT-licensed flag-icons project.
 
