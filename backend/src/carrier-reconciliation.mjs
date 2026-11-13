@@ -71,6 +71,14 @@ async function reconcile(row,env,fetchImpl){
   // A full page without a next cursor cannot prove the provider did not truncate
   // the response at its advertised page_size. Never unlock from that ambiguity.
   if(listing.data.length>=1000)return failed('INCOMPLETE_CARRIER_PAGINATION');
+  // Never infer a complete carrier ledger from malformed entries or repeated
+  // segment identifiers: either could conceal another billable outbound leg.
+  const ids=new Set();
+  for(const entry of listing.data){
+    if(!isObj(entry)||typeof entry.id!=='string'||!entry.id||ids.has(entry.id))
+      return failed('AMBIGUOUS_CARRIER_LOG_ENTRIES');
+    ids.add(entry.id);
+  }
   if(inbound.id!==row.provider_segment_id)return failed('INBOUND_LOG_MISMATCH');
   if(inbound.direction!=='inbound'||inbound.to!==env.US_BRIDGE_DID)
     return failed('INBOUND_LOG_MISMATCH');
