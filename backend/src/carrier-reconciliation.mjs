@@ -68,6 +68,9 @@ async function reconcile(row,env,fetchImpl){
      typeof listing.links.first!=='string'||!listing.links.first)
     return failed('INCOMPLETE_CARRIER_PAGINATION');
   if(listing.links.next)return failed('PAGINATED_CARRIER_LOGS');
+  // A full page without a next cursor cannot prove the provider did not truncate
+  // the response at its advertised page_size. Never unlock from that ambiguity.
+  if(listing.data.length>=1000)return failed('INCOMPLETE_CARRIER_PAGINATION');
   if(inbound.id!==row.provider_segment_id)return failed('INBOUND_LOG_MISMATCH');
   if(inbound.direction!=='inbound'||inbound.to!==env.US_BRIDGE_DID)
     return failed('INBOUND_LOG_MISMATCH');
