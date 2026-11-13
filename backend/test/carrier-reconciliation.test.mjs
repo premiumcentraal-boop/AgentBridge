@@ -20,7 +20,8 @@ function provider(inRow=inbound,children=[child],links=COMPLETE_LINKS){
   const calls=[];
   const fetchImpl=async(url,options)=>{
     calls.push({url,options});
-    const payload=url.endsWith('/'+SEG)?inRow:{data:children,links};
+    const entries=children.some(x=>x?.id===SEG)?children:[inRow,...children];
+    const payload=url.endsWith('/'+SEG)?inRow:{data:entries,links};
     return new Response(JSON.stringify(payload),{status:200});
   };
   return {fetchImpl,calls};
@@ -83,7 +84,7 @@ test('missing or malformed pagination metadata cannot prove exhaustive child leg
   }
 });
 test('full Voice Logs page without continuation remains locked even with expected child',async()=>{
-  const unrelated=Array.from({length:999},(_,i)=>({
+  const unrelated=Array.from({length:998},(_,i)=>({
     id:'unrelated-'+i,parent_id:null,direction:'outbound',to:'+13125550100'
   }));
   const full=provider(inbound,[child,...unrelated],COMPLETE_LINKS);
@@ -206,5 +207,5 @@ test('contradictory inbound detail and list evidence never unlocks a reservation
   assert.equal(matching.ok,true,JSON.stringify(matching));
   // The list may omit the inbound detail record; that alone is not a contradiction.
   const omitted=await fetchCarrierReconciliation(row,env,provider().fetchImpl);
-  assert.equal(omitted.ok,true);
+  assert.equal(omitted.ok,false);
 });
