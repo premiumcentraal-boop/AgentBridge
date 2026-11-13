@@ -607,3 +607,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Require the two independent reads to agree on inbound parentage, and require the inbound segment to be a root (`parent_id` null or absent). Mismatches keep the reservation locked with existing fail-closed codes.
 - Added offline regression cases for contradictory parent IDs and non-root inbound segments. This is an intentionally conservative safety check; provider contract and legitimate edge cases remain subject to issue #50.
 - No live provider calls, routing activation, payments, merge or deployment. Exact-head CI verification required for this commit.
+
+
+## 2026-11-13 — Carrier clock-skew and high-volume listing boundary regressions (draft PR #49)
+- Added deterministic offline regression coverage for the `created_after = reservation.created_at - 120 seconds` query boundary across seven clock offsets, plus the fail-closed case where the provider list omits the inbound segment despite a valid detail response. This does **not** prove SignalWire includes all records inside the requested time window.
+- Added a 1,000-entry listing test with 998 unrelated records and both expected call legs; the full-page completeness guard must keep the reservation locked. Added a short-page continuation-cursor test asserting the cursor is rejected and never followed with Basic credentials.
+- These tests exercise existing conservative behavior; no production routing, billing, or carrier API changes. Exact-head CI and actual SignalWire timestamp/pagination semantics remain pending. No calls, purchases, secrets, deployment or merges.
