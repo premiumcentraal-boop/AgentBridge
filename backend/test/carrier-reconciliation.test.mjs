@@ -185,3 +185,26 @@ test('missing or unexpected documented fields stay locked with a specific code, 
   const nullish=await fetchCarrierReconciliation(row,env,async()=>new Response('null'));
   assert.equal(nullish.ok,false);
 });
+
+test('contradictory inbound detail and list evidence never unlocks a reservation',async()=>{
+  const listed={...inbound};
+  const variants=[
+    {...listed,status:'ringing'},
+    {...listed,charge:0.09},
+    {...listed,to:'+13125550111'},
+    {...listed,direction:'outbound'},
+    {...listed,charge:undefined}
+  ];
+  for(const conflict of variants){
+    const result=await fetchCarrierReconciliation(row,env,
+      provider(inbound,[conflict,child]).fetchImpl);
+    assert.equal(result.code,'CONFLICTING_INBOUND_CARRIER_LOGS',JSON.stringify({conflict,result}));
+    assert.equal(result.ok,false);
+  }
+  const matching=await fetchCarrierReconciliation(row,env,
+    provider(inbound,[{...inbound},child]).fetchImpl);
+  assert.equal(matching.ok,true,JSON.stringify(matching));
+  // The list may omit the inbound detail record; that alone is not a contradiction.
+  const omitted=await fetchCarrierReconciliation(row,env,provider().fetchImpl);
+  assert.equal(omitted.ok,true);
+});
