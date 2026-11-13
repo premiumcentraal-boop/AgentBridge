@@ -345,3 +345,27 @@ test('pagination metadata cannot falsely claim a complete first-page ledger',asy
     assert.equal(result.ok,true,JSON.stringify({links,result}));
   }
 });
+
+
+test('UUID case variants cannot conceal extra direct or nested billable legs',async()=>{
+  const extra={...child,id:'68313c74-b321-4c08-a3ea-7123449130ab',
+    parent_id:SEG.toUpperCase(),charge:0.5};
+  const direct=await fetchCarrierReconciliation(row,env,
+    provider(inbound,[child,extra]).fetchImpl);
+  assert.equal(direct.code,'UNVERIFIED_OUTBOUND_LEGS',JSON.stringify(direct));
+  const grandchild={...child,id:'88313c74-b321-4c08-a3ea-7123449130ab',
+    parent_id:CHILD.toUpperCase(),charge:0.5};
+  const nested=await fetchCarrierReconciliation(row,env,
+    provider(inbound,[child,grandchild]).fetchImpl);
+  assert.equal(nested.code,'UNVERIFIED_NESTED_OUTBOUND_LEGS',JSON.stringify(nested));
+  // The provider may capitalize an otherwise identical UUID in the detail
+  // or child parent reference. Case alone must not create a false missing leg.
+  const upperDetail={...inbound,id:SEG.toUpperCase()};
+  const accepted=await fetchCarrierReconciliation(row,env,
+    provider(upperDetail,[{...inbound}, {...child,parent_id:SEG.toUpperCase()}]).fetchImpl);
+  assert.equal(accepted.ok,true,JSON.stringify(accepted));
+  const upperChild={...child,id:CHILD.toUpperCase()};
+  const nestedUpper=await fetchCarrierReconciliation(row,env,
+    provider(inbound,[upperChild,{...grandchild,parent_id:CHILD}]).fetchImpl);
+  assert.equal(nestedUpper.code,'UNVERIFIED_NESTED_OUTBOUND_LEGS',JSON.stringify(nestedUpper));
+});
