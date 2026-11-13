@@ -35,7 +35,7 @@ function isObj(x){return x!==null&&typeof x==='object'&&!Array.isArray(x);}
 // Exact decimal arithmetic for the finite, nonnegative provider dollar values.
 // Number.toString() gives the shortest round-trippable decimal, including exponents.
 function decimalCents(value){
-  const match=/^(\\d+)(?:\\.(\\d+))?(?:e([+-]?\\d+))?$/i.exec(String(value));
+  const match=/^(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/i.exec(String(value));
   if(!match)throw Error('invalid carrier charge');
   const digits=BigInt(match[1]+(match[2]||''));
   const scale=(match[2]||'').length-Number(match[3]||0);
