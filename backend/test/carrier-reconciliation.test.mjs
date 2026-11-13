@@ -16,11 +16,11 @@ const inbound={id:SEG,status:'completed',direction:'inbound',to:DID,charge:0.01}
 const child={id:CHILD,parent_id:SEG,direction:'outbound',from:DID,to:DEST,status:'completed',charge:0.02};
 const COMPLETE_LINKS={self:'https://example-space.signalwire.com/api/voice/logs?page_size=1000',
   first:'https://example-space.signalwire.com/api/voice/logs?page_size=1000'};
-function provider(inRow=inbound,children=[child],links=COMPLETE_LINKS){
+function provider(inRow=inbound,children=[child],links=COMPLETE_LINKS,includeInbound=true){
   const calls=[];
   const fetchImpl=async(url,options)=>{
     calls.push({url,options});
-    const entries=children.some(x=>x?.id===SEG)?children:[inRow,...children];
+    const entries=!includeInbound||children.some(x=>x?.id===SEG)?children:[inRow,...children];
     const payload=url.endsWith('/'+SEG)?inRow:{data:entries,links};
     return new Response(JSON.stringify(payload),{status:200});
   };
@@ -206,6 +206,7 @@ test('contradictory inbound detail and list evidence never unlocks a reservation
     provider(inbound,[{...inbound},child]).fetchImpl);
   assert.equal(matching.ok,true,JSON.stringify(matching));
   // The list may omit the inbound detail record; that alone is not a contradiction.
-  const omitted=await fetchCarrierReconciliation(row,env,provider().fetchImpl);
+  const omitted=await fetchCarrierReconciliation(row,env,provider(inbound,[child],COMPLETE_LINKS,false).fetchImpl);
   assert.equal(omitted.ok,false);
+  assert.equal(omitted.code,'INBOUND_MISSING_FROM_CARRIER_LIST');
 });
