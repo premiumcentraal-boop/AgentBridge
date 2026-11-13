@@ -307,6 +307,10 @@ test('pagination metadata cannot falsely claim a complete first-page ledger',asy
     {...COMPLETE_LINKS,self:base+'?page_number=1'},
     {...COMPLETE_LINKS,first:base+'?page_number=2'},
     {...COMPLETE_LINKS,self:base+'?page_number=0&page_number=1'},
+    {...COMPLETE_LINKS,self:base+'?page_size=1'},
+    {...COMPLETE_LINKS,first:base+'?page_size=1000&page_size=1000'},
+    {...COMPLETE_LINKS,self:base+'?created_after=2020-01-01T00%3A00%3A00Z'},
+    {...COMPLETE_LINKS,first:base+'?created_after=2020-01-01T00%3A00%3A00Z&created_after=2020-01-01T00%3A00%3A00Z'},
     {...COMPLETE_LINKS,self:'https://user:pass@example-space.signalwire.com/api/voice/logs'},
     {...COMPLETE_LINKS,first:base+'#fragment'},
     {...COMPLETE_LINKS,first:'not a url'}
@@ -319,7 +323,8 @@ test('pagination metadata cannot falsely claim a complete first-page ledger',asy
   }
   for(const links of [
     {...COMPLETE_LINKS,self:base+'?page_number=0'},
-    {...COMPLETE_LINKS,first:base+'?page_number=0'}
+    {...COMPLETE_LINKS,first:base+'?page_number=0'},
+    {...COMPLETE_LINKS,self:base+'?page_size=1000&created_after='+encodeURIComponent(new Date((row.created_at-120)*1000).toISOString())}
   ]){
     const result=await fetchCarrierReconciliation(row,env,provider(inbound,[child],links).fetchImpl);
     assert.equal(result.ok,true,JSON.stringify({links,result}));
