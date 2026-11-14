@@ -491,3 +491,34 @@ test('equivalent first-page last links normalize absent page_number to zero',asy
     assert.equal(p.calls.length,2,'never follow metadata links');
   }
 });
+
+
+test('bounded near-full carrier pages reach completeness validation instead of 256 KiB rejection',async()=>{
+  const unrelated=Array.from({length:997},(_,i)=>({
+    id:'78313c74-b321-4c08-a3ea-'+i.toString(16).padStart(12,'0'),
+    parent_id:null,direction:'outbound',status:'completed',
+    charge:0.01,metadata:'x'.repeat(300)
+  }));
+  const records=[inbound,child,...unrelated]; // 999 entries, above former 256 KiB cap
+  const payload=JSON.stringify({data:records,links:COMPLETE_LINKS});
+  assert.ok(Buffer.byteLength(payload)>256*1024);
+  assert.ok(Buffer.byteLength(payload)<1024*1024);
+  const fetchImpl=async(url)=>new Response(url.endsWith('/'+SEG)?
+    JSON.stringify(inbound):payload);
+  const result=await fetchCarrierReconciliation(row,env,fetchImpl);
+  assert.equal(result.ok,true,JSON.stringify(result));
+
+  // A full 1,000-entry page must still fail closed, even below the byte cap.
+  const extra={...unrelated[0],id:'88313c74-b321-4c08-a3ea-7123449130ab'};
+  const full=JSON.stringify({data:[...records,extra],links:COMPLETE_LINKS});
+  const denied=await fetchCarrierReconciliation(row,env,async(url)=>
+    new Response(url.endsWith('/'+SEG)?JSON.stringify(inbound):full));
+  assert.equal(denied.code,'INCOMPLETE_CARRIER_PAGINATION');
+
+  // The larger budget is finite; responses over 1 MiB cannot unlock.
+  const oversized=JSON.stringify({data:[inbound,child],
+    links:COMPLETE_LINKS,padding:'x'.repeat(1024*1024)});
+  const locked=await fetchCarrierReconciliation(row,env,async(url)=>
+    new Response(url.endsWith('/'+SEG)?JSON.stringify(inbound):oversized));
+  assert.equal(locked.ok,false);
+});
