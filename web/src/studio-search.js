@@ -5,7 +5,8 @@ const keywords = {
   overview: "home dashboard workspace",
   numbers: "phone routing purchased owned inventory signalwire",
   connections: "destination receiver contacts countries",
-  calls: "international call plans calling live",
+  calls:
+    "international calling live history recent recordings audio capture transcript transcription highlights notes retention",
   routes: "route routing transfer destinations",
   memory:
     "recording audio capture transcript transcription language retention preferences",
@@ -17,8 +18,8 @@ const keywords = {
 const pageDetails = {
   overview: "Live calls and recent connections",
   numbers: "Your AgentBridge routing numbers",
-  connections: "Saved destinations",
-  calls: "Active calls and call plans",
+  connections: "Saved contacts, phone numbers and conversation memory",
+  calls: "Live calls, recent conversations, recordings and transcripts",
   routes: "Choose where a call goes",
   memory: "Recordings, transcripts and capture preferences",
   connection: "Provider and backend setup",
@@ -102,7 +103,7 @@ export function studioSearchEntries(snapshot, call) {
     if (plan.status === "archived") continue;
     entries.push({
       id: `plan:${plan.id}`,
-      group: "Call plans",
+      group: "Call shortcuts",
       title: plan.label,
       detail: plan.destination,
       icon: "calls",

@@ -83,7 +83,46 @@ export async function syncCalls(database, account, client, doc) {
     .filter((c) => roots.has(c.sid) || roots.has(c.parent_call_sid))
     .map(callView);
   await changeLive(database, account.id, (d) => {
-    d.calls = calls;
+    d.calls = calls.map((call) => {
+      const old =
+        (d.call_history || []).find((item) => item.id === call.id) ||
+        (d.calls || []).find((item) => item.id === call.id);
+      const number = d.routing_numbers.find(
+        (item) =>
+          item.provider_number_id === call.provider_number_id ||
+          item.e164 === call.from ||
+          item.e164 === call.to,
+      );
+      const connection =
+        d.connections.find((item) => item.id === old?.connection_id) ||
+        d.connections.find((item) => item.destination === call.to) ||
+        (call.direction === "inbound"
+          ? d.connections.find(
+              (item) =>
+                item.routing_number_id === number?.id &&
+                item.status === "saved",
+            )
+          : null);
+      return {
+        ...old,
+        ...call,
+        label: old?.label || connection?.label || call.to,
+        destination: old?.destination || connection?.destination || call.to,
+        connection_id: old?.connection_id || connection?.id || null,
+        notes: old?.notes || [],
+      };
+    });
+    const merged = new Map(
+      (d.call_history || []).map((call) => [call.id, call]),
+    );
+    for (const call of d.calls)
+      if (!activeCall(call))
+        merged.set(call.id, { ...merged.get(call.id), ...call });
+    d.call_history = [...merged.values()]
+      .sort(
+        (a, b) => Date.parse(b.started_at || 0) - Date.parse(a.started_at || 0),
+      )
+      .slice(0, 200);
     d.last_sync = stamp();
     d.calls_has_more = Boolean(payload.next_page_uri);
     return {};
@@ -141,7 +180,14 @@ export async function startTestCall({
     Record: false,
   });
   if (!UUID.test(call.sid || "")) throw new ProviderError(502, true);
-  const result = callView(call);
+  const result = {
+    ...callView(call),
+    connection_id: connection.id,
+    label: connection.label,
+    destination: connection.destination,
+    routing_number: number.e164,
+    notes: [],
+  };
   await changeLive(database, account.id, (d) => {
     d.calls = [result, ...d.calls.filter((c) => c.id !== result.id)].slice(
       0,
@@ -174,7 +220,15 @@ export async function controlCall({
       Status: call.status === "in-progress" ? "completed" : "canceled",
     });
     await changeLive(database, account.id, (d) => {
-      d.calls = d.calls.map((c) => (c.id === id ? callView(result) : c));
+      d.calls = d.calls.map((c) =>
+        c.id === id ? { ...c, ...callView(result) } : c,
+      );
+      const ended = d.calls.find((c) => c.id === id);
+      if (ended && !activeCall(ended))
+        d.call_history = [
+          ended,
+          ...(d.call_history || []).filter((c) => c.id !== id),
+        ].slice(0, 200);
       liveEvent(d, "call.end_requested", "Call end requested from SignalWire.");
       return {};
     });

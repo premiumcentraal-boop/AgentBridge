@@ -1,5 +1,22 @@
 # AgentBridge
-**connect agents worldwide**
+**Connect agents worldwide**
+
+## Contacts and call history
+
+The studio has one **Calls** page for live calls, recent conversations, recordings,
+transcripts and notes. Completed calls retain contact, routing number, duration and
+status even when capture was off. **Numbers** is a separate inventory page.
+
+Contact memory saves notes against the destination phone number and combines them
+with previous call details and highlights. Copy that context into your agent before
+the next call; AgentBridge does not silently update an external agent's memory.
+Account notes and history persist on the server. The public sample stays in its tab.
+
+Recording and transcription remain opt-in. A saved recording can support a later
+transcript; audio that was never recorded cannot be recovered. The sample supports
+restoring its fictional transcript from its fictional recording. Real recording
+controls use SignalWire; new live transcription and human audio joining still need
+the media integration described below. See [capture and memory behavior](docs/CONVERSATIONS.md).
 
 ## Public accounts on Railway
 
@@ -85,7 +102,7 @@ work before JavaScript starts. The original `/design/` gallery remains available
 - `/studio/demo/{numbers,connections,routes,calls,memory,connection,activity,settings,call,design}/` — Matching demo pages
 - `/app/` — Compatibility link to the sample studio
 
-The main hero says **connect agents worldwide**, with a signup-first action, secondary studio entry and an interactive sample-agent widget showing a three-message agent/business exchange. The sample waveform animates with reduced-motion support. A separate worldwide section shows overlapping bold country routes:
+The main hero says **Connect agents worldwide**, with a signup-first action, secondary studio entry and an interactive sample-agent widget showing a three-message agent/business exchange. The sample waveform animates with reduced-motion support. A separate worldwide section shows overlapping bold country routes:
 12 journeys cover all 16 flags over a 60-second cycle, with at most two
 approaching together. Complementary routes use four aligned connection points,
 consistent rounded corners and occasional crossings, leaving room between flags

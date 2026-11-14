@@ -43,6 +43,8 @@ export function NumberWorkspace({
   call,
   navTo,
   onOpenCall,
+  onToggleCapture,
+  onMemory,
   onStartCall,
   onBuy,
   onAdd,
@@ -146,78 +148,90 @@ export function NumberWorkspace({
           onOpen={onOpenCall}
           expandable
           transcript={transcript}
+          onToggleCapture={onToggleCapture}
         />
       )}
-      <nav
-        className="workspace-primary-actions"
-        aria-label="Studio shortcuts"
-        tabIndex={0}
-      >
-        <button
-          type="button"
-          className="workspace-primary-action buy-action"
-          aria-label="Buy a number"
-          onClick={onBuy}
+      {page === "overview" ? (
+        <nav
+          className="workspace-primary-actions"
+          aria-label="Studio shortcuts"
+          tabIndex={0}
         >
-          <span className="workspace-action-icon">
-            <Icon name="phone" size={26} />
-            <i>
-              <Icon name="plus" size={11} />
-            </i>
-          </span>
-          <span>
-            <strong>Buy a number</strong>
-            <small>A dedicated AgentBridge line</small>
-          </span>
-          <DirectionArrow />
-        </button>
-        <button
-          type="button"
-          className="workspace-primary-action"
-          aria-label="Connect a destination"
-          onClick={() => onAdd("", country === "all" ? "GB" : country)}
-        >
-          <span className="workspace-action-icon">
-            <Icon name="connection" size={29} />
-          </span>
-          <span>
-            <strong>Connect a destination</strong>
-            <small>Link an outside phone number</small>
-          </span>
-          <DirectionArrow />
-        </button>
-        {[
-          ["calls", "Calls", "Live and saved calls", "calls"],
-          [
-            "memory",
-            "Transcripts",
-            "Words, recordings and notes",
-            "transcript",
-          ],
-          [
-            "numbers",
-            "Your numbers",
-            "Manage your AgentBridge lines",
-            "numbers",
-          ],
-        ].map(([pageId, title, detail, icon]) => (
-          <A
-            key={pageId}
-            to={navTo(pageId)}
-            className="workspace-primary-action"
-            aria-label={title}
+          <button
+            type="button"
+            className="workspace-primary-action buy-action"
+            aria-label="Buy a number"
+            onClick={onBuy}
           >
             <span className="workspace-action-icon">
-              <Icon name={icon} size={28} />
+              <Icon name="phone" size={26} />
+              <i>
+                <Icon name="plus" size={11} />
+              </i>
             </span>
             <span>
-              <strong>{title}</strong>
-              <small>{detail}</small>
+              <strong>Buy a number</strong>
+              <small>Choose a line for your calls</small>
             </span>
             <DirectionArrow />
-          </A>
-        ))}
-      </nav>
+          </button>
+          <button
+            type="button"
+            className="workspace-primary-action"
+            aria-label="Connect a destination"
+            onClick={() => onAdd("", country === "all" ? "GB" : country)}
+          >
+            <span className="workspace-action-icon">
+              <Icon name="connection" size={29} />
+            </span>
+            <span>
+              <strong>Connect a destination</strong>
+              <small>Save a contact and its phone number</small>
+            </span>
+            <DirectionArrow />
+          </button>
+          {[
+            ["calls", "Calls", "Live calls and recent conversations", "calls"],
+            [
+              "memory",
+              "Recordings",
+              "Audio, transcripts and call notes",
+              "transcript",
+            ],
+            [
+              "numbers",
+              "Your numbers",
+              "Manage your AgentBridge lines",
+              "numbers",
+            ],
+          ].map(([pageId, title, detail, icon]) => (
+            <A
+              key={pageId}
+              to={navTo(pageId)}
+              className="workspace-primary-action"
+              aria-label={title}
+            >
+              <span className="workspace-action-icon">
+                <Icon name={icon} size={28} />
+              </span>
+              <span>
+                <strong>{title}</strong>
+                <small>{detail}</small>
+              </span>
+              <DirectionArrow />
+            </A>
+          ))}
+        </nav>
+      ) : (
+        <div className="number-page-actions">
+          <Btn
+            label={numberPage ? "Buy a number" : "Connect a destination"}
+            icon={numberPage ? "plus" : "connection"}
+            primary
+            onClick={numberPage ? onBuy : () => onAdd("", "GB")}
+          />
+        </div>
+      )}
       <div className="connections-section-heading">
         <div>
           <h2>{numberPage ? "Routing numbers" : "Connections"}</h2>
@@ -426,6 +440,15 @@ export function NumberWorkspace({
                     end="arrow"
                     onClick={() => onEdit(link)}
                   />
+                  {onMemory && (
+                    <Btn
+                      label="Contact memory"
+                      aria-label={"Memory for " + link.label}
+                      icon="bookmark"
+                      end={null}
+                      onClick={() => onMemory(link)}
+                    />
+                  )}
                   {expanded && (
                     <button
                       type="button"

@@ -23,7 +23,19 @@ import {
   Wave,
   Loop,
 } from "./ui.jsx";
-import { CallExtensions, SAMPLE_CALL } from "./call-tools.jsx";
+import {
+  CallExtensions,
+  SAMPLE_CALL,
+  CapturePermission,
+} from "./call-tools.jsx";
+import { ContactMemoryDialog } from "./conversations.jsx";
+import {
+  sampleCallHistory,
+  saveContactNotes,
+  contactContext,
+  finishDemoConversation,
+  recoverSampleTranscript,
+} from "../../shared/conversations.mjs";
 import { SignalWireSettings, LiveWorkspace } from "./provider-live.jsx";
 import {
   AccountAuth,
@@ -47,6 +59,8 @@ const empty = () => ({
   connections: [],
   number_orders: [],
   call_plans: [],
+  call_history: [],
+  contact_memories: [],
   capture_preferences: { ...DEFAULT_CAPTURE },
   routes: [],
   events: [],
@@ -70,8 +84,16 @@ export function Studio({ mode, setMode, isDemo }) {
   const current =
     path.replace(/^\/(?:studio\/(?:demo\/)?|app\/)/, "").split("/")[0] ||
     "overview";
-  const page = ["overview", "call", ...NAV.map(([id]) => id)].includes(current)
-    ? current
+  const canonicalPage =
+    current === "memory"
+      ? "calls"
+      : current === "routes"
+        ? "connections"
+        : current;
+  const page = ["overview", "call", ...NAV.map(([id]) => id)].includes(
+    canonicalPage,
+  )
+    ? canonicalPage
     : "overview";
   const [snapshot, setSnapshot] = useState(() =>
     isDemo
@@ -83,6 +105,14 @@ export function Studio({ mode, setMode, isDemo }) {
             ...connection,
           })),
           number_orders: [],
+          call_history: sampleCallHistory(),
+          contact_memories: [
+            {
+              destination: "+442079460123",
+              notes: "Ask about access to reception on the next call.",
+              updated_at: "2026-11-13T10:31:00Z",
+            },
+          ],
           call_plans: SAMPLE_CALL_PLANS.map((p) => ({
             ...p,
             capture: { ...p.capture },
@@ -110,6 +140,8 @@ export function Studio({ mode, setMode, isDemo }) {
     [mobileOpen, setMobileOpen] = useState(false),
     [joinOpen, setJoinOpen] = useState(false);
   const [routingOpen, setRoutingOpen] = useState(false);
+  const [memoryContact, setMemoryContact] = useState(null);
+  const [captureRequest, setCaptureRequest] = useState(null);
   const [searchTarget, setSearchTarget] = useState(null);
   const [connectionRecency, setConnectionRecency] = useState({});
   const [numberEditorOpen, setNumberEditorOpen] = useState(false);
@@ -120,6 +152,10 @@ export function Studio({ mode, setMode, isDemo }) {
   const sampleAudioRef = useRef(null);
   const samplePlayAttempt = useRef(0);
   const [call, setCall] = useState({
+      id: isDemo ? "sample-current-london" : undefined,
+      connection_id: isDemo ? "connection-demo-london" : undefined,
+      started_at: new Date(Date.now() - 18_000).toISOString(),
+      notes: [],
       active: isDemo,
       muted: false,
       elapsed: 18,
@@ -655,6 +691,14 @@ export function Studio({ mode, setMode, isDemo }) {
       setJoinOpen(false);
       setSnapshot((s) => ({
         ...s,
+        call_history: [
+          finishDemoConversation({
+            ...call,
+            active: false,
+            ended_at: new Date().toISOString(),
+          }),
+          ...(s.call_history || []).filter((item) => item.id !== call.id),
+        ].slice(0, 100),
         events: [event("preview.call_ended", "Call ended."), ...s.events],
       }));
       notify("Call ended.");
@@ -719,6 +763,7 @@ export function Studio({ mode, setMode, isDemo }) {
     }
     try {
       if (persistentDemo) {
+        await callQueue.current;
         const result = await api("demo-call/start", {
           method: "POST",
           body: JSON.stringify({ connection_id: connection.id }),
@@ -731,7 +776,11 @@ export function Studio({ mode, setMode, isDemo }) {
           (number) => number.id === connection.routing_number_id,
         );
         setCall({
-          id: "fixture-call",
+          id: uuid(),
+          connection_id: connection.id,
+          started_at: new Date().toISOString(),
+          notes: [],
+          contact_context: contactContext(snapshot, connection),
           active: true,
           label: connection.label,
           destination: connection.destination,
@@ -760,17 +809,135 @@ export function Studio({ mode, setMode, isDemo }) {
       return;
     }
     if (isDemo) {
-      setCall({
-        active: true,
-        muted: false,
-        elapsed: 0,
-        joined: false,
-        userMuted: true,
-        recording: false,
-        transcription: false,
-        recordingPaused: false,
+      const connection =
+        snapshot.connections.find(
+          (connection) =>
+            connection.id === call.connection_id &&
+            connection.status === "saved",
+        ) ||
+        snapshot.connections.find(
+          (connection) => connection.status === "saved",
+        );
+      if (connection) startDemoCall(connection);
+    }
+  };
+  const toggleCapture = (kind) => {
+    if (!sandbox || !call.active) return;
+    if (!call[kind] && !call.capturePermission) {
+      setCaptureRequest(kind);
+      return;
+    }
+    setCall((c) => ({
+      ...c,
+      [kind]: !c[kind],
+      recordingPaused: kind === "recording" ? false : c.recordingPaused,
+      recording_saved:
+        c.recording_saved || (kind === "recording" && !c.recording),
+      transcript_saved:
+        c.transcript_saved || (kind === "transcription" && !c.transcription),
+    }));
+  };
+  const saveMemory = async (contact, notes) => {
+    if (isDemo)
+      setSnapshot((s) => {
+        const next = {
+          ...s,
+          contact_memories: (s.contact_memories || []).map((item) => ({
+            ...item,
+          })),
+        };
+        saveContactNotes(next, contact.destination, notes.trim());
+        return next;
       });
-      returnCall();
+    else {
+      await api(`contacts/${contact.id}/memory`, {
+        method: "PATCH",
+        body: JSON.stringify({ notes }),
+      });
+      await refresh();
+    }
+    notify("Contact memory saved.");
+  };
+  const saveCallNote = async (id, value) => {
+    let note;
+    if (isDemo) {
+      note = { ...value, id: uuid(), created_at: new Date().toISOString() };
+      setSnapshot((s) => ({
+        ...s,
+        call_history: (s.call_history || []).map((item) =>
+          item.id === id
+            ? { ...item, notes: [...(item.notes || []), note] }
+            : item,
+        ),
+      }));
+    } else {
+      await callQueue.current;
+      const result = await api(`calls/${id}/notes`, {
+        method: "POST",
+        body: JSON.stringify(value),
+      });
+      note = result.note;
+      await refresh();
+    }
+    setCall((c) =>
+      c.id === id ? { ...c, notes: [...(c.notes || []), note] } : c,
+    );
+  };
+  const deleteCallNote = async (id, noteId) => {
+    if (isDemo)
+      setSnapshot((s) => ({
+        ...s,
+        call_history: (s.call_history || []).map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                notes: (item.notes || []).filter((note) => note.id !== noteId),
+              }
+            : item,
+        ),
+      }));
+    else {
+      await callQueue.current;
+      await api(`calls/${id}/notes/${noteId}`, {
+        method: "DELETE",
+        body: "{}",
+      });
+      await refresh();
+    }
+    setCall((c) =>
+      c.id === id
+        ? { ...c, notes: (c.notes || []).filter((note) => note.id !== noteId) }
+        : c,
+    );
+  };
+  const historyCapture = async (id, kind) => {
+    if (isDemo)
+      setSnapshot((s) => ({
+        ...s,
+        call_history: (s.call_history || []).map((item) => {
+          if (item.id !== id) return item;
+          const next = { ...item };
+          if (kind === "restore-transcript") recoverSampleTranscript(next);
+          else if (kind === "recording") next.has_recording = false;
+          else {
+            next.has_transcript = false;
+            next.transcript = [];
+          }
+          return next;
+        }),
+      }));
+    else {
+      await callQueue.current;
+      await api(
+        kind === "restore-transcript"
+          ? `calls/${id}/sample-transcript`
+          : `calls/${id}/capture`,
+        {
+          method: kind === "restore-transcript" ? "POST" : "DELETE",
+          body: JSON.stringify(kind === "restore-transcript" ? {} : { kind }),
+        },
+      );
+      await refresh();
     }
   };
   if (!session.authenticated && (accountDemo || session.auth_method))
@@ -841,14 +1008,7 @@ export function Studio({ mode, setMode, isDemo }) {
       go(navTo(entry.page));
     }
   };
-  const primaryIds = [
-    "overview",
-    "numbers",
-    "connections",
-    "calls",
-    "routes",
-    "memory",
-  ];
+  const primaryIds = ["overview", "numbers", "connections", "calls"];
   const renderNav = (mobile = false) => (
     <nav
       className={
@@ -1009,6 +1169,7 @@ export function Studio({ mode, setMode, isDemo }) {
         <main className="workspace-main" id="main" tabIndex={-1}>
           {liveMode && page !== "design" ? (
             <LiveWorkspace
+              initialHistoryFilter={current === "memory" ? "recording" : "all"}
               page={page}
               account={session.account}
               onSignout={signout}
@@ -1060,6 +1221,12 @@ export function Studio({ mode, setMode, isDemo }) {
               onListen={listenToSample}
               onRoute={reviewRouting}
               onStartCall={sandbox ? startDemoCall : undefined}
+              onToggleCapture={sandbox ? toggleCapture : undefined}
+              onSaveNote={saveCallNote}
+              onDeleteNote={deleteCallNote}
+              onHistoryCapture={historyCapture}
+              onMemory={setMemoryContact}
+              initialHistoryFilter={current === "memory" ? "recording" : "all"}
             />
           ) : ["overview", "numbers", "connections", "routes"].includes(
               page,
@@ -1071,6 +1238,8 @@ export function Studio({ mode, setMode, isDemo }) {
               call={call}
               navTo={navTo}
               onOpenCall={openCall}
+              onToggleCapture={sandbox ? toggleCapture : undefined}
+              onMemory={setMemoryContact}
               onStartCall={sandbox ? startDemoCall : undefined}
               transcript={
                 sandbox && call.transcription ? SAMPLE_CALL.transcript : []
@@ -1201,6 +1370,30 @@ export function Studio({ mode, setMode, isDemo }) {
           );
         }}
       />
+      <ContactMemoryDialog
+        contact={memoryContact}
+        snapshot={snapshot}
+        onSave={saveMemory}
+        onClose={() => setMemoryContact(null)}
+      />
+      {captureRequest && (
+        <CapturePermission
+          kind={captureRequest}
+          onClose={() => setCaptureRequest(null)}
+          onConfirm={() => {
+            const kind = captureRequest;
+            setCall((c) => ({
+              ...c,
+              [kind]: true,
+              capturePermission: true,
+              recordingPaused: false,
+              recording_saved: c.recording_saved || kind === "recording",
+              transcript_saved: c.transcript_saved || kind === "transcription",
+            }));
+            setCaptureRequest(null);
+          }}
+        />
+      )}
       {sandbox && (
         <div className="sample-listen-dock" hidden={!call.listening}>
           <BotFace

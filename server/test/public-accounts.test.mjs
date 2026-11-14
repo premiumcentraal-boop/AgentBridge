@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -286,6 +286,40 @@ test("two public users cannot read or mutate each other's SignalWire credentials
     await connectionResult.clone().text(),
   );
   const { connection } = await connectionResult.json();
+  const savedMemory = await studio(
+    first.cookie,
+    "live/contacts/" + connection.id + "/memory",
+    "PATCH",
+    { notes: "Private caller preferences" },
+  );
+  assert.equal(savedMemory.status, 200);
+  for (const [suffix, method, body] of [
+    ["context", "GET", undefined],
+    ["memory", "PATCH", { notes: "Foreign overwrite" }],
+  ]) {
+    const foreign = await studio(
+      second.cookie,
+      "live/contacts/" + connection.id + "/" + suffix,
+      method,
+      body,
+    );
+    assert.equal(foreign.status, 404, "Contact memory must be account scoped");
+  }
+  const retained = await (
+    await studio(first.cookie, "live/contacts/" + connection.id + "/context")
+  ).json();
+  assert.equal(retained.context.notes, "Private caller preferences");
+  assert.equal(
+    (
+      await studio(
+        second.cookie,
+        "live/calls/" + randomUUID() + "/notes",
+        "POST",
+        { text: "Foreign note" },
+      )
+    ).status,
+    404,
+  );
   const before = b.state.requests.length;
   assert.equal(
     (

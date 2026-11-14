@@ -14,6 +14,7 @@ scripts/**
 shared/**
 !shared/call-plans.mjs
 !shared/numbers.mjs
+!shared/conversations.mjs
 !web/
 web/**
 !web/package.json
