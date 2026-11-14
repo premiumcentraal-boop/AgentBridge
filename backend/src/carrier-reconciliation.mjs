@@ -22,7 +22,10 @@ import {validateConnection} from './signalwire.mjs';
 import {readBoundedWebhookBody} from './bounded-body.mjs';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const MAX_RESPONSE=65_536;
-const MAX_LIST_RESPONSE=256*1024;
+// Bounded 1 MiB budget for up to 1,000 Voice Logs (including metadata).
+// The former 256 KiB ceiling rejected ordinary near-full pages before
+// pagination completeness could be assessed. Oversized responses stay locked.
+const MAX_LIST_RESPONSE=1024*1024;
 // Only states SignalWire documents as final. 'ending'/'in-progress' etc. stay locked.
 export const INBOUND_TERMINAL=new Set(['completed','ended']);
 export const OUTBOUND_TERMINAL=new Set(['completed','ended','busy','failed','no-answer','canceled']);
