@@ -22,7 +22,10 @@ import {validateConnection} from './signalwire.mjs';
 import {readBoundedWebhookBody} from './bounded-body.mjs';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const MAX_RESPONSE=65_536;
-const MAX_LIST_RESPONSE=256*1024;
+// Bounded 1 MiB budget for up to 1,000 Voice Logs (including metadata).
+// The former 256 KiB ceiling rejected ordinary near-full pages before
+// pagination completeness could be assessed. Oversized responses stay locked.
+const MAX_LIST_RESPONSE=1024*1024;
 // Only states SignalWire documents as final. 'ending'/'in-progress' etc. stay locked.
 export const INBOUND_TERMINAL=new Set(['completed','ended']);
 export const OUTBOUND_TERMINAL=new Set(['completed','ended','busy','failed','no-answer','canceled']);
@@ -32,6 +35,23 @@ function safeMoney(value){
   return typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=1000;
 }
 function isObj(x){return x!==null&&typeof x==='object'&&!Array.isArray(x);}
+// Exact decimal arithmetic for the finite, nonnegative provider dollar values.
+// Number.toString() gives the shortest round-trippable decimal, including exponents.
+function decimalCents(value){
+  const match=/^(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/i.exec(String(value));
+  if(!match)throw Error('invalid carrier charge');
+  const digits=BigInt(match[1]+(match[2]||''));
+  const scale=(match[2]||'').length-Number(match[3]||0);
+  return scale>0
+    ? [digits*100n,10n**BigInt(scale)]
+    : [digits*100n*10n**BigInt(-scale),1n];
+}
+function ceilCarrierCents(a,b){
+  const [an,ad]=decimalCents(a),[bn,bd]=decimalCents(b);
+  const numerator=an*bd+bn*ad,denominator=ad*bd;
+  return Number((numerator+denominator-1n)/denominator);
+}
+
 export async function fetchCarrierReconciliation(row,env,fetchImpl=fetch){
   try{return await reconcile(row,env,fetchImpl);}
   catch{return failed('RECONCILIATION_ERROR');}
@@ -54,10 +74,10 @@ async function reconcile(row,env,fetchImpl){
     if(raw===null)return null;
     try{return JSON.parse(raw);}catch{return null;}
   };
+  const q=new URL(prefix);
   let inbound,listing;
   try{
     inbound=await get(prefix+'/'+row.provider_segment_id);
-    const q=new URL(prefix);
     q.searchParams.set('created_after',new Date((row.created_at-120)*1000).toISOString());
     q.searchParams.set('page_size','1000');
     listing=await get(q.toString(),MAX_LIST_RESPONSE);
@@ -66,6 +86,41 @@ async function reconcile(row,env,fetchImpl){
     return failed('INCOMPLETE_CARRIER_LOGS');
   if(!isObj(listing.links)||typeof listing.links.self!=='string'||!listing.links.self||
      typeof listing.links.first!=='string'||!listing.links.first)
+    return failed('INCOMPLETE_CARRIER_PAGINATION');
+  // A short response is not proof of a complete first page when its own
+  // pagination links identify a different origin, endpoint or page. Never
+  // trust an arbitrary metadata URL as evidence of a complete call ledger.
+  const isFirstPageLink=value=>{
+    try{
+      const url=new URL(value);
+      if(url.protocol!=='https:'||url.origin!==new URL(prefix).origin||
+         url.pathname!==new URL(prefix).pathname||url.username||url.password||url.hash)
+        return false;
+      // Unknown query filters/cursors can silently narrow the provider ledger.
+      // Require both requested filters exactly once; omission cannot attest to the requested ledger. Only an optional first-page marker is allowed.
+      for(const key of url.searchParams.keys()){
+        if(key!=='page_number'&&key!=='page_size'&&key!=='created_after')return false;
+      }
+      const pages=url.searchParams.getAll('page_number');
+      // A link with the right origin/path but a different query window or page
+      // size cannot attest to completeness of the requested first page.
+      const sizes=url.searchParams.getAll('page_size');
+      const starts=url.searchParams.getAll('created_after');
+      return pages.length<=1&&(pages.length===0||pages[0]==='0')&&
+        sizes.length===1&&sizes[0]===q.searchParams.get('page_size')&&
+        starts.length===1&&starts[0]===q.searchParams.get('created_after');
+    }catch{return false;}
+  };
+  if(!isFirstPageLink(listing.links.self)||!isFirstPageLink(listing.links.first))
+    return failed('INCOMPLETE_CARRIER_PAGINATION');
+  // Optional reverse/terminal navigation metadata must not contradict the
+  // single first-and-last page claim. An omitted page_number means page zero.\n  // Never follow these untrusted URLs.
+  if(listing.links.prev!==null&&listing.links.prev!==undefined)
+    return failed('INCOMPLETE_CARRIER_PAGINATION');
+  if(listing.links.last!==null&&listing.links.last!==undefined&&
+     (!isFirstPageLink(listing.links.last)||
+      (new URL(listing.links.last).searchParams.get('page_number')??'0')!==
+      (new URL(listing.links.self).searchParams.get('page_number')??'0')))
     return failed('INCOMPLETE_CARRIER_PAGINATION');
   if(listing.links.next!==null&&listing.links.next!==undefined)
     return failed('PAGINATED_CARRIER_LOGS');
@@ -76,27 +131,86 @@ async function reconcile(row,env,fetchImpl){
   // segment identifiers: either could conceal another billable outbound leg.
   const ids=new Set();
   for(const entry of listing.data){
-    if(!isObj(entry)||typeof entry.id!=='string'||!entry.id||ids.has(entry.id))
+    if(!isObj(entry)||typeof entry.id!=='string'||!UUID.test(entry.id)||
+       (entry.parent_id!==null&&entry.parent_id!==undefined&&
+        (typeof entry.parent_id!=='string'||!UUID.test(entry.parent_id)))||
+       ids.has(entry.id.toLowerCase()))
       return failed('AMBIGUOUS_CARRIER_LOG_ENTRIES');
-    ids.add(entry.id);
+    // UUID identifiers are case-insensitive; mixed-case duplicates must not
+    // masquerade as distinct provider segments in the billing ledger.
+    ids.add(entry.id.toLowerCase());
   }
-  if(inbound.id!==row.provider_segment_id)return failed('INBOUND_LOG_MISMATCH');
+  // The detail endpoint and list endpoint are independent reads. If the list
+  // includes the inbound segment, contradictory terminal state or charges must
+  // never be treated as verified evidence for releasing a reservation.
+  const sameUuid=(a,b)=>typeof a==='string'&&typeof b==='string'&&UUID.test(a)&&UUID.test(b)&&a.toLowerCase()===b.toLowerCase();
+  const listedInbound=listing.data.find(x=>sameUuid(x.id,inbound.id));
+  // The list is the only evidence used to count all legs. If it omits the
+  // inbound segment, we cannot establish that the query covers this call.
+  // Never release a lock using a list that might be incomplete or stale.
+  if(!listedInbound)return failed('INBOUND_MISSING_FROM_CARRIER_LIST');
+  if(
+    listedInbound.direction!==inbound.direction||
+    listedInbound.from!==inbound.from||
+    listedInbound.to!==inbound.to||
+    listedInbound.status!==inbound.status||
+    listedInbound.charge!==inbound.charge||
+    listedInbound.parent_id!==inbound.parent_id)
+    return failed('CONFLICTING_INBOUND_CARRIER_LOGS');
+  if(!sameUuid(inbound.id,row.provider_segment_id))return failed('INBOUND_LOG_MISMATCH');
+  // A root inbound segment must not itself be a child of another billable leg.
+  if(inbound.parent_id!==null&&inbound.parent_id!==undefined)
+    return failed('INBOUND_LOG_MISMATCH');
   if(inbound.direction!=='inbound'||inbound.to!==env.US_BRIDGE_DID)
     return failed('INBOUND_LOG_MISMATCH');
   if(!INBOUND_TERMINAL.has(inbound.status))return failed('INBOUND_CARRIER_NOT_TERMINAL');
   if(!safeMoney(inbound.charge))return failed('INBOUND_CHARGE_UNKNOWN');
-  const children=listing.data.filter(x=>isObj(x)&&x.parent_id===inbound.id);
+  // Preserve specific inbound evidence errors before evaluating unrelated
+  // graph orphans. Both paths remain fail-closed; diagnostics stay actionable.
+  // A valid-looking parent UUID that is absent from the returned ledger is
+  // not proof of an unrelated call. The omitted ancestor may conceal another
+  // billable leg, so never release a reservation from an orphaned call graph.
+  for(const entry of listing.data){
+    if(entry.parent_id!==null&&entry.parent_id!==undefined&&
+       !ids.has(entry.parent_id.toLowerCase()))
+      return failed('ORPHANED_CARRIER_LOG_PARENT');
+  }
+  // A complete carrier ledger must be a forest rooted at parentless segments.
+  // A self-parent or a cycle of otherwise valid UUIDs cannot establish call
+  // ancestry, even when the expected A/B legs look coherent. Retain the lock.
+  const parents=new Map(listing.data.map(entry=>[
+    entry.id.toLowerCase(),entry.parent_id?.toLowerCase()??null
+  ]));
+  const resolved=new Set();
+  for(const start of parents.keys()){
+    const visiting=new Set();
+    let current=start;
+    while(current!==null&&!resolved.has(current)){
+      if(visiting.has(current))return failed('CYCLIC_CARRIER_LOG_PARENT');
+      visiting.add(current);
+      current=parents.get(current)??null;
+    }
+    for(const id of visiting)resolved.add(id);
+  }
+  const children=listing.data.filter(x=>isObj(x)&&sameUuid(x.parent_id,inbound.id));
   // Exactly one outbound leg is expected in this one-destination trial.
   // Multiple children might be additional billable legs: manual review required.
   if(children.length!==1)return failed('UNVERIFIED_OUTBOUND_LEGS');
   const child=children[0];
-  if(!UUID.test(child.id||'')||child.id===inbound.id||
+  if(!UUID.test(child.id||'')||sameUuid(child.id,inbound.id)||
      !OUTBOUND_DIRECTIONS.has(child.direction)||child.from!==env.US_BRIDGE_DID||
      child.to!==row.destination)
     return failed('OUTBOUND_LOG_MISMATCH');
+  // A terminal direct B-leg does not prove there were no downstream billable
+  // legs. Any listed child of that B-leg makes the two-leg ledger incomplete.
+  if(listing.data.some(entry=>sameUuid(entry.parent_id,child.id)))
+    return failed('UNVERIFIED_NESTED_OUTBOUND_LEGS');
   if(!OUTBOUND_TERMINAL.has(child.status))return failed('OUTBOUND_CARRIER_NOT_TERMINAL');
   if(!safeMoney(child.charge))return failed('OUTBOUND_CHARGE_UNKNOWN');
-  const total=Math.ceil(Math.round((inbound.charge+child.charge)*1e6)/1e4);
+  // Convert each provider charge's decimal representation to an exact rational
+  // number of cents. Binary float addition or rounding to four decimal places
+  // can undercount a positive fraction of a cent at a cap boundary.
+  const total=ceilCarrierCents(inbound.charge,child.charge);
   if(total>row.max_cost_cents)return failed('ACTUAL_CHARGE_EXCEEDS_RESERVED_CAP');
   return {ok:true,inbound_segment_id:inbound.id,outbound_segment_id:child.id,
     outbound_status:child.status,actual_cost_cents:total,

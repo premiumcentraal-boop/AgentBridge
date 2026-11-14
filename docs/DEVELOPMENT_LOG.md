@@ -571,3 +571,146 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Tightened fail-closed pagination validation: only absent or explicit null `links.next` is terminal; false, zero and object cursors no longer bypass the pagination guard.
 - Added offline regression inputs for these malformed cursor shapes. A non-null cursor remains untrusted and never triggers a follow-up fetch or unlock.
 - Previous exact-head `f432ae2` Quality gate #43359731037 passed before this change. New commits require exact-head CI. Real SignalWire response semantics and D1 validation remain manual release gates; no calls, routing activation, deployment or merges.
+
+## 2026-11-13 — Reject contradictory inbound Voice Logs snapshots (draft, not merged)
+- Reviewed the merged SignalWire reconciler after release v1.2.0. The detail endpoint and list endpoint are fetched independently; previously, when both returned the inbound segment with conflicting direction, destination, status or charge, reconciliation could still accept the detail and one outbound child, releasing the reservation on contradictory carrier evidence.
+- Added fail-closed `CONFLICTING_INBOUND_CARRIER_LOGS` when the inbound segment is present in the list but disagrees with the detail response on those security/billing fields. Added offline negative cases for each mismatch and positive cases for consistent and omitted inbound list records.
+- This is a conservative offline guard, not proof of SignalWire snapshot consistency or completeness. Legitimate concurrent status changes may remain locked for owner investigation. Real provider fixtures, D1 validation, pricing and cryptographic caller authorization remain pending. No calls, paid routing, provisioning, secrets, merges or deployment were authorized.
+
+## 2026-11-13 — Require inbound coverage in carrier listing (draft PR #49)
+- Follow-up security review found that the detail endpoint could report a terminal inbound segment while the list omitted that segment entirely; a child-only listing was still sufficient to unlock. This does not prove that the list covers the relevant call or all of its legs.
+- Changed reconciliation to fail closed with `INBOUND_MISSING_FROM_CARRIER_LIST` unless the list explicitly contains the inbound segment, then compare detail/list status, direction, destination and charge. Updated fixtures to include the inbound segment by default and added a deliberate omission regression case.
+- Conservative behavior can retain locks during provider indexing delays; provider contract and live D1 remain unverified. Routing stays default-deny. No carrier calls, paid resources, secrets, merges or deployment.
+
+
+## 2026-11-13 — Owner force-unlock regression fixture follows inbound coverage requirement (draft PR #49)
+- Investigated exact-head GitHub Actions Quality gate #43386133441 on `9ae09e2`: syntax checks passed, but 191/192 Node tests passed. `backend/test/owner-force-unlock.test.mjs` expected HTTP 200 and received 409 because its mocked Voice Logs listing contained only the outbound child, violating the new fail-closed inbound-presence requirement.
+- Updated the positive owner reconciliation fixture to return both the inbound segment and the outbound child. This preserves the stricter production check and read-only GET behavior rather than weakening security for a test.
+- The fix requires fresh exact-head CI; real SignalWire list completeness, D1 and owner authorization remain manual verification gates. No routing enablement, calls, purchases, secrets, merges or deployment.
+
+## 2026-11-13 — Reject nested outbound segments in carrier reconciliation (draft PR #49)
+- Security review found that a single terminal direct child of the inbound segment could pass while another Voice Logs entry had `parent_id` equal to that outbound child's ID. That nested leg's charge and state were not included in the two-leg total, potentially allowing an undercounted reservation release.
+- Added fail-closed `UNVERIFIED_NESTED_OUTBOUND_LEGS` for any listed descendant directly parented by the expected B-leg. Added regression fixtures for completed, in-progress and unknown-charge nested legs, plus an unrelated-parent control. This only protects against nested legs present in the returned page; incomplete provider pagination and indexing remain blockers.
+- Offline CI is required on the new exact SHA. Provider semantics, live D1 and paid routing remain unverified/default-deny. No calls, purchases, secrets, merges or deployments.
+
+## 2026-11-13 — Exact decimal carrier cost ceiling (draft PR #49)
+- Found that rounding the binary-float sum of provider charges to four decimal dollar places before applying the cent ceiling can undercount fractional-cent charges. For example, $0.01 + $0.000000001 is strictly above one cent, but the previous formula returned one cent, potentially bypassing a one-cent reservation cap.
+- Replaced the rounding step with exact rational decimal arithmetic derived from each finite nonnegative provider number's shortest round-trippable decimal representation. Added six regression cases including exponent notation, zero, the 0.1+0.2 float trap, and cap rejection one cent below the exact ceiling.
+- Standalone arithmetic verification: Node v22.16.0, six cases passed. Full repository CI and independent SignalWire billing semantics remain pending; draft PR unmerged, paid routing default-deny. No calls, carrier resources, payments, secrets, merges or deployments.
+
+## 2026-11-13 — CI correction for decimal parser regex (draft PR #49)
+- Exact-head Quality gate #43426087591 failed 11/194 Node tests: the new decimal parser regex had accidentally doubled JavaScript backslashes, causing valid numeric charges to return `RECONCILIATION_ERROR` instead of a verified cent total. The secret scan passed.
+- Corrected the regex to match decimal digits and literal decimal points using single regex escapes; no routing policy or safety gate changed. Re-run exact-head CI before claiming successful full verification.
+
+## 2026-11-13 — Inbound carrier parent-link integrity (draft PR #49)
+- Reviewed the exact-head reconciliation implementation and found that inbound detail/list comparisons did not verify `parent_id`, and a terminal inbound record could itself claim to be a child of another segment. This weakens confidence in the two-leg billing graph.
+- Require the two independent reads to agree on inbound parentage, and require the inbound segment to be a root (`parent_id` null or absent). Mismatches keep the reservation locked with existing fail-closed codes.
+- Added offline regression cases for contradictory parent IDs and non-root inbound segments. This is an intentionally conservative safety check; provider contract and legitimate edge cases remain subject to issue #50.
+- No live provider calls, routing activation, payments, merge or deployment. Exact-head CI verification required for this commit.
+
+
+## 2026-11-13 — Carrier clock-skew and high-volume listing boundary regressions (draft PR #49)
+- Added deterministic offline regression coverage for the `created_after = reservation.created_at - 120 seconds` query boundary across seven clock offsets, plus the fail-closed case where the provider list omits the inbound segment despite a valid detail response. This does **not** prove SignalWire includes all records inside the requested time window.
+- Added a 1,000-entry listing test with 998 unrelated records and both expected call legs; the full-page completeness guard must keep the reservation locked. Added a short-page continuation-cursor test asserting the cursor is rejected and never followed with Basic credentials.
+- These tests exercise existing conservative behavior; no production routing, billing, or carrier API changes. Exact-head CI and actual SignalWire timestamp/pagination semantics remain pending. No calls, purchases, secrets, deployment or merges.
+
+## 2026-11-13 — Validate Voice Logs first-page metadata (draft PR #49)
+- Found that reconciliation previously accepted any nonempty pagination self/first strings, including a different provider origin or a non-first page. Such metadata cannot establish a complete first-page ledger and could falsely justify releasing a reservation with missing billable legs.
+- Added conservative fail-closed checks requiring HTTPS links on the configured SignalWire origin and exact Voice Logs path, without URL credentials/fragments or a nonzero/duplicate page_number. Added offline negative fixtures for foreign origin, insecure scheme, wrong endpoint, page 1/2, duplicate page parameters, URL credentials, fragment and malformed URL; page 0 controls remain accepted.
+- No continuation URL is fetched. Provider pagination contract remains unverified; legitimate alternate link formats may now retain locks until independently reviewed. Exact-head CI and real SignalWire/D1 verification required. No routing activation, carrier calls, purchases, payments, merges or deployment.
+
+## 2026-11-13 — PR #49 pagination metadata regression CI repair (unmerged)
+- Exact-head Quality gate run #43462737446 failed 1/199 Node tests (owner-force-unlock.test.mjs:87): the successful synthetic reconciliation fixture still returned `links.self='s'` and `links.first='f'`, which correctly fail the newly strict same-origin HTTPS first-page metadata check and preserve HTTP 409 instead of expected 200. Secret scan passed; checks failed before local-MCP steps.
+- Updated only the successful owner test fixture to use the actual requested read-only Voice Logs list URL as both first-page metadata links. The existing malformed/foreign pagination negative tests and production fail-closed guard remain unchanged.
+- This does not verify real SignalWire pagination contracts, D1 behavior or carrier completeness. Exact-head CI on the corrected commit remains to be checked. No paid routing, calls, carrier purchases, secrets, merges or deployment.
+
+## 2026-11-13 — Reject contradictory Voice Logs pagination filters (draft PR #49)
+- Source review after successful exact-head Quality gate #43472928340 found that first-page pagination links were checked for origin/path/page number but not for contradictory `page_size` or `created_after` filters. Metadata could claim a different query window while being accepted as evidence of completeness.
+- Reconciliation now rejects explicitly mismatched or duplicate `page_size` and `created_after` values in self/first links, while accepting omitted optional metadata and matching values. Added negative and positive synthetic regression cases. The provider's actual pagination contract remains unverified; no continuation links are followed.
+- New exact-head CI must pass before review. No routing enablement, carrier calls, purchases, payments, secrets, merges or deployment.
+
+
+## 2026-11-13 — Fix pagination filter scope regression (draft PR #49, not merged)
+- Exact-head Quality gate #43482384129 on `f99e1a0` failed 2 of 199 Node tests: matching `created_after` metadata was rejected with `INCOMPLETE_CARRIER_PAGINATION`, and owner reconciliation returned HTTP 409 rather than 200. Secret scan succeeded.
+- Root cause: `q` (the requested Voice Logs URL) was declared inside the fetch `try` block, but referenced by the subsequent pagination-link validator. The validator caught the resulting `ReferenceError` and incorrectly treated every link containing `created_after` as invalid. Moved `q` into the enclosing reconciliation scope; the pre-existing positive `created_after` and owner integration tests exercise this path, while mismatched filters remain rejected.
+- This is a source fix awaiting exact-head CI; it does not establish real provider pagination semantics, D1 readiness, or safe paid routing. No calls, purchases, payments, secrets, deployment or merges.
+
+## 2026-11-13 — Reject unknown Voice Logs pagination filters (draft PR #49)
+- The first-page link validator previously allowed arbitrary extra query parameters such as `status=completed`, `page_token=next` or `created_before`. Even with a trusted origin and `page_number=0`, those parameters could describe a narrowed or cursor-shifted carrier ledger and make a partial list look complete.
+- Allow only `page_number`, `page_size` and `created_after` in `links.self` and `links.first`, retaining the existing exact-value and duplicate checks. Added five offline negative regression fixtures for unknown filters/cursors. Any ambiguity retains the reservation lock; no provider-supplied URL is followed.
+- The change is conservative: legitimate undocumented provider metadata may now require owner review. Exact-head CI, actual SignalWire pagination contract and Cloudflare D1 behavior remain release gates. No calls, carrier purchases, payments, routing activation, merges or deployment.
+
+
+## 2026-11-13 — Reject conflicting inbound caller evidence (draft PR #49)
+- The read-only carrier reconciler compared inbound Voice Logs detail and listing direction, destination, status, charge and parent linkage, but not the `from` field. This permitted contradictory caller identities across independent provider snapshots to be treated as coherent evidence for releasing a reservation.
+- Require exact `from` equality across the two inbound representations; mismatches fail closed with `CONFLICTING_INBOUND_CARRIER_LOGS`. Added a negative regression to the existing contradiction test matrix. This is an evidence-consistency check, **not** caller-ID authentication: spoofable inbound identity remains insufficient to authorize paid routing.
+- Earlier exact-head `efa13ac` Quality gate #43502569910 passed; these new commits require their own CI. SignalWire real list/detail semantics and Cloudflare D1 recovery remain unverified. No calls, paid routing, provider resources, purchases, payments, merges or deployment.
+
+## 2026-11-13 — Case-insensitive Voice Log segment deduplication (draft PR #49)
+- Reconciliation now treats differently cased spellings of the same UUID as one segment identifier. Previously, a mixed-case duplicate could pass the list's exact-string uniqueness check and be counted as an independent provider record.
+- Added negative regression fixtures for mixed-case duplicates of inbound and outbound segment IDs; ambiguous listings retain the reservation lock with `AMBIGUOUS_CARRIER_LOG_ENTRIES`.
+- Source and tests committed on the existing unmerged PR #49 branch. Exact-head CI must be checked independently; no real provider access, calls, billing, routing changes, merge or deployment occurred. SignalWire list completeness remains P0 issue #50.
+
+## 2026-11-13 — Normalize UUID parent relationships in Voice Logs (draft PR #49)
+- Security review found a concrete fail-open case: a second direct outbound leg whose `parent_id` differed from the inbound UUID only by letter case was ignored, allowing the two-leg ledger to reconcile; likewise a nested outbound leg could be missed when its `parent_id` differed in case from the direct child ID. UUID spelling is case-insensitive, so this could undercount carrier charges and release the reservation prematurely.
+- Use a validated case-insensitive UUID equality helper for inbound detail/list matching, root identity verification, direct-child discovery, child/self identity and nested-leg detection. Existing duplicate-ID rejection remains case-insensitive. Added synthetic negative tests for extra direct and nested legs using case variants, plus a positive mixed-case identity fixture.
+- Source and tests committed to the existing unmerged draft PR #49. Exact-head CI and independent local tests must be checked; provider documentation and real read-only evidence remain P0 issue #50. No routing, calls, payments, secrets, merges or deployment.
+
+## 2026-11-13 — Strict carrier segment and parent UUID evidence (draft PR #49)
+- Reject malformed segment UUIDs and non-null malformed parent UUIDs in any returned Voice Logs entry before accepting a two-leg ledger. Previously a third leg with a malformed parent could evade direct/nested relationship checks.
+- Add offline regressions for malformed parent types/strings and segment IDs; retain well-formed unrelated roots and update synthetic volume IDs to valid UUIDs.
+- This is fail-closed offline hardening only; real SignalWire contract, D1 behavior and exact-head CI remain verification gates. No routing flags, calls, purchases, payments, secrets, merges or deployment.
+
+## 2026-11-14 — Contradictory reverse/last pagination evidence (draft PR #49)
+- Strengthened read-only SignalWire Voice Logs single-page reconciliation: a non-null `links.prev` now retains the reservation lock, and an optional `links.last` must be a validated first-page link with the same explicit page marker as `links.self`. No provider-supplied navigation link is followed or receives credentials.
+- Added synthetic regression cases for contradictory previous/last links, malicious last-link hosts, unknown last-link filters, and valid null or matching terminal metadata. This conservative guard is pending exact-head CI and provider contract verification; undocumented link conventions could require manual recovery.
+- No carrier calls, paid routing, provider provisioning, payment, secrets, merge or deployment.
+
+## 2026-11-14 — Orphaned SignalWire Voice Logs parent guard (draft PR #49)
+- The read-only reconciler previously accepted an extra segment with a well-formed but absent `parent_id`, allowing a disconnected billable leg to be ignored when the expected inbound and direct outbound legs were present. Require every non-null parent UUID in the returned listing to identify a segment present in that same listing; otherwise retain the reservation lock with `ORPHANED_CARRIER_LOG_PARENT`.
+- Added synthetic regression cases for orphaned parents (including mixed-case UUIDs) and a valid unrelated root. Updated the prior orphan fixture to assert denial. This deliberately favors billing integrity over availability: legitimate provider responses whose parents fall outside the requested time window may require owner review.
+- Provider pagination completeness and parent-link contract, Cloudflare D1 behavior, and exact-head CI remain independent release gates. No calls, provider purchases, payments, routing flags, merges or deployments.
+
+### 2026-11-14 — Restore exact-head CI after orphan-parent safety guard
+- Inspected failed Quality gate [#43562027643](https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/43562027643) on PR #49 head `b231ec7`: 212/216 Node tests passed; four legacy tests failed solely because the new `ORPHANED_CARRIER_LOG_PARENT` check preempted specific inbound mismatch/missing evidence error codes.
+- Moved orphan-parent validation after inbound list/detail identity, root-parent, terminal-status and charge validation, but before counting outbound children or releasing any reservation. The same malformed/orphaned graph is still rejected, while absent or contradictory inbound records retain their established diagnostic codes. No forwarding or provider calls were enabled.
+- Validation: source inspection and exact-head GitHub Actions pending at commit time; provider contract and D1 recovery remain unverified. Draft PR #49 and P0 issue #50 remain manual-review gates.
+
+## 2026-11-14 — Reject cyclic Voice Logs parent graphs (draft PR #49; unmerged)
+- Audited the read-only SignalWire ledger graph after the orphan-parent guard. Valid UUIDs and present parents did not guarantee an acyclic call graph: a self-parent or two-segment cycle in otherwise unrelated records could pass the two-leg reconciliation and release the reservation despite contradictory carrier ancestry.
+- Added a bounded, iterative parent-chain cycle check over the already capped (<1000) returned segments. Any cycle fails closed with `CYCLIC_CARRIER_LOG_PARENT` before charge reconciliation; no additional provider requests or carrier actions. Added synthetic regression cases for self-parent, two-node cycle, nested self-cycle and a valid unrelated tree with mixed-case UUID references.
+- This is an offline consistency guard, not proof that SignalWire produces cycles or that its logs are complete. Preserve manual owner review, default-deny paid routing and unverified carrier contract status. Exact-head CI required; no calls, purchases, payments, deployments or merges.
+
+## 2026-11-14 — Require exact Voice Logs pagination filter attestations (draft PR #49, unmerged)
+- Review identified that the first-page URL validator allowed both requested `created_after` and `page_size` to be omitted from `links.self` and `links.first`. A link lacking the filters cannot independently attest to the requested billing query window.
+- Require both query filters exactly once with exact values on all accepted first-page metadata links (including optional `last`), preserving optional page_number=0 and the existing fail-closed pagination, orphan and cycle checks. Add synthetic negative tests for omitted/duplicate filters and positive complete-ledger control.
+- Conservative contract assumption: actual SignalWire pagination links might omit request filters. If so, this rejects reconciliation and retains the lock until provider documentation and redacted read-only evidence establish a safe alternative. No live provider verification, calls, purchases, payments, routing activation, merges or deployment. Exact-head CI required.
+
+## 2026-11-14 — Exact-head pagination CI regression correction (draft PR #49; unmerged)
+- Inspected Quality gate [#43580756226](https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/43580756226) at `7f9a100`: 225/226 Node tests passed, secret-scan passed; the sole failure was the clock-skew fixture at `backend/test/carrier-reconciliation.test.mjs:330` returning `INCOMPLETE_CARRIER_PAGINATION` instead of success. The fixture reused baseline `COMPLETE_LINKS` while iterating seven changed reservation timestamps, so its pagination URLs no longer matched the newly required `created_after` filter.
+- Updated the clock-skew test to construct both `links.self` and `links.first` from each iteration's expected timestamp, preserving the exact-filter guard and all negative pagination tests. Production routing and reconciliation logic unchanged; no weaker validation or altered carrier permissions.
+- This is a test-fixture repair, not proof of the SignalWire pagination contract. Exact-head CI for the new commit remains required; live SignalWire and D1 behavior are unverified. No calls, carrier provisioning, payments, routing activation, secrets, merges or deployment.
+
+## 2026-11-14 — Normalize equivalent page-zero SignalWire last links (draft PR #49)
+- The strict pagination check compared raw optional `page_number` values for `links.last` and `links.self`, treating omitted page number and explicit `page_number=0` as different despite both satisfying the existing first-page validator. This could unnecessarily strand a reconciled reservation on a benign metadata representation difference.
+- Canonicalize absent page numbers to zero for the last/self comparison while retaining exact origin, path, filter, page-size and first-page validation. Any nonzero, duplicated or malformed page marker remains fail-closed; no pagination URLs are followed.
+- Added six deterministic positive/negative cases, including an explicit later page and duplicate page markers. These tests are written but not independently executed at commit time; exact-head CI and authoritative provider semantics remain release gates.
+- No carrier calls, purchases, payments, secrets, routing activation, merges or deployment.
+
+## 2026-11-14 — Pagination normalization syntax regression (PR #49, pending review)
+- Exact-head Quality gate for `ba68901` failed at `npm run check` before tests: `backend/src/carrier-reconciliation.mjs:120` had one extra closing parenthesis in the optional `links.last` comparison. [CI #43590102873](https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/43590102873).
+- Removed the unmatched parenthesis only; pagination checks and fail-closed billing behavior are unchanged. Re-run exact-head CI before claiming success; carrier contract and real billing remain unverified. No calls, purchases, routing, merges or deployment.
+
+## 2026-11-14 — Bounded near-full Voice Logs response handling (draft PR #49)
+- Raised the read-only list response byte ceiling from 256 KiB to 1 MiB while retaining the 1,000-record completeness guard, 8-second per-fetch timeout, strict pagination validation and fail-closed handling of oversized responses.
+- Added synthetic tests for a 999-record JSON payload larger than 256 KiB, a 1,000-record page, and an over-1-MiB response. No provider credentials or live calls used.
+- This is an offline liveness improvement, not a verified SignalWire response-size contract. Provider pagination/indexing semantics and production authorization remain blocked by issue #50. PR remains draft, unmerged and undeployed; exact-head CI must be checked independently.
+
+## 2026-11-14 — Streamed Voice Logs response-budget regression (draft PR #49)
+- Added offline adversarial response tests for the 1 MiB Voice Logs limit: a streamed body exceeding the cap while falsely advertising a two-byte Content-Length, and a short valid ledger falsely advertising an oversized Content-Length. Both must retain the reservation lock; the former must cancel the stream and neither may trigger extra carrier requests.
+- This tests the existing bounded reader's fail-closed integration without changing paid-routing logic, provider configuration, or spending policy. Exact-head CI is pending; no independent local Node run (container GitHub DNS unavailable). Real SignalWire response semantics and D1 reconciliation remain unverified. No calls, purchases, routing enablement, merges or deployment.
+
+## 2026-11-14 — Voice Logs byte-cap CI fixture correction (draft PR #49)
+- Investigated exact-head `0f6faef` Quality gate #43615779654: 228/229 Node tests passed; the new oversized Content-Length mock asserted zero `ReadableStream.pull` calls, but WHATWG streams may prefetch one chunk at construction before application code reads the body. Secret scan passed.
+- Updated the negative regression to tolerate at most one eager prefetch, keep the mock stream open, and require cancellation. The production `readBoundedWebhookBody` remains unchanged: it rejects oversized Content-Length before requesting a reader, and fails closed.
+- Follow-up exact-head CI must pass before review; no independent local Node run, provider access, paid calls, routing changes, deployment or merge. SignalWire contract and D1 recovery remain release blockers.
