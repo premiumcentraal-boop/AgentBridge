@@ -181,19 +181,6 @@ async function connectingRow(env,id){
   return env.DB.prepare("SELECT r.id,r.account_id,r.destination,r.status,r.provider,r.created_at,r.max_cost_cents,r.provider_call_id,l.provider_segment_id FROM reservations r LEFT JOIN reservation_carrier_legs l ON l.reservation_id=r.id WHERE r.id=? AND r.status='connecting'")
     .bind(id).first();
 }
-async function completeReconciled(env,row,checked,now){
-  // Verified first; record carrier charge and release the lock in one batch.
-  const results=await runAtomic(env,[
-    env.DB.prepare('UPDATE reservation_carrier_legs SET reconciled_at=?,actual_cost_cents=? WHERE reservation_id=?')
-      .bind(now,checked.actual_cost_cents,row.id),
-    env.DB.prepare("UPDATE reservations SET status='completed',completed_at=? WHERE id=? AND provider='signalwire' AND status='connecting'")
-      .bind(now,row.id)
-  ]);
-  if(results?.[1]?.meta?.changes!==1)return error('CANNOT_MARK_ENDED','Reservation state changed during reconciliation',409);
-  return json({id:row.id,status:'completed',carrier_confirmed:true,
-    actual_cost_cents:checked.actual_cost_cents,
-    warning:'Charges are from the retrieved carrier records; independently confirm the statement before further calls.'});
-}
 async function ownerRoute(request,url,env){
   // Owner token never goes to the chat/MCP connector. GET review is separate
   // from POST approval; both demand the exact independently held owner token.
@@ -245,6 +232,11 @@ async function ownerRoute(request,url,env){
        (input.force!==undefined&&typeof input.force!=='boolean')||
        (input.reason!==undefined&&typeof input.reason!=='string'))
       return error('INVALID_FORCE_UNLOCK','Body must be JSON {"force":true,"reason":"..."}',422);
+    // Validate intent before any provider lookup. Malformed/no-force requests
+    // must not amplify read-only carrier API traffic or consume rate limits.
+    const reason=typeof input.reason==='string'?input.reason.trim():'';
+    if(input.force!==true||reason.length<8||reason.length>500||/[\\u0000-\\u001f\\u007f]/.test(reason))
+      return error('FORCE_REQUIRED','Confirm in the SignalWire dashboard that the call ended, then retry with force=true and a reason (8-500 characters).',409);
     const row=await connectingRow(env,m[1]);
     if(!row)return error('CANNOT_UNLOCK','Reservation is not stuck in connecting',409);
     let carrierCode='NO_CARRIER_SEGMENT';
@@ -255,10 +247,6 @@ async function ownerRoute(request,url,env){
       if(checked.ok){carrierCode='CARRIER_FINALITY_UNVERIFIED';}
       else carrierCode=checked.code;
     }
-    const reason=typeof input.reason==='string'?input.reason.trim():'';
-    if(input.force!==true||reason.length<8||reason.length>500||/[\u0000-\u001f\u007f]/.test(reason))
-      return error('FORCE_REQUIRED','Carrier reconciliation failed ('+carrierCode+
-        '). Confirm in the SignalWire dashboard that the call ended, then retry with force=true and a reason (8-500 characters).',409);
     try{
       const results=await runAtomic(env,[
         env.DB.prepare("INSERT INTO owner_actions (id,reservation_id,action,prior_status,carrier_code,reason,created_at) VALUES (?,?,'force_unlock','connecting',?,?,?)")
