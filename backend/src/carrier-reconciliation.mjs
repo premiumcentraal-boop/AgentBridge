@@ -117,7 +117,7 @@ async function reconcile(row,env,fetchImpl){
   if(listing.links.last!==null&&listing.links.last!==undefined&&
      (!isFirstPageLink(listing.links.last)||
       (new URL(listing.links.last).searchParams.get('page_number')??'0')!==
-      (new URL(listing.links.self).searchParams.get('page_number')??'0'))))
+      (new URL(listing.links.self).searchParams.get('page_number')??'0')))
     return failed('INCOMPLETE_CARRIER_PAGINATION');
   if(listing.links.next!==null&&listing.links.next!==undefined)
     return failed('PAGINATED_CARRIER_LOGS');
