@@ -172,6 +172,23 @@ async function reconcile(row,env,fetchImpl){
        !ids.has(entry.parent_id.toLowerCase()))
       return failed('ORPHANED_CARRIER_LOG_PARENT');
   }
+  // A complete carrier ledger must be a forest rooted at parentless segments.
+  // A self-parent or a cycle of otherwise valid UUIDs cannot establish call
+  // ancestry, even when the expected A/B legs look coherent. Retain the lock.
+  const parents=new Map(listing.data.map(entry=>[
+    entry.id.toLowerCase(),entry.parent_id?.toLowerCase()??null
+  ]));
+  const resolved=new Set();
+  for(const start of parents.keys()){
+    const visiting=new Set();
+    let current=start;
+    while(current!==null&&!resolved.has(current)){
+      if(visiting.has(current))return failed('CYCLIC_CARRIER_LOG_PARENT');
+      visiting.add(current);
+      current=parents.get(current)??null;
+    }
+    for(const id of visiting)resolved.add(id);
+  }
   const children=listing.data.filter(x=>isObj(x)&&sameUuid(x.parent_id,inbound.id));
   // Exactly one outbound leg is expected in this one-destination trial.
   // Multiple children might be additional billable legs: manual review required.
