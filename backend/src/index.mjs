@@ -232,7 +232,8 @@ async function ownerRoute(request,url,env){
     // A terminal two-leg snapshot is not authoritative billing finality.
     // Keep the durable reservation locked until a reviewed carrier-finality
     // contract exists; owner recovery remains separately authenticated/audited.
-    return error('CARRIER_FINALITY_UNVERIFIED',\n      'Carrier logs look terminal, but later billable legs cannot yet be excluded. Use audited owner force-unlock only after independent dashboard review.',409);
+    return error('CARRIER_FINALITY_UNVERIFIED',
+      'Carrier logs look terminal, but later billable legs cannot yet be excluded. Use audited owner force-unlock only after independent dashboard review.',409);
   }
   if(action==='force-unlock'){
     // Owner-only escape hatch for a reservation stuck in 'connecting' (for
