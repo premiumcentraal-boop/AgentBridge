@@ -387,3 +387,30 @@ test('UUID case variants cannot conceal extra direct or nested billable legs',as
     provider(inbound,[upperChild,{...grandchild,parent_id:CHILD}]).fetchImpl);
   assert.equal(nestedUpper.code,'UNVERIFIED_NESTED_OUTBOUND_LEGS',JSON.stringify(nestedUpper));
 });
+
+test('reverse and terminal pagination metadata cannot contradict a single-page ledger',async()=>{
+  const base='https://example-space.signalwire.com/api/voice/logs';
+  for(const links of [
+    {...COMPLETE_LINKS,prev:base+'?page_number=0'},
+    {...COMPLETE_LINKS,prev:''},
+    {...COMPLETE_LINKS,prev:false},
+    {...COMPLETE_LINKS,last:base+'?page_number=1'},
+    {...COMPLETE_LINKS,last:'https://other.example/api/voice/logs'},
+    {...COMPLETE_LINKS,last:base+'?status=completed'},
+    {...COMPLETE_LINKS,last:base+'?page_number=0'}
+  ]){
+    const p=provider(inbound,[child],links);
+    const result=await fetchCarrierReconciliation(row,env,p.fetchImpl);
+    // An explicit last-page marker must agree with self's page marker.
+    assert.equal(result.code,'INCOMPLETE_CARRIER_PAGINATION',JSON.stringify({links,result}));
+    assert.equal(p.calls.length,2,'never follow carrier-supplied links');
+  }
+  for(const links of [
+    {...COMPLETE_LINKS,prev:null,last:COMPLETE_LINKS.self},
+    {...COMPLETE_LINKS,prev:null,last:null},
+    {...COMPLETE_LINKS,last:COMPLETE_LINKS.self}
+  ]){
+    const result=await fetchCarrierReconciliation(row,env,provider(inbound,[child],links).fetchImpl);
+    assert.equal(result.ok,true,JSON.stringify({links,result}));
+  }
+});
