@@ -130,6 +130,19 @@ test('malformed segment and parent IDs cannot conceal a third billable leg',asyn
     provider(inbound,[child,{...extra,parent_id:null}]).fetchImpl);
   assert.equal(unrelated.ok,true,JSON.stringify(unrelated));
 });
+test('valid but orphaned parent UUIDs cannot hide extra billable legs',async()=>{
+  const extra={...child,id:'68313c74-b321-4c08-a3ea-7123449130ab',
+    parent_id:'98313c74-b321-4c08-a3ea-7123449130ab',charge:0.75};
+  const orphan=await fetchCarrierReconciliation(row,env,
+    provider(inbound,[child,extra]).fetchImpl);
+  assert.equal(orphan.code,'ORPHANED_CARRIER_LOG_PARENT',JSON.stringify(orphan));
+  const mixedCase=await fetchCarrierReconciliation(row,env,
+    provider(inbound,[child,{...extra,parent_id:extra.parent_id.toUpperCase()}]).fetchImpl);
+  assert.equal(mixedCase.code,'ORPHANED_CARRIER_LOG_PARENT',JSON.stringify(mixedCase));
+  const unrelatedRoot=await fetchCarrierReconciliation(row,env,
+    provider(inbound,[child,{...extra,parent_id:null}]).fetchImpl);
+  assert.equal(unrelatedRoot.ok,true,JSON.stringify(unrelatedRoot));
+});
 test('nested outbound carrier legs cannot be omitted from the billed two-leg total',async()=>{
   const grandchild={id:'88313c74-b321-4c08-a3ea-7123449130ab',parent_id:CHILD,
     direction:'outbound-dial',from:DEST,to:'+442079460000',status:'completed',charge:0.25};
@@ -143,7 +156,7 @@ test('nested outbound carrier legs cannot be omitted from the billed two-leg tot
   const unrelated={...grandchild,parent_id:'78313c74-b321-4c08-a3ea-7123449130ab'};
   const result=await fetchCarrierReconciliation(row,env,
     provider(inbound,[child,unrelated]).fetchImpl);
-  assert.equal(result.ok,true,JSON.stringify(result));
+  assert.equal(result.code,'ORPHANED_CARRIER_LOG_PARENT',JSON.stringify(result));
 });
 test('actual charges above reservation cap never unlock',async()=>{
   const p=provider({...inbound,charge:0.03},[{...child,charge:0.03}]);
