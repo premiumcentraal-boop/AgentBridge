@@ -94,7 +94,7 @@ async function reconcile(row,env,fetchImpl){
          url.pathname!==new URL(prefix).pathname||url.username||url.password||url.hash)
         return false;
       // Unknown query filters/cursors can silently narrow the provider ledger.
-      // Only the exact request filters and optional first-page marker are safe.
+      // Require both requested filters exactly once; omission cannot attest to the requested ledger. Only an optional first-page marker is allowed.
       for(const key of url.searchParams.keys()){
         if(key!=='page_number'&&key!=='page_size'&&key!=='created_after')return false;
       }
@@ -104,8 +104,8 @@ async function reconcile(row,env,fetchImpl){
       const sizes=url.searchParams.getAll('page_size');
       const starts=url.searchParams.getAll('created_after');
       return pages.length<=1&&(pages.length===0||pages[0]==='0')&&
-        sizes.length<=1&&(sizes.length===0||sizes[0]==='1000')&&
-        starts.length<=1&&(starts.length===0||starts[0]===q.searchParams.get('created_after'));
+        sizes.length===1&&sizes[0]===q.searchParams.get('page_size')&&
+        starts.length===1&&starts[0]===q.searchParams.get('created_after');
     }catch{return false;}
   };
   if(!isFirstPageLink(listing.links.self)||!isFirstPageLink(listing.links.first))
