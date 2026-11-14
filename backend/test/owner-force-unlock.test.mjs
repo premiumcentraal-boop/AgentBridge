@@ -74,7 +74,7 @@ test('explicit forced unlock is audited, releases the lock and still counts towa
   assert.equal(usage,1);
 });
 
-test('force-unlock tries carrier reconciliation first and completes normally when it succeeds',async t=>{
+test('complete-looking carrier snapshot cannot silently release a reservation',async t=>{
   const {env,DB,id}=await stuck(t);
   const inbound={id:SEG,parent_id:null,direction:'inbound',status:'completed',to:DID,charge:0.01};
   const child={id:CHILD,parent_id:SEG,direction:'outbound',status:'completed',from:DID,to:DEST,charge:0.02};
@@ -83,16 +83,25 @@ test('force-unlock tries carrier reconciliation first and completes normally whe
     seen.push(o.method);
     return new Response(JSON.stringify(String(url).endsWith('/'+SEG)?inbound:{data:[inbound,child],links:{self:String(url),first:String(url)}}));
   });
-  const r=await worker.fetch(unlock(id,{}),env);
-  assert.equal(r.status,200);
-  const body=await r.json();
-  assert.equal(body.status,'completed');
-  assert.equal(body.carrier_confirmed,true);
-  assert.equal(body.actual_cost_cents,3);
-  assert.deepEqual([...new Set(seen)],['GET'],'reconciliation is read-only');
-  assert.equal(status(DB,id),'completed');
-  assert.equal(DB.raw.prepare('SELECT actual_cost_cents FROM reservation_carrier_legs WHERE reservation_id=?').get(id).actual_cost_cents,3);
+  const mark=await worker.fetch(new Request(BASE+'/v1/owner/reservations/'+id+'/mark-ended',{
+    method:'POST',headers:{authorization:'Bearer '+OWNER}}),env);
+  assert.equal(mark.status,409);
+  assert.equal((await mark.json()).error.code,'CARRIER_FINALITY_UNVERIFIED');
+  const attempt=await worker.fetch(unlock(id,{}),env);
+  assert.equal(attempt.status,409);
+  assert.equal((await attempt.json()).error.code,'FORCE_REQUIRED');
+  assert.equal(status(DB,id),'connecting');
   assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions').get().n,0);
+  assert.equal(DB.raw.prepare('SELECT actual_cost_cents FROM reservation_carrier_legs WHERE reservation_id=?').get(id).actual_cost_cents,null);
+  const manual=await worker.fetch(unlock(id,{force:true,reason:'Verified terminal in dashboard and reviewed billing'}),env);
+  assert.equal(manual.status,200);
+  const body=await manual.json();
+  assert.equal(body.status,'failed');
+  assert.equal(body.force_unlocked,true);
+  assert.equal(body.carrier_code,'CARRIER_FINALITY_UNVERIFIED');
+  assert.equal(status(DB,id),'failed');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions').get().n,1);
+  assert.deepEqual([...new Set(seen)],['GET'],'carrier lookups remain read-only');
 });
 
 test('force-unlock fails closed (no unlock) when the audit table is missing',async t=>{
