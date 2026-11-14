@@ -473,3 +473,21 @@ test('reverse and terminal pagination metadata cannot contradict a single-page l
     assert.equal(result.ok,true,JSON.stringify({links,result}));
   }
 });
+
+test('equivalent first-page last links normalize absent page_number to zero',async()=>{
+  const base=COMPLETE_LINKS.self;
+  for(const [self,last,expected] of [
+    [base,base+'&page_number=0',true],
+    [base+'&page_number=0',base,true],
+    [base+'&page_number=0',base+'&page_number=0',true],
+    [base,base+'&page_number=1',false],
+    [base+'&page_number=0',base+'&page_number=1',false],
+    [base,base+'&page_number=0&page_number=0',false]
+  ]){
+    const p=provider(inbound,[child],{...COMPLETE_LINKS,self,last});
+    const result=await fetchCarrierReconciliation(row,env,p.fetchImpl);
+    assert.equal(result.ok,expected,JSON.stringify({self,last,result}));
+    if(!expected)assert.equal(result.code,'INCOMPLETE_CARRIER_PAGINATION');
+    assert.equal(p.calls.length,2,'never follow metadata links');
+  }
+});
