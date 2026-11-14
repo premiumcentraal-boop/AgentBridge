@@ -57,8 +57,9 @@ function setField(window, element, value) {
     }),
   );
 }
-function backend(t, platform) {
+function backend(t, platform, publicSignup = false) {
   const database = openAccountDatabase(":memory:");
+  const messages = [];
   t.after(() => database.close());
   const service = createAccountService({
     database,
@@ -67,6 +68,15 @@ function backend(t, platform) {
     platformIdentity: platform,
     passwords: nodePasswords,
     signupInviteHash: createHash("sha256").update(invite).digest("hex"),
+    signupMode: publicSignup ? "public" : undefined,
+    mailer: publicSignup
+      ? {
+          ready: true,
+          send: async (message) => {
+            messages.push(message);
+          },
+        }
+      : undefined,
   });
   let cookie = "",
     verified = true;
@@ -94,6 +104,7 @@ function backend(t, platform) {
   };
   return {
     database,
+    messages,
     requests,
     fetcher,
     session: () => cookie,
@@ -288,6 +299,121 @@ test("the hosted tester creates a real account, pairs an API-owned number, calls
     second.errors.map((error) => error.message),
     [],
   );
+});
+
+test("public email signup, verification and recovery use the rendered forms and real account API", async (t) => {
+  const api = backend(t, false, true);
+  const first = browser(t, api, "/signup/");
+  let { document, window } = first;
+  await until(() => document.querySelector('input[autocomplete="name"]'));
+  assert.equal(document.querySelector('input[type="password"]'), null);
+  setField(window, field(document, "Your name"), "Public user");
+  setField(window, field(document, "Agent name"), "Public agent");
+  setField(window, field(document, "Email address"), "public@example.com");
+  named(document, "Create account").click();
+  await until(() => document.querySelector(".account-email-notice"));
+  assert.match(
+    document.querySelector(".account-email-notice").textContent,
+    /Check your inbox/,
+  );
+  assert.equal(api.session(), "");
+  assert.equal(
+    (await api.database.first("SELECT COUNT(*) AS n FROM ab_accounts")).n,
+    0,
+  );
+  assert.equal(api.messages.length, 1);
+  first.dom.window.close();
+
+  const verification = browser(
+    t,
+    api,
+    "/verify-email/#token=" + api.messages[0].token,
+  );
+  ({ document, window } = verification);
+  await until(() =>
+    document.querySelector('input[autocomplete="new-password"]'),
+  );
+  assert.equal(
+    window.location.hash,
+    "",
+    "The bearer link is removed from browser history",
+  );
+  setField(
+    window,
+    field(document, "New password"),
+    "public-account-password-123",
+  );
+  setField(
+    window,
+    field(document, "Confirm password"),
+    "public-account-password-123",
+  );
+  named(document, "Verify & open studio").click();
+  await until(() => document.querySelector(".workspace-shell"));
+  assert.equal((await api.snapshot()).account.email, "public@example.com");
+  const originalId = (await api.snapshot()).account.id;
+  await api.fetcher("/api/auth/logout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  verification.dom.window.close();
+
+  const signin = browser(t, api, "/signin/");
+  await until(() =>
+    signin.document.querySelector('input[autocomplete="current-password"]'),
+  );
+  named(signin.document, "Forgot password?", "a").click();
+  await until(() =>
+    signin.document.querySelector(
+      'section[aria-label="Forgot your password?"]',
+    ),
+  );
+  setField(
+    signin.window,
+    field(signin.document, "Email address"),
+    "public@example.com",
+  );
+  named(signin.document, "Send reset link").click();
+  await until(() => signin.document.querySelector(".account-email-notice"));
+  assert.equal(api.messages[1].purpose, "reset");
+  signin.dom.window.close();
+
+  const recovery = browser(
+    t,
+    api,
+    "/reset-password/#token=" + api.messages[1].token,
+  );
+  ({ document, window } = recovery);
+  await until(() =>
+    document.querySelector('input[autocomplete="new-password"]'),
+  );
+  setField(window, field(document, "New password"), "public-new-password-456");
+  setField(
+    window,
+    field(document, "Confirm password"),
+    "public-new-password-456",
+  );
+  named(document, "Save new password").click();
+  await until(() => document.querySelector(".account-email-notice"));
+  assert.match(
+    document.querySelector(".account-email-notice").textContent,
+    /Password updated/,
+  );
+  named(document, "Back to sign in", "a").click();
+  await until(() =>
+    document.querySelector('input[autocomplete="current-password"]'),
+  );
+  setField(window, field(document, "Email address"), "public@example.com");
+  setField(window, field(document, "Password"), "public-new-password-456");
+  named(document, "Sign in").click();
+  await until(() => document.querySelector(".workspace-shell"));
+  assert.equal((await api.snapshot()).account.id, originalId);
+  for (const page of [first, verification, signin, recovery])
+    assert.deepEqual(
+      page.errors.map((error) => error.message),
+      [],
+    );
 });
 test("email/password customer signup and sign-in use server sessions and return to the same workspace", async (t) => {
   const api = backend(t, false),

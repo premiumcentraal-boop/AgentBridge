@@ -14,6 +14,7 @@ import { Studio } from "./studio.jsx";
 import { Features, FeaturePage } from "./features.jsx";
 import { TITLES } from "./data.js";
 import { Signup, Signin } from "./signup.jsx";
+import { AccountEmail } from "./account-auth.jsx";
 function Pages() {
   const { path, offline, accountDemo } = useRoute();
   const [mode, setMode] = useState("dark");
@@ -30,6 +31,12 @@ function Pages() {
       <Signup />
     ) : path === "/signin/" ? (
       <Signin />
+    ) : path === "/verify-email/" ? (
+      <AccountEmail key="verify" mode="verify" />
+    ) : path === "/forgot-password/" ? (
+      <AccountEmail key="forgot" mode="forgot" />
+    ) : path === "/reset-password/" ? (
+      <AccountEmail key="reset" mode="reset" />
     ) : path === "/features/" ? (
       <Features />
     ) : path === "/international-calling/" ? (

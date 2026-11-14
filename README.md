@@ -1,6 +1,16 @@
 # AgentBridge
 **connect agents worldwide**
 
+## Public accounts on Railway
+
+Public email signup, email verification and password recovery are available in
+the Node/Railway service with `STUDIO_SIGNUP_MODE=public`. Each account owns a
+separate persistent workspace and its encrypted SignalWire credentials. New
+accounts start in demo mode. Configure a verified Resend sending domain, server
+secrets and the Railway volume using the [deployment guide](docs/RAILWAY_STUDIO.md).
+Run `npm run launch:check -- https://agentbridge.victor.ceo` after deployment.
+The private Sites preview keeps its existing tester access.
+
 ## SignalWire live development testing
 
 The private account studio supports an encrypted, customer-supplied SignalWire
@@ -27,8 +37,8 @@ AgentBridge tab in the `victor-ceo` repository, following Meridian’s integrati
 - `/` — real React/Astryx product page, animated country-to-call connections, product walkthrough and rendered studio preview.
 - `/studio/demo/` — interactive sample workspace; changes reset when the tab reloads. The old `/studio/?demo=1` link still works.
 - `/design/` — three original design boards (Signal, Material, Atlas) with floating call navigation and an interactive component preview; also under **Design boards** in the studio. See [design rationale and references](docs/DESIGN_DIRECTIONS.md).
-- `/studio/` — private operator sign-in; server-backed route drafts, search, archive, activity,
-  call plans, capture/join preferences, export and optional read-only private backend discovery.
+- `/studio/` — authenticated studio; account-owned connections, numbers, call
+  plans, settings, activity, exports and optional customer-supplied SignalWire integration.
 - `npm start` — standalone Node service; persistent SQLite storage, no runtime dependencies.
 
 **Mobile preview:** [Open the working pages](https://agentbridge-worldwide.premiumcentraal.chatgpt.site).
@@ -36,10 +46,9 @@ The preview is private to your ChatGPT account. Tap **Open studio** for the
 single-tester account. A separate portable HTML file retains the browser-local
 sample. [Account setup](docs/TESTER_ACCOUNT.md).
 
-**Railway deployment:** [new service, volume, access key and custom domain setup](docs/RAILWAY_STUDIO.md).
-The Docker service does not load or expose the telephony Worker. New studio drafts
-are separate from carrier reservations and cannot activate calls. Existing private
-backend credentials are optional and stay on the server.
+**Railway deployment:** [public signup, email delivery, secrets, volume and domain setup](docs/RAILWAY_STUDIO.md).
+The Docker service connects directly to each opted-in customer's SignalWire project.
+It does not deploy the separate legacy telephony Worker.
 
 Local setup: Node 22.13+ (Node 24 recommended), `npm run setup:web`, `npm run ci`, then `npm run dev`.
 Open `/studio/` with the local development key `local-development`, or explore the demo.
@@ -49,18 +58,19 @@ hash keeps the private workspace locked.
 
 A premium website and developer-first international telecom bridge for AI agents with their own US outbound calling capability. The intended experience is a natural extension of Grok Bot: prepare a route, call a US access number, and let the carrier connect it to an approved international recipient while **Grok Bot stays the only speaking AI**.
 
-> **Current status: development preview, NOT a live calling service.** No consumer account creation, payments, number provisioning, or verified Grok Bot end-to-end dialing are provided. AgentBridge is independent of Grok/xAI, Cursor and Apple. A US calling feature must already be enabled and its use must be allowed under the relevant terms.
+> **Current status: development testing.** Public email accounts require host email configuration. Real provider actions require customer-supplied SignalWire credentials and explicit live testing. Platform billing, live ASR/listen-in/join and verified Grok Bot end-to-end dialing are not provided. AgentBridge is independent of Grok/xAI, Cursor and Apple.
 
 ## Website
 
 The public site and control studio share an Astryx/React 19 foundation. The
 interface uses actual Astryx navigation, buttons, cards, segmented controls,
 dialogs and inputs, with monochrome surfaces, original status avatars and SVG connection art.
-Build output contains 33 rendered HTML pages, so direct links and public content
+Build output contains rendered HTML pages, so direct links and public content
 work before JavaScript starts. The original `/design/` gallery remains available.
 
 - `/` — Product overview
-- `/signup/` — Early-access signup design preview; details stay in the tab and no account/request is created
+- `/signup/`, `/signin/` — Server-backed signup and account sessions when configured
+- `/verify-email/`, `/forgot-password/`, `/reset-password/` — Public email verification and recovery
 - `/features/` — Calling extensions overview
 - `/international-calling/` — International call planning walkthrough
 - `/call-memory/` — Optional recording/transcription and playable sample

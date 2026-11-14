@@ -23,7 +23,8 @@
     "d1:preflight": "node scripts/d1-migration-preflight.mjs",
     "build:account-demo": "node scripts/build-account-demo.mjs",
     "test:account-demo": "node --test test/account-worker.test.mjs",
-    "demo:invite": "node scripts/demo-invite.mjs"
+    "demo:invite": "node scripts/demo-invite.mjs",
+    "launch:check": "node scripts/check-public-launch.mjs"
   },
   "engines": {
     "node": ">=22.13"

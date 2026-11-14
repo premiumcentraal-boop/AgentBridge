@@ -12,7 +12,13 @@ export const useRoute = () => useContext(Router);
 const isStudio = (path) =>
   path.startsWith("/studio/") ||
   path.startsWith("/app/") ||
-  ["/signup/", "/signin/"].includes(path);
+  [
+    "/signup/",
+    "/signin/",
+    "/verify-email/",
+    "/forgot-password/",
+    "/reset-password/",
+  ].includes(path);
 export function RouterProvider({
   initialPath = "/",
   base = "",
