@@ -1434,13 +1434,19 @@ export function CallExtensions({
                           end={null}
                           onClick={onListen}
                           disabled={Boolean(call.listening)}
+                          aria-pressed={Boolean(call.listening)}
+                          data-control-state={
+                            call.listening ? "enabled" : "off"
+                          }
                         />
                         <Btn
-                          label="Jump in"
+                          label={call.joined ? "Joined" : "Jump in"}
                           icon="join"
                           end={null}
                           onClick={() => setJoinOpen(true)}
                           disabled={Boolean(call.joined)}
+                          aria-pressed={Boolean(call.joined)}
+                          data-control-state={call.joined ? "enabled" : "off"}
                         />
                       </>
                     )}
@@ -1464,6 +1470,10 @@ export function CallExtensions({
                       }
                       icon={call.recordingPaused ? "play" : "pause"}
                       end={null}
+                      aria-pressed={Boolean(call.recordingPaused)}
+                      data-control-state={
+                        call.recordingPaused ? "paused" : "off"
+                      }
                       onClick={() =>
                         setCall((c) => ({
                           ...c,
@@ -1489,6 +1499,7 @@ export function CallExtensions({
                       onClick={onMute}
                       disabled={!call.active}
                       aria-pressed={call.muted}
+                      data-control-state={call.muted ? "muted" : "off"}
                     />
                     {call.joined && (
                       <>
@@ -1500,6 +1511,8 @@ export function CallExtensions({
                           }
                           icon={call.userMuted ? "muted" : "mute"}
                           end={null}
+                          aria-pressed={Boolean(call.userMuted)}
+                          data-control-state={call.userMuted ? "muted" : "off"}
                           onClick={() =>
                             setCall((c) => ({ ...c, userMuted: !c.userMuted }))
                           }

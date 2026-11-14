@@ -1,0 +1,227 @@
+/* Filled controls share one state palette across the studio and its dialogs. */
+.foundation-app {
+  --control-selected-fill: #0071e3;
+  --control-selected-ink: #fff;
+  --control-on-fill: #30d158;
+  --control-on-ink: #062510;
+  --control-record-fill: #ff453a;
+  --control-record-ink: #280503;
+  --control-paused-fill: #ffd60a;
+  --control-paused-ink: #322600;
+  --control-off-fill: #2c2c2e;
+  --control-off-line: #ffffff26;
+  --control-selection-wash: #0071e31f;
+}
+.foundation-app[data-mode="light"] {
+  --control-selected-fill: #0068d9;
+  --control-on-fill: #34c759;
+  --control-on-ink: #072710;
+  --control-record-fill: #d92d20;
+  --control-record-ink: #fff;
+  --control-paused-fill: #ffcc00;
+  --control-paused-ink: #322600;
+  --control-off-fill: #e9e9ef;
+  --control-off-line: #0000001f;
+  --control-selection-wash: #0068d912;
+}
+
+.foundation-app
+  :is(
+    .capture-action,
+    .ab-button,
+    .conversation-filters button,
+    .provider-tabs button,
+    .memory-tab-row button,
+    .studio-nav a,
+    .connection-filter-toggle,
+    .destination-country-picker button,
+    .guidance-option,
+    .ab-segments [role="radio"]
+  ) {
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+/* Off is neutral; active features get a full, unmistakable colour fill. */
+.foundation-app .capture-action {
+  min-height: 44px;
+  background: var(--control-off-fill);
+  border-color: var(--control-off-line);
+  font-weight: 600;
+}
+.foundation-app .capture-action[aria-pressed="false"] > i {
+  background: var(--quiet);
+}
+.foundation-app :is(.capture-action, .ab-button)[aria-pressed="true"] {
+  background: var(--control-on-fill);
+  color: var(--control-on-ink);
+  border-color: transparent;
+  box-shadow:
+    inset 0 1px 0 #ffffff30,
+    0 2px 7px #00000012;
+}
+.foundation-app
+  :is(.capture-action, .ab-button)[data-control-state="recording"] {
+  background: var(--control-record-fill);
+  color: var(--control-record-ink);
+}
+.foundation-app
+  :is(.capture-action, .ab-button):is(
+    [data-control-state="paused"],
+    [data-control-state="muted"]
+  ) {
+  background: var(--control-paused-fill);
+  color: var(--control-paused-ink);
+}
+.foundation-app .capture-action[aria-pressed="true"] > i {
+  background: currentColor;
+  box-shadow: 0 0 0 3px #0000000a;
+}
+.foundation-app .capture-action[data-control-state="recording"] > i {
+  border-radius: 2px;
+}
+.foundation-app .capture-action[data-control-state="paused"] > i {
+  width: 7px;
+  height: 9px;
+  border: 0 solid currentColor;
+  border-width: 0 2px;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.foundation-app :is(.capture-action, .ab-button)[aria-pressed="true"]:disabled {
+  opacity: 1;
+}
+.foundation-app
+  :is(.capture-action, .ab-button)[aria-pressed="true"]:not(:disabled):hover {
+  filter: brightness(1.06);
+}
+
+/* Selection is blue, distinct from a feature that is switched on. */
+.foundation-app
+  :is(
+    .conversation-filters,
+    .provider-tabs,
+    .feature-country-choices,
+    .destination-country-picker,
+    .number-country-rail
+  )
+  > button[aria-pressed="true"],
+.foundation-app .memory-tab-row button[aria-selected="true"],
+.foundation-app :is(.ab-segments, .theme-segments) [aria-checked="true"],
+.foundation-app .studio-nav a[aria-current="page"],
+.foundation-app .studio-search-results [aria-selected="true"],
+.foundation-app
+  .connection-filter-toggle:is(
+    [aria-expanded="true"],
+    [data-filter-active="true"]
+  ) {
+  background: var(--control-selected-fill);
+  color: var(--control-selected-ink);
+  border-color: transparent;
+  box-shadow:
+    inset 0 1px 0 #ffffff26,
+    0 2px 6px #0000000d;
+}
+.foundation-app .memory-tab-row button {
+  padding: 10px 14px;
+  border-radius: 12px;
+}
+.foundation-app
+  :is(
+    .destination-country-picker button[aria-pressed="true"],
+    .studio-search-results [aria-selected="true"]
+  )
+  small {
+  color: #ffffffde;
+}
+.foundation-app .studio-nav a[aria-current="page"] small,
+.foundation-app .connection-filter-toggle[data-filter-active="true"] > i {
+  color: inherit;
+  background: #ffffff26;
+}
+.foundation-app .connection-filter-toggle[data-filter-active="true"] > i {
+  background: currentColor;
+}
+.foundation-app .ab-button[aria-pressed="true"] .direction-arrow {
+  color: inherit;
+  background: #0000000a;
+  border-color: color-mix(in srgb, currentColor 24%, transparent);
+}
+.foundation-app
+  .connections-layout-toggle[aria-expanded="true"]
+  .direction-arrow {
+  background: var(--control-selected-fill);
+  color: var(--control-selected-ink);
+  border-color: transparent;
+}
+.foundation-app .guidance-option[aria-checked="true"] {
+  background: var(--control-selection-wash);
+  border-color: var(--control-selected-fill);
+  box-shadow: inset 0 0 0 1px var(--control-selected-fill);
+}
+.foundation-app .guidance-option[aria-checked="true"] .radio-dot {
+  background: var(--control-selected-fill);
+  color: var(--control-selected-ink);
+  border-color: transparent;
+}
+.foundation-app
+  :is(.number-candidates, .provider-number-list)
+  > label:has(input:checked) {
+  border-color: var(--control-selected-fill);
+  background: var(--control-selection-wash);
+  box-shadow: inset 0 0 0 1px var(--control-selected-fill);
+}
+.foundation-app input:is([type="checkbox"], [type="radio"]) {
+  accent-color: var(--control-selected-fill);
+}
+
+/* iOS-style switches: a bright green track and a white, moving thumb. */
+.foundation-app .capture-toggle input[role="switch"] {
+  background: var(--control-off-fill);
+  border-color: var(--control-off-line);
+}
+.foundation-app .capture-toggle input[role="switch"]::after {
+  background: #fff;
+  box-shadow: 0 1px 3px #00000030;
+}
+.foundation-app .capture-toggle input[role="switch"]:checked {
+  background: var(--control-on-fill);
+  border-color: var(--control-on-fill);
+}
+.foundation-app
+  :is(
+    .capture-action,
+    .ab-button,
+    .conversation-filters button,
+    .connection-filter-toggle,
+    .capture-toggle input,
+    .guidance-option,
+    .provider-tabs button,
+    .memory-tab-row button
+  ):focus-visible {
+  outline: 3px solid var(--control-selected-fill);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .foundation-app
+    :is(
+      .capture-action,
+      .ab-button,
+      .conversation-filters button,
+      .provider-tabs button,
+      .memory-tab-row button,
+      .studio-nav a,
+      .connection-filter-toggle,
+      .destination-country-picker button,
+      .guidance-option,
+      .ab-segments [role="radio"],
+      .capture-toggle input
+    ),
+  .foundation-app .capture-toggle input::after {
+    transition: none;
+  }
+}
