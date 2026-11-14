@@ -700,3 +700,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 ## 2026-11-14 — Pagination normalization syntax regression (PR #49, pending review)
 - Exact-head Quality gate for `ba68901` failed at `npm run check` before tests: `backend/src/carrier-reconciliation.mjs:120` had one extra closing parenthesis in the optional `links.last` comparison. [CI #43590102873](https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/43590102873).
 - Removed the unmatched parenthesis only; pagination checks and fail-closed billing behavior are unchanged. Re-run exact-head CI before claiming success; carrier contract and real billing remain unverified. No calls, purchases, routing, merges or deployment.
+
+## 2026-11-14 — Bounded near-full Voice Logs response handling (draft PR #49)
+- Raised the read-only list response byte ceiling from 256 KiB to 1 MiB while retaining the 1,000-record completeness guard, 8-second per-fetch timeout, strict pagination validation and fail-closed handling of oversized responses.
+- Added synthetic tests for a 999-record JSON payload larger than 256 KiB, a 1,000-record page, and an over-1-MiB response. No provider credentials or live calls used.
+- This is an offline liveness improvement, not a verified SignalWire response-size contract. Provider pagination/indexing semantics and production authorization remain blocked by issue #50. PR remains draft, unmerged and undeployed; exact-head CI must be checked independently.
