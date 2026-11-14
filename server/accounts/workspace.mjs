@@ -1,6 +1,8 @@
 import { validateNumberConnection, validateNumberOrder } from '../../shared/numbers.mjs';
 import { validateCallPlan, validateCapture } from '../../shared/call-plans.mjs';
 import { accountSnapshot, addEvent, deny, mutateWorkspace } from './model.mjs';
+import { conversationRequest } from './conversations.mjs';
+import { contactContext, finishDemoConversation } from '../../shared/conversations.mjs';
 
 const now = () => new Date().toISOString();
 const fields = (value, allowed) => {
@@ -22,6 +24,8 @@ export async function workspaceRequest({ database, account, path, method, readBo
   };
   const update = fn => mutateWorkspace(database, account.id, fn);
   const reply = (status, body) => ({ status, body: { ...body, ...flags } });
+  const conversation = await conversationRequest({ path, method, readBody, read, update, sandbox: true });
+  if (conversation) return reply(conversation.status, conversation.body);
   if (method === 'GET' && ['overview', 'export'].includes(path)) return reply(200, accountSnapshot(await read(), account));
   if (method === 'GET' && path === 'numbers') { const data = await read(); return reply(200, { numbers: data.routing_numbers, orders: data.number_orders }); }
   if (method === 'GET' && path === 'connections') return reply(200, { connections: (await read()).connections });
@@ -108,6 +112,7 @@ export async function workspaceRequest({ database, account, path, method, readBo
       if (document.demo_call?.active) deny(409, 'CALL_ACTIVE', 'End the current demo call before starting another.');
       const { connection, number } = availableConnection(document, input.connection_id);
       const call = { id: crypto.randomUUID(), connection_id: connection.id, active: true, muted: false, elapsed: 0, joined: false, userMuted: true, recording: false, transcription: false, recordingPaused: false, capturePermission: false, label: connection.label, routing_number: number.e164, destination: connection.destination, started_at: now() };
+      call.contact_context = contactContext(document, connection);
       document.demo_call = call; addEvent(document, 'demo.call_started', 'Demo call started with ' + connection.label + '.'); return { call };
     });
     return reply(201, result);
@@ -124,8 +129,10 @@ export async function workspaceRequest({ database, account, path, method, readBo
       const next = { ...call };
       for (const key of booleans) if (input[key] !== undefined) next[key] = input[key];
       if ((next.recording || next.transcription) && !next.capturePermission) deny(422, 'PERMISSION_REQUIRED', 'Confirm capture permission before enabling it.');
+      next.recording_saved = Boolean(call.recording_saved || next.recording);
+      next.transcript_saved = Boolean(call.transcript_saved || next.transcription);
       if (input.proposed_route_id !== undefined) { const { connection, number } = availableConnection(document, input.proposed_route_id); next.proposedRoute = { id: connection.id, label: connection.label, destination: connection.destination, routing_number_id: number.id }; }
-      if (call.active && !next.active) { next.ended_at = now(); next.elapsed = Math.max(0, Math.floor((Date.now() - Date.parse(call.started_at)) / 1000)); next.joined = false; next.recording = false; next.transcription = false; next.recordingPaused = false; document.call_history = [{ ...call, ended_at: next.ended_at, elapsed: next.elapsed }, ...(document.call_history || [])].slice(0, 50); addEvent(document, 'demo.call_ended', 'Demo call ended.'); }
+      if (call.active && !next.active) { next.ended_at = now(); next.elapsed = Math.max(0, Math.floor((Date.now() - Date.parse(call.started_at)) / 1000)); document.call_history = [finishDemoConversation(next), ...(document.call_history || [])].slice(0, 100); next.joined = false; next.recording = false; next.transcription = false; next.recordingPaused = false; addEvent(document, 'demo.call_ended', 'Demo call ended.'); }
       if (!next.active && (next.joined || next.recording || next.transcription)) deny(409, 'CALL_ENDED', 'This demo call has ended.');
       document.demo_call = next; return { call: next };
     });

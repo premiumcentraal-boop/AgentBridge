@@ -26,6 +26,8 @@ import {
   recordingView,
 } from "./live-calls.mjs";
 import { UUID, E164, ProviderError } from "./signalwire-client.mjs";
+import { conversationRequest } from "./conversations.mjs";
+import { contactContext } from "../../shared/conversations.mjs";
 const uuidPath = (path) => UUID.test(path || "");
 const numberView = (n, label) => ({
   id: crypto.randomUUID(),
@@ -111,6 +113,19 @@ export async function liveWorkspaceRequest({
     return {
       status: 200,
       body: await liveSnapshot(database, account, vaultKey),
+    };
+  const conversation = await conversationRequest({
+    path,
+    method,
+    readBody,
+    read: () => readLive(database, account.id),
+    update: (fn) => changeLive(database, account.id, fn),
+    sandbox: false,
+  });
+  if (conversation)
+    return {
+      status: conversation.status,
+      body: { ...conversation.body, mode: "live-testing", sandbox: false },
     };
   const { row, client } = await connectedProvider(
     database,
@@ -503,7 +518,16 @@ export async function liveWorkspaceRequest({
           callback: input.callback_number,
         }),
     );
-    return reply(201, result);
+    const doc = await readLive(database, account.id);
+    return reply(201, {
+      ...result,
+      contact_context: contactContext(
+        doc,
+        doc.connections.find(
+          (connection) => connection.id === input.connection_id,
+        ) || { label: result.call.label, destination: result.call.destination },
+      ),
+    });
   }
   const callAction = path.match(
     /^calls\/([a-f0-9-]{36})\/(end|transfer|record)$/,
@@ -539,14 +563,22 @@ export async function liveWorkspaceRequest({
     return reply(200, result);
   }
   const callRecordings = path.match(/^calls\/([a-f0-9-]{36})\/recordings$/);
-  if (callRecordings && method === "GET")
-    return reply(200, {
-      recordings: await recordingsFor(
-        client,
-        await readLive(database, account.id),
-        callRecordings[1],
-      ),
+  if (callRecordings && method === "GET") {
+    const recordings = await recordingsFor(
+      client,
+      await readLive(database, account.id),
+      callRecordings[1],
+    );
+    await changeLive(database, account.id, (d) => {
+      for (const call of [...(d.calls || []), ...(d.call_history || [])])
+        if (call.id === callRecordings[1]) {
+          call.has_recording = recordings.length > 0;
+          call.recording_ids = recordings.map((recording) => recording.id);
+        }
+      return {};
     });
+    return reply(200, { recordings });
+  }
   const recording = path.match(/^recordings\/([a-f0-9-]{36})(?:\/(audio))?$/);
   if (recording) {
     const doc = await readLive(database, account.id),
@@ -607,27 +639,54 @@ export async function liveWorkspaceRequest({
       return reply(200, { deleted: true });
     }
   }
-  if (path === "transcripts" && method === "GET") {
+  const transcriptCall = path.match(/^calls\/([a-f0-9-]{36})\/transcripts$/);
+  if ((path === "transcripts" || transcriptCall) && method === "GET") {
     const doc = await readLive(database, account.id),
       recordings = [];
-    for (const call of doc.calls.slice(0, 10))
+    const checkedCalls = transcriptCall
+      ? [{ id: transcriptCall[1] }]
+      : doc.calls.slice(0, 10);
+    for (const call of checkedCalls)
       recordings.push(...(await recordingsFor(client, doc, call.id)));
     const allowed = new Set(recordings.map((r) => r.id)),
       p = await client.compat("/Transcriptions?PageSize=100");
     if (!Array.isArray(p.transcriptions)) throw new ProviderError(502);
+    const transcripts = p.transcriptions
+      .filter((t) => allowed.has(t.recording_sid))
+      .map((t) => ({
+        id: t.sid,
+        recording_id: t.recording_sid,
+        call_id: recordings.find(
+          (recording) => recording.id === t.recording_sid,
+        )?.call_id,
+        status: t.status,
+        text:
+          typeof t.transcription_text === "string"
+            ? t.transcription_text.slice(0, 100_000)
+            : "",
+        created_at: t.date_created,
+      }));
+    await changeLive(database, account.id, (d) => {
+      for (const call of [...(d.calls || []), ...(d.call_history || [])]) {
+        const ownedRecordings = recordings.filter(
+          (recording) => recording.call_id === call.id,
+        );
+        if (checkedCalls.some((checked) => checked.id === call.id)) {
+          const found = transcripts.some(
+            (t) => t.call_id === call.id && t.status === "completed",
+          );
+          call.has_transcript = found
+            ? true
+            : p.next_page_uri && ownedRecordings.length
+              ? undefined
+              : false;
+        }
+      }
+      return {};
+    });
     return reply(200, {
-      transcripts: p.transcriptions
-        .filter((t) => allowed.has(t.recording_sid))
-        .map((t) => ({
-          id: t.sid,
-          recording_id: t.recording_sid,
-          status: t.status,
-          text:
-            typeof t.transcription_text === "string"
-              ? t.transcription_text.slice(0, 100_000)
-              : "",
-          created_at: t.date_created,
-        })),
+      transcripts,
+      has_more: Boolean(p.next_page_uri),
       live_transcription: false,
     });
   }

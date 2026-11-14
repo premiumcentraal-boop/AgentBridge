@@ -213,6 +213,22 @@ test("the hosted tester creates a real account, pairs an API-owned number, calls
   assert.equal(snapshot.routing_numbers[0].ownership_source, "demo");
   assert.equal(snapshot.connections[0].label, "London office");
   assert.equal(snapshot.account.agent_name, "Concierge");
+  named(document, "Memory for London office").click();
+  await until(() =>
+    document.querySelector('dialog[open][aria-label="Contact memory"]'),
+  );
+  dialog = document.querySelector('dialog[open][aria-label="Contact memory"]');
+  setField(
+    window,
+    field(dialog, "Notes for the next conversation"),
+    "Ask for Alex at reception.",
+  );
+  named(dialog, "Save contact memory").click();
+  await until(() => !document.querySelector("dialog[open]"));
+  assert.equal(
+    (await api.snapshot()).contact_memories[0].notes,
+    "Ask for Alex at reception.",
+  );
   named(document.querySelector("main"), "Start demo call").click();
   await until(() => document.querySelector(".gb-call-layout"));
   named(document.querySelector("main"), "Start transcription").click();
@@ -234,6 +250,19 @@ test("the hosted tester creates a real account, pairs an API-owned number, calls
   assert.equal(snapshot.demo_call.active, true);
   assert.equal(snapshot.demo_call.transcription, true);
   assert.equal(snapshot.calling_enabled, false);
+  const callNotes = document.querySelector(".conversation-notes");
+  setField(
+    window,
+    field(callNotes, "Add a note"),
+    "Confirm the viewing address.",
+  );
+  named(callNotes, "Save highlight").click();
+  await until(() => callNotes.querySelector("article"));
+  assert.equal(
+    (await api.snapshot()).demo_call.notes[0].text,
+    "Confirm the viewing address.",
+  );
+
   const settings = document.querySelector(
     '.floating-rail a[aria-label="Settings"]',
   );
@@ -276,6 +305,15 @@ test("the hosted tester creates a real account, pairs an API-owned number, calls
   assert.equal(
     (await api.database.first("SELECT COUNT(*) AS n FROM ab_workspaces")).n,
     1,
+  );
+  const remembered = await api.snapshot();
+  assert.equal(
+    remembered.contact_memories[0].notes,
+    "Ask for Alex at reception.",
+  );
+  assert.equal(
+    remembered.demo_call.notes[0].text,
+    "Confirm the viewing address.",
   );
   api.verified(false);
   assert.equal((await api.fetcher("/api/studio/overview")).status, 401);

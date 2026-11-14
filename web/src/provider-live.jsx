@@ -3,6 +3,11 @@ import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { Btn, Card, Icon, Pill } from "./ui.jsx";
 import { ConnectionEditor } from "./number-studio.jsx";
 import { AccountProfile, accountRequest } from "./account-auth.jsx";
+import {
+  CallHistoryList,
+  CallNotes,
+  ContactMemoryDialog,
+} from "./conversations.jsx";
 import "./provider-live.css";
 
 export async function providerRequest(path, options = {}) {
@@ -708,6 +713,7 @@ export function LiveWorkspace({
   onSignout,
   navTo,
   onModeChange,
+  initialHistoryFilter = "all",
 }) {
   const [data, setData] = useState(blank),
     [error, setError] = useState(""),
@@ -721,6 +727,7 @@ export function LiveWorkspace({
     [selectedCall, setSelectedCall] = useState(""),
     [recordings, setRecordings] = useState([]),
     [transcripts, setTranscripts] = useState([]);
+  const [memoryContact, setMemoryContact] = useState(null);
   const mounted = useRef(true),
     syncing = useRef(false),
     stateCallback = useRef(onState);
@@ -774,10 +781,32 @@ export function LiveWorkspace({
   };
   const connections = data.connections.filter((c) => c.status === "saved"),
     calls = data.calls.filter(active),
-    history = data.calls.filter((c) => !active(c));
+    history = [
+      ...new Map(
+        [...data.calls.filter((c) => !active(c)), ...(data.call_history || [])]
+          .filter((c) => !c.parent_call_id)
+          .map((c) => [c.id, c]),
+      ).values(),
+    ].sort(
+      (a, b) => Date.parse(b.started_at || 0) - Date.parse(a.started_at || 0),
+    );
   const matches = (value) =>
     !query || JSON.stringify(value).toLowerCase().includes(query.toLowerCase());
-  const details = data.calls.find((c) => c.id === selectedCall);
+  const details =
+    (data.call_history || []).find((c) => c.id === selectedCall) ||
+    data.calls.find((c) => c.id === selectedCall);
+  const openCall = (call) => {
+    setSelectedCall(call.id);
+    navTo("call");
+  };
+  const addCallNote = async (id, value) => {
+    await write(`live/calls/${id}/notes`, value);
+    await refresh();
+  };
+  const deleteCallNote = async (id, noteId) => {
+    await write(`live/calls/${id}/notes/${noteId}`, {}, "DELETE");
+    await refresh();
+  };
   useEffect(() => {
     if (page !== "call") setSelectedCall("");
   }, [page]);
@@ -935,6 +964,13 @@ export function LiveWorkspace({
             disabled={busy || number?.status !== "owned"}
             onClick={() => setAction({ type: "start", connection: c })}
           />
+          <Btn
+            label="Contact memory"
+            aria-label={"Memory for " + c.label}
+            icon="bookmark"
+            end={null}
+            onClick={() => setMemoryContact(c)}
+          />
         </div>
         {c.routing_state === "active" && (
           <p className="provider-muted">
@@ -991,11 +1027,9 @@ export function LiveWorkspace({
                 ? "Connections"
                 : page === "routes"
                   ? "Routing"
-                  : ["call", "calls"].includes(page)
+                  : ["call", "calls", "memory"].includes(page)
                     ? "Calls"
-                    : page === "memory"
-                      ? "Recordings & transcripts"
-                      : "Studio"}
+                    : "Studio"}
           </h1>
         </div>
         <Btn
@@ -1145,12 +1179,12 @@ export function LiveWorkspace({
           )}
         </>
       )}
-      {["calls", "call"].includes(page) && (
+      {["calls", "call", "memory"].includes(page) && (
         <>
           {details ? (
             <section className="live-connection-card">
               <div className="live-card-heading">
-                <h2>{details.to}</h2>
+                <h2>{details.label || details.to}</h2>
                 <Btn
                   label="Back to calls"
                   end={null}
@@ -1178,12 +1212,51 @@ export function LiveWorkspace({
                       setAction({ type: "transfer", call: details })
                     }
                   />
-                  <Btn
-                    label="Record call"
-                    disabled={details.status !== "in-progress"}
-                    icon="record"
-                    onClick={() => setAction({ type: "record", call: details })}
-                  />
+                  <button
+                    type="button"
+                    className={
+                      "capture-action" +
+                      (recordings.some((r) => r.status === "in-progress")
+                        ? " is-recording"
+                        : "")
+                    }
+                    aria-label={
+                      recordings.some((r) =>
+                        ["in-progress", "paused"].includes(r.status),
+                      )
+                        ? "Stop recording"
+                        : "Start recording"
+                    }
+                    aria-pressed={recordings.some((r) =>
+                      ["in-progress", "paused"].includes(r.status),
+                    )}
+                    disabled={busy || details.status !== "in-progress"}
+                    onClick={() => {
+                      const running = recordings.find((r) =>
+                        ["in-progress", "paused"].includes(r.status),
+                      );
+                      if (running)
+                        run(async () => {
+                          await write(
+                            "live/recordings/" + running.id,
+                            { request_id: requestId(), status: "stopped" },
+                            "PATCH",
+                          );
+                          await loadRecordings(details.id);
+                        });
+                      else setAction({ type: "record", call: details });
+                    }}
+                  >
+                    <Icon name="record" size={17} />
+                    <span>
+                      {recordings.some((r) => r.status === "in-progress")
+                        ? "Recording · Stop"
+                        : recordings.some((r) => r.status === "paused")
+                          ? "Recording paused"
+                          : "Record call"}
+                    </span>
+                    <i aria-hidden="true" />
+                  </button>
                 </div>
               )}
               <h3>Recordings</h3>
@@ -1265,11 +1338,71 @@ export function LiveWorkspace({
                   No recording for this call. Capture is off by default.
                 </p>
               )}
-              <p className="provider-muted">
-                Browser listening, human conference join and live transcription
-                are not connected for this call type. No sample audio or text is
-                shown here.
-              </p>
+              <section>
+                <div className="tools-list-heading">
+                  <h3>Transcript</h3>
+                  <Btn
+                    label="Load provider transcript"
+                    icon="transcript"
+                    end={null}
+                    disabled={busy}
+                    onClick={() =>
+                      run(async () => {
+                        const result = await providerRequest(
+                          "live/calls/" + details.id + "/transcripts",
+                        );
+                        setTranscripts(result.transcripts);
+                      })
+                    }
+                  />
+                </div>
+                {transcripts
+                  .filter(
+                    (t) =>
+                      t.call_id === details.id ||
+                      recordings.some((r) => r.id === t.recording_id),
+                  )
+                  .map((t) => (
+                    <p className="live-transcript" key={t.id}>
+                      {t.text}
+                    </p>
+                  ))}
+                {!transcripts.some(
+                  (t) =>
+                    t.call_id === details.id ||
+                    recordings.some((r) => r.id === t.recording_id),
+                ) && (
+                  <p className="conversation-help">
+                    No transcript loaded. This retrieves existing provider
+                    transcripts; live transcription is not connected.
+                  </p>
+                )}
+              </section>
+              <CallNotes
+                call={details}
+                onAdd={addCallNote}
+                onDelete={deleteCallNote}
+              />
+              {connections.find(
+                (c) =>
+                  c.id === details.connection_id ||
+                  c.destination === details.destination,
+              ) && (
+                <Btn
+                  label="Open contact memory"
+                  icon="bookmark"
+                  end={null}
+                  onClick={() =>
+                    setMemoryContact(
+                      connections.find(
+                        (c) =>
+                          c.id === details.connection_id ||
+                          c.destination === details.destination,
+                      ),
+                    )
+                  }
+                />
+              )}
             </section>
           ) : (
             <>
@@ -1281,42 +1414,13 @@ export function LiveWorkspace({
                   test callback from a connection.
                 </p>
               )}
-              <h2>Recent calls</h2>
-              <div className="live-call-list">{history.map(callCard)}</div>
+              <CallHistoryList
+                records={history}
+                onOpen={openCall}
+                initialFilter={initialHistoryFilter}
+              />
             </>
           )}
-        </>
-      )}
-      {page === "memory" && (
-        <>
-          <p className="provider-muted">
-            Recordings stay in your SignalWire project. Open a call to play,
-            pause, stop or delete its recording.
-          </p>
-          <div className="live-call-list">{data.calls.map(callCard)}</div>
-          <div className="provider-actions">
-            <Btn
-              label="Load provider transcripts"
-              icon="transcript"
-              disabled={busy}
-              onClick={() =>
-                run(async () => {
-                  const r = await providerRequest("live/transcripts");
-                  setTranscripts(r.transcripts);
-                  if (!r.transcripts.length)
-                    setNotice(
-                      "No provider-generated transcripts are available for these calls.",
-                    );
-                })
-              }
-            />
-          </div>
-          {transcripts.map((t) => (
-            <article className="live-connection-card" key={t.id}>
-              <Pill>{t.status}</Pill>
-              <p className="live-transcript">{t.text}</p>
-            </article>
-          ))}
         </>
       )}
       <LiveNumberDialog
@@ -1325,6 +1429,15 @@ export function LiveWorkspace({
         onClose={() => setNumberOpen(false)}
         onAdded={refresh}
         runBusy={busy}
+      />
+      <ContactMemoryDialog
+        contact={memoryContact}
+        snapshot={data}
+        onClose={() => setMemoryContact(null)}
+        onSave={async (contact, notes) => {
+          await write(`live/contacts/${contact.id}/memory`, { notes }, "PATCH");
+          await refresh();
+        }}
       />
       <ConnectionEditor
         open={editorOpen}

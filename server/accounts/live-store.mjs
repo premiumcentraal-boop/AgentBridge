@@ -5,6 +5,8 @@ export function emptyLiveWorkspace() {
     routing_numbers: [],
     connections: [],
     calls: [],
+    call_history: [],
+    contact_memories: [],
     recordings: [],
     transcriptions: [],
     events: [],

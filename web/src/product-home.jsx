@@ -22,8 +22,8 @@ export function ProductHome() {
     <main id="main" tabIndex={-1} className="gb-product-home">
       <section className="gb-product-hero frame">
         <div className="gb-hero-copy">
-          <h1 aria-label="connect agents worldwide">
-            connect agents
+          <h1 aria-label="Connect agents worldwide">
+            Connect agents
             <br /> <span>worldwide</span>
           </h1>
           <p>
@@ -57,22 +57,31 @@ export function ProductHome() {
         </div>
         <div className="gb-workflow-grid">
           <A to="/studio/demo/connections/" className="gb-workflow-card">
-            <div className="gb-connect-art">
-              <BotFace size={68} tone="teal" />
-              <span />
-              <div className="gb-contact-bubble">🇬🇧</div>
+            <div className="gb-memory-art">
+              <div>
+                <BotFace size={46} tone="teal" />
+                <strong>
+                  London studio <span aria-hidden="true">🇬🇧</span>
+                </strong>
+              </div>
+              <p>Last call: ask about access to reception.</p>
+              <small>Contact saved · Context for next time</small>
             </div>
             <span className="gb-step-number">01 / CONNECT</span>
             <h3>
-              A name. A number.
-              <br />A new connection.
+              Your contacts.
+              <br />
+              Ready to call.
             </h3>
-            <p>Save a destination and give your agent a clear next step.</p>
+            <p>
+              Save contacts and keep notes from past conversations, ready for
+              your agent’s next call.
+            </p>
             <span className="gb-card-action">
-              Add a connection <Icon name="arrow" size={16} />
+              Save a contact <Icon name="arrow" size={16} />
             </span>
           </A>
-          <A to="/studio/demo/call/" className="gb-workflow-card">
+          <A to="/studio/demo/calls/" className="gb-workflow-card">
             <div className="gb-transcript-art">
               <div>
                 <BotFace size={28} tone="teal" />
@@ -82,38 +91,52 @@ export function ProductHome() {
                 <span>LD</span>
                 <span>Tuesday at 10:30 works.</span>
               </div>
-              <small>Sample conversation</small>
+              <small>00:18 · Important moment saved</small>
             </div>
             <span className="gb-step-number">02 / FOLLOW</span>
             <h3>
-              Your agent, calling.
+              Keep the conversation.
               <br />
-              You, in the loop.
+              And the important parts.
             </h3>
-            <p>See the call and choose a transcript to follow the details.</p>
+            <p>
+              Record with permission, read the transcript, and save highlights
+              you’ll want to revisit.
+            </p>
             <span className="gb-card-action">
-              Explore a sample call <Icon name="arrow" size={16} />
+              Explore call history <Icon name="arrow" size={16} />
             </span>
           </A>
           <A to="/join-call/" className="gb-workflow-card">
-            <div className="gb-listen-art">
+            <div className="gb-listen-art has-chat">
               <BotFace size={68} state="working" tone="purple" />
               <span className="gb-listen-chip">
                 <Icon name="headphones" size={18} /> Listening
               </span>
+              <div className="gb-join-chat">
+                <span>
+                  <strong>You joined the conversation.</strong>
+                </span>
+                <span>You: “I’ll take it from here.”</span>
+                <div className="gb-join-control">
+                  <Icon name="pause" size={14} />
+                  <span>Pause agent</span>
+                  <Icon name="muted" size={14} />
+                </div>
+              </div>
             </div>
             <span className="gb-step-number">03 / JOIN</span>
             <h3>
-              Step in.
+              Join the conversation.
               <br />
-              Stay connected.
+              Take over when needed.
             </h3>
             <p>
-              Listen alongside your agent. Join the conversation when it needs
-              you.
+              Follow your agent’s call and step in when it matters, with clear
+              controls close at hand.
             </p>
             <span className="gb-card-action">
-              Meet “Let me join” <Icon name="arrow" size={16} />
+              See how joining works <Icon name="arrow" size={16} />
             </span>
           </A>
         </div>

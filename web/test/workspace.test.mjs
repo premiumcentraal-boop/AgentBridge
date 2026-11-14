@@ -113,6 +113,11 @@ function change(window, input, value) {
 }
 async function navigate(document, path) {
   const link = document.querySelector(`a[href="#${path}"]`);
+  if (!link && path === "/studio/demo/call/") {
+    named(document, "Call overview").click();
+    await pause(100);
+    return;
+  }
   assert.ok(link, `Missing page link ${path}`);
   link.click();
   await pause(100);
@@ -151,13 +156,13 @@ test("working preview navigates real pages and keeps call state in the floating 
   t.after(() => dom.window.close());
   // The portable file already contains rendered HTML. Wait for the React
   // mount effect before interacting, rather than clicking the inert SSR copy.
-  await waitFor(() => document.title.includes("connect agents worldwide"));
+  await waitFor(() => document.title.includes("Connect agents worldwide"));
   await waitFor(() =>
     document.querySelector('.gb-hero-actions a[href="#/studio/"]'),
   );
   assert.match(
     document.querySelector("h1").textContent,
-    /connect agents\s+worldwide/,
+    /Connect agents\s+worldwide/,
   );
   assert.equal(
     document.querySelector(".world-network-svg").dataset.loopSeconds,
@@ -499,7 +504,7 @@ test("public navigation keeps a native top-level studio link across the CSP boun
 test("the portable review links to signup without pretending to create a server account", async (t) => {
   const { dom, document, errors, requests } = setup();
   t.after(() => dom.window.close());
-  await waitFor(() => document.title.includes("connect agents worldwide"));
+  await waitFor(() => document.title.includes("Connect agents worldwide"));
   const signup = document.querySelector('.gb-hero-actions a[href="#/signup/"]');
   assert.ok(signup);
   signup.click();
@@ -623,8 +628,6 @@ test("mobile navigation is a dismissible left drawer with all destinations and a
     "Numbers",
     "Connections",
     "Calls",
-    "Routing",
-    "Transcripts",
     "Calling setup",
     "Activity",
     "Settings",
@@ -843,11 +846,27 @@ test("international call planning saves optional capture choices and join defaul
     "Ask about a viewing and return the reference.",
   );
   named(document, "Continue to options").click();
-  await waitFor(() => document.querySelector('input[role="switch"]'));
-  assert.equal(labelled(document, "Record the call").checked, false);
-  assert.equal(labelled(document, "Create a transcript").checked, false);
-  labelled(document, "Create a transcript").click();
-  fieldValue(window, labelled(document, "Transcript language"), "nl");
+  await waitFor(() =>
+    document.querySelector('dialog[open] input[role="switch"]'),
+  );
+  assert.equal(
+    labelled(document.querySelector("dialog[open]"), "Record the call").checked,
+    false,
+  );
+  assert.equal(
+    labelled(document.querySelector("dialog[open]"), "Create a transcript")
+      .checked,
+    false,
+  );
+  labelled(
+    document.querySelector("dialog[open]"),
+    "Create a transcript",
+  ).click();
+  fieldValue(
+    window,
+    labelled(document.querySelector("dialog[open]"), "Transcript language"),
+    "nl",
+  );
   named(document, "Save call plan").click();
   await waitFor(() =>
     document
@@ -874,7 +893,8 @@ test("international call planning saves optional capture choices and join defaul
   await waitFor(
     () => !document.querySelector('dialog[open][aria-label="Edit call plan"]'),
   );
-  await navigate(document, "/studio/demo/memory/");
+  await navigate(document, "/studio/demo/calls/");
+  document.querySelector(".call-defaults").open = true;
   fieldValue(window, labelled(document, "When I join a call"), "phone");
   await waitFor(() =>
     [...document.querySelectorAll("label")].some((el) =>
@@ -952,23 +972,23 @@ test("sample call joins and leaves without ending, requires capture permission a
   assert.equal(named(document, "Enable recording").disabled, true);
   labelled(document, "Permission confirmed").click();
   named(document, "Enable recording").click();
-  await waitFor(() =>
-    document
-      .querySelector(".capture-control-heading")
-      ?.textContent.includes("Recording"),
+  await waitFor(
+    () =>
+      document
+        .querySelector('button[aria-label="Stop recording"]')
+        ?.getAttribute("aria-pressed") === "true",
   );
   named(document, "Pause recording").click();
   await waitFor(() =>
-    document
-      .querySelector(".capture-control-heading")
-      ?.textContent.includes("Paused"),
+    named(document, "Stop recording").textContent.includes("Recording paused"),
   );
   named(document, "Resume recording").click();
   named(document, "Start transcription").click();
-  await waitFor(() => document.querySelector("dialog[open]"));
-  assert.equal(named(document, "Enable transcription").disabled, true);
-  labelled(document, "Permission confirmed").click();
-  named(document, "Enable transcription").click();
+  assert.equal(
+    document.querySelector("dialog[open]"),
+    null,
+    "Capture permission is already confirmed for this sample call",
+  );
   await waitFor(() =>
     [...document.querySelectorAll(".live-transcript button")].some(
       (button) => button.textContent.trim() === "Show full transcript",
@@ -978,48 +998,47 @@ test("sample call joins and leaves without ending, requires capture permission a
   await waitFor(
     () => document.querySelectorAll(".live-transcript-line").length === 6,
   );
-  await navigate(document, "/studio/demo/memory/");
-  const audio = document.querySelector("audio");
-  assert.match(audio.getAttribute("src"), /^data:audio\/(?:mpeg|mp3);base64,/);
-  named(document, "Transcript").click();
+  await navigate(document, "/studio/demo/calls/");
+  named(document, "Open recent call with London studio").click();
   await waitFor(() =>
-    document.querySelector('input[aria-label="Search sample transcript"]'),
+    document.querySelector('dialog[open][aria-label="Recent call details"]'),
   );
+  const details = document.querySelector(
+    'dialog[open][aria-label="Recent call details"]',
+  );
+  const audio = details.querySelector("audio");
+  assert.match(audio.getAttribute("src"), /^data:audio\/(?:mpeg|mp3);base64,/);
   fieldValue(
     window,
-    document.querySelector('input[aria-label="Search sample transcript"]'),
+    details.querySelector('input[aria-label="Search call transcript"]'),
     "reference",
   );
-  fieldValue(window, labelled(document, "Speaker"), "Recipient");
+  fieldValue(window, labelled(details, "Speaker"), "Recipient");
   await waitFor(
-    () => document.querySelectorAll(".transcript-lines article").length === 1,
+    () =>
+      details.querySelectorAll(".conversation-transcript article").length === 1,
   );
   assert.match(
-    document.querySelector(".transcript-lines").textContent,
+    details.querySelector(".conversation-transcript").textContent,
     /two zero four/,
   );
-  named(document, "Jump to 00:16").click();
+  named(details, "Jump to 00:16").click();
   assert.equal(audio.currentTime, 16.07);
   fieldValue(
     window,
-    document.querySelector('input[aria-label="Search sample transcript"]'),
+    details.querySelector('input[aria-label="Search call transcript"]'),
     "does-not-exist",
   );
-  await waitFor(() => document.querySelector(".tools-empty"));
+  await waitFor(() => details.querySelector(".tools-empty"));
   assert.match(
-    document.querySelector(".tools-empty").textContent,
+    details.querySelector(".tools-empty").textContent,
     /No matching transcript/,
   );
-  named(document, "Outcome").click();
-  await waitFor(() => document.querySelector(".memory-outcome"));
   assert.match(
-    document.querySelector(".memory-outcome").textContent,
-    /DEMO 204/,
+    details.querySelector(".conversation-notes").textContent,
+    /access to reception/,
   );
-  assert.match(
-    document.querySelector(".memory-outcome").textContent,
-    /not a real confirmation/,
-  );
+  named(details, "Close").click();
   await navigate(document, "/studio/demo/call/");
   assert.ok(named(document, "Pause recording"));
   assert.ok(named(document, "Stop transcription"));
@@ -1040,7 +1059,7 @@ test("sample call joins and leaves without ending, requires capture permission a
 test("feature pages link into international planning, call memory and joining through real routes", async (t) => {
   const { dom, document, errors, requests } = setup();
   t.after(() => dom.window.close());
-  await waitFor(() => document.title.includes("connect agents worldwide"));
+  await waitFor(() => document.title.includes("Connect agents worldwide"));
   await navigate(document, "/features/");
   assert.match(
     document.querySelector("main h1").textContent,
@@ -1272,7 +1291,7 @@ test("home live call expands and minimizes in place while its action opens the f
   named(card, "Expand live call").click();
   await waitFor(() => !card.querySelector(".active-call-details").hidden);
   assert.match(card.textContent, /Routing number/);
-  assert.match(card.textContent, /Transcription is off/);
+  assert.match(card.textContent, /Turn on the transcript here/);
   named(card, "Minimize live call").click();
   await waitFor(() => card.querySelector(".active-call-details").hidden);
   assert.equal(document.title, "Your workspace | AgentBridge");
@@ -1424,7 +1443,7 @@ test("studio shortcuts form one five-item rail and the single circle arrow expan
   assert.ok(named(rail, "Connect a destination"));
   for (const [label, route] of [
     ["Calls", "calls"],
-    ["Transcripts", "memory"],
+    ["Recordings", "memory"],
     ["Your numbers", "numbers"],
   ])
     assert.equal(
@@ -1510,7 +1529,7 @@ test("Calls shows live and idle saved cards, searches them, and edits call detai
   );
   fieldValue(window, search, "no matching saved call");
   await waitFor(() =>
-    document.querySelector(".saved-calls-section .tools-empty-card"),
+    document.querySelector(".saved-calls-section .conversation-help"),
   );
   fieldValue(window, search, "");
   await waitFor(
@@ -1620,6 +1639,156 @@ test("an idle connection opens a prefilled call and saving it converts that card
   assert.deepEqual(requests, []);
   assert.deepEqual(
     errors.map((error) => error.message),
+    [],
+  );
+});
+
+test("quick capture switches, contact memory and highlights remain usable in the unified Calls history", async (t) => {
+  const { dom, window, document, errors, requests } = setup(
+    "file:///AgentBridge-Working-Website.html#/studio/demo/",
+  );
+  t.after(() => dom.window.close());
+  await waitFor(() => document.title === "Your workspace | AgentBridge");
+  named(document.querySelector("main"), "Expand live call").click();
+  await waitFor(
+    () => !document.querySelector("main .active-call-details").hidden,
+  );
+  const home = document.querySelector("main");
+  named(home, "Start transcription").click();
+  await waitFor(() =>
+    document.querySelector(
+      'dialog[open][aria-label="Optional capture permission"]',
+    ),
+  );
+  const permission = document.querySelector(
+    'dialog[open][aria-label="Optional capture permission"]',
+  );
+  labelled(permission, "Permission confirmed").click();
+  named(permission, "Enable transcription").click();
+  await waitFor(() =>
+    document.querySelector("main .capture-action.is-transcribing"),
+  );
+  named(home, "Start recording").click();
+  await waitFor(() =>
+    document.querySelector("main .capture-action.is-recording"),
+  );
+  assert.equal(
+    document.title,
+    "Your workspace | AgentBridge",
+    "Quick controls must keep the user in the call card",
+  );
+  named(home, "Stop recording").click();
+  await waitFor(
+    () => !document.querySelector("main .capture-action.is-recording"),
+  );
+  named(document, "Memory for London studio").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Contact memory"]'),
+  );
+  let memory = document.querySelector(
+    'dialog[open][aria-label="Contact memory"]',
+  );
+  fieldValue(
+    window,
+    labelled(memory, "Notes for the next conversation"),
+    "Ask Alex about afternoon appointments.",
+  );
+  named(memory, "Save contact memory").click();
+  await waitFor(
+    () => !document.querySelector('dialog[open][aria-label="Contact memory"]'),
+  );
+  await navigate(document, "/studio/demo/call/");
+  const notes = document.querySelector(".conversation-notes");
+  fieldValue(
+    window,
+    labelled(notes, "Add a note"),
+    "Confirm reception access next time.",
+  );
+  named(notes, "Save highlight").click();
+  await waitFor(() => notes.querySelector("article"));
+  assert.ok(
+    notes.querySelector("article time"),
+    "A live note keeps its call timestamp",
+  );
+  await endFixtureCall(document);
+  await navigate(document, "/studio/demo/calls/");
+  assert.equal(
+    document.querySelectorAll(".conversation-history-row").length,
+    3,
+  );
+  named(document, "With notes").click();
+  await waitFor(
+    () => document.querySelectorAll(".conversation-history-row").length === 2,
+  );
+  document.querySelector(".conversation-history-row").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Recent call details"]'),
+  );
+  let detail = document.querySelector(
+    'dialog[open][aria-label="Recent call details"]',
+  );
+  assert.ok(
+    detail.querySelector("audio"),
+    "A recording captured before Stop remains available",
+  );
+  assert.match(
+    detail.querySelector(".conversation-notes").textContent,
+    /Confirm reception access/,
+  );
+  named(detail, "Remove transcript").click();
+  await waitFor(() => !detail.querySelector(".conversation-transcript"));
+  await waitFor(() => !named(detail, "Restore sample transcript").disabled);
+  named(detail, "Restore sample transcript").click();
+  await waitFor(() => detail.querySelector(".conversation-transcript"));
+  named(detail, "Open contact memory").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Contact memory"]'),
+  );
+  memory = document.querySelector('dialog[open][aria-label="Contact memory"]');
+  assert.equal(
+    labelled(memory, "Notes for the next conversation").value,
+    "Ask Alex about afternoon appointments.",
+  );
+  assert.match(
+    memory.querySelector(".contact-previous-calls").textContent,
+    /Confirm reception access/,
+  );
+  named(memory, "Cancel").click();
+  await waitFor(() => !document.querySelector("dialog[open]"));
+  named(document, "All calls").click();
+  await waitFor(
+    () => document.querySelectorAll(".conversation-history-row").length === 3,
+  );
+  named(document, "Open recent call with New York office").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Recent call details"]'),
+  );
+  detail = document.querySelector(
+    'dialog[open][aria-label="Recent call details"]',
+  );
+  assert.equal(
+    detail.querySelector("audio"),
+    null,
+    "An uncaptured call must not expose fictional recovered audio",
+  );
+  assert.match(detail.textContent, /01:12/);
+  assert.ok(
+    ![...detail.querySelectorAll("button")].some((b) =>
+      b.textContent.includes("Restore sample transcript"),
+    ),
+  );
+  named(detail, "Close").click();
+  await navigate(document, "/studio/demo/numbers/");
+  assert.equal(
+    document.querySelector('nav[aria-label="Studio shortcuts"]'),
+    null,
+    "Numbers has its own inventory page",
+  );
+  assert.equal(document.querySelector("main .active-call-card"), null);
+  assert.ok(document.querySelector(".owned-number-card"));
+  assert.deepEqual(requests, []);
+  assert.deepEqual(
+    errors.map((e) => e.message),
     [],
   );
 });

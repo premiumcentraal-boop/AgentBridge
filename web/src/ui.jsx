@@ -54,6 +54,7 @@ const paths = {
   search: "M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16M16 16l6 6",
   check: "M5 12l4 4L19 6",
   copy: "M9 9h12v12H9zM15 5V2H2v13h3",
+  bookmark: "M6 3h12v18l-6-4-6 4z",
   download: "M12 3v12M7 10l5 5 5-5M4 16v5h16v-5",
   globe:
     "M3 12h18M12 3a16 16 0 0 1 0 18 16 16 0 0 1 0-18M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0",

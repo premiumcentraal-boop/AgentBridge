@@ -6,6 +6,13 @@ import { BotFace } from "./grok-ui.jsx";
 import { FocusCall } from "./connection-hub.jsx";
 import { ActiveCallCard, SavedCallCard } from "./studio-navigation.jsx";
 import {
+  CallCaptureControls,
+  CallHistoryList,
+  CallNotes,
+  conversationClock,
+} from "./conversations.jsx";
+import { contactNotes } from "../../shared/conversations.mjs";
+import {
   CALL_COUNTRIES,
   CALL_LANGUAGES,
   DEFAULT_CAPTURE,
@@ -519,7 +526,7 @@ export function JoinDialog({ open, onClose, onJoin, preferences }) {
     </Dialog>
   );
 }
-function CapturePermission({ kind, onClose, onConfirm }) {
+export function CapturePermission({ kind, onClose, onConfirm }) {
   const id = useId(),
     [agreed, setAgreed] = useState(false);
   return (
@@ -879,7 +886,7 @@ function Participants({ call }) {
       <span className="participant-thread" />
       <div>
         <span className="participant-avatar recipient">L</span>
-        <strong>London studio</strong>
+        <strong>{call.label || "Contact"}</strong>
         <small>Recipient</small>
       </div>
       {call.joined && (
@@ -950,6 +957,224 @@ function LiveCallTranscript({ call, allLines, setAllLines, onEnable }) {
     </Card>
   );
 }
+function ConversationDetail({
+  call,
+  onClose,
+  onAddNote,
+  onDeleteNote,
+  onCapture,
+  onMemory,
+}) {
+  const [error, setError] = useState(""),
+    [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState(""),
+    [speaker, setSpeaker] = useState("all");
+  const player = useRef(null),
+    searchId = useId();
+  useEffect(() => {
+    setError("");
+    setQuery("");
+    setSpeaker("all");
+  }, [call?.id]);
+  const capture = async (kind) => {
+    setBusy(true);
+    setError("");
+    try {
+      await onCapture(call.id, kind);
+    } catch (failure) {
+      setError(failure.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog
+      isOpen={Boolean(call)}
+      onOpenChange={(open) => !open && onClose()}
+      width={720}
+      maxHeight="calc(100dvh - 32px)"
+      className="tools-dialog conversation-detail-dialog"
+      aria-label="Recent call details"
+    >
+      <DialogHeader
+        className="tools-dialog-heading"
+        title={call?.label || "Call details"}
+        onOpenChange={onClose}
+      />
+      {call && (
+        <div className="tools-dialog-body">
+          <div className="conversation-detail-facts">
+            <span>{call.destination}</span>
+            <time>{conversationClock(call.duration ?? call.elapsed)}</time>
+            <span>{call.status || "Completed"}</span>
+            {call.sample && <Pill>Demo</Pill>}
+          </div>
+          {call.has_recording ? (
+            <section aria-label="Saved recording">
+              <h3>Recording</h3>
+              <audio
+                ref={player}
+                className="conversation-dialog-player"
+                controls
+                preload="none"
+                src={sampleAudio}
+                aria-label="Saved sample call recording"
+              />
+              <p className="conversation-help">
+                Fictional example audio. Your recordings are saved only when
+                capture is enabled.
+              </p>
+              <button
+                className="number-text-action"
+                disabled={busy}
+                onClick={() => capture("recording")}
+              >
+                Remove sample recording
+              </button>
+            </section>
+          ) : (
+            <div className="conversation-content-empty">
+              <strong>No recording</strong>
+              <p>
+                Recording was off or the recording was removed. There is no
+                audio to recover.
+              </p>
+            </div>
+          )}
+          {call.has_transcript && call.transcript?.length ? (
+            <section aria-label="Saved transcript">
+              <div className="tools-list-heading">
+                <h3>Transcript</h3>
+                <button
+                  className="number-text-action"
+                  disabled={busy}
+                  onClick={() => capture("transcript")}
+                >
+                  Remove transcript
+                </button>
+              </div>
+              <div className="transcript-tools">
+                <label htmlFor={searchId} className="number-search">
+                  <Icon name="search" size={16} />
+                  <input
+                    id={searchId}
+                    type="search"
+                    aria-label="Search call transcript"
+                    placeholder="Search this transcript"
+                    value={query}
+                    maxLength={160}
+                    onChange={(event) => setQuery(event.target.value)}
+                  />
+                </label>
+                <label className="sr-only" htmlFor={searchId + "speaker"}>
+                  Speaker
+                </label>
+                <select
+                  id={searchId + "speaker"}
+                  value={speaker}
+                  onChange={(event) => setSpeaker(event.target.value)}
+                >
+                  <option value="all">All speakers</option>
+                  <option value="Agent">Agent</option>
+                  <option value="Recipient">Recipient</option>
+                </select>
+              </div>
+              <div className="conversation-transcript">
+                {call.transcript
+                  .filter(
+                    (line) =>
+                      (speaker === "all" || speaker === line.speaker) &&
+                      line.text.toLowerCase().includes(query.toLowerCase()),
+                  )
+                  .map((line) => (
+                    <article key={line.id}>
+                      <button
+                        type="button"
+                        className="transcript-time"
+                        aria-label={"Jump to " + conversationClock(line.start)}
+                        disabled={!call.has_recording}
+                        onClick={() => {
+                          if (player.current)
+                            player.current.currentTime = line.start;
+                        }}
+                      >
+                        {conversationClock(line.start)}
+                      </button>
+                      <div>
+                        <strong>{line.speaker}</strong>
+                        <p>{line.text}</p>
+                      </div>
+                    </article>
+                  ))}
+              </div>
+              {!call.transcript.some(
+                (line) =>
+                  (speaker === "all" || speaker === line.speaker) &&
+                  line.text.toLowerCase().includes(query.toLowerCase()),
+              ) && (
+                <p className="tools-empty">No matching transcript passages.</p>
+              )}
+              <a
+                className="text-action"
+                download="agentbridge-call-transcript.txt"
+                href={
+                  "data:text/plain;charset=utf-8," +
+                  encodeURIComponent(
+                    "DEMONSTRATION TRANSCRIPT\n\n" +
+                      call.transcript
+                        .map(
+                          (line) =>
+                            `[${conversationClock(line.start)}] ${line.speaker}: ${line.text}`,
+                        )
+                        .join("\n\n"),
+                  )
+                }
+              >
+                <Icon name="download" size={15} />
+                Download transcript
+              </a>
+            </section>
+          ) : (
+            <div className="conversation-content-empty">
+              <strong>No transcript saved</strong>
+              <p>
+                {call.has_recording
+                  ? "A saved recording can be used to create a transcript later."
+                  : "Transcription was off. Your call details and notes are still saved."}
+              </p>
+              {call.has_recording && call.sample && (
+                <Btn
+                  label="Restore sample transcript"
+                  end={null}
+                  disabled={busy}
+                  onClick={() => capture("restore-transcript")}
+                />
+              )}
+            </div>
+          )}
+          <CallNotes call={call} onAdd={onAddNote} onDelete={onDeleteNote} />
+          {onMemory && (
+            <Btn
+              label="Open contact memory"
+              icon="connection"
+              end={null}
+              onClick={() => onMemory(call)}
+            />
+          )}
+          {error && (
+            <p role="alert" className="form-error">
+              {error}
+            </p>
+          )}
+          <div className="tools-dialog-actions">
+            <Btn label="Close" end={null} onClick={onClose} />
+          </div>
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
 export function CallExtensions({
   page,
   snapshot,
@@ -969,6 +1194,12 @@ export function CallExtensions({
   onListen,
   onRoute,
   onStartCall,
+  onToggleCapture,
+  onSaveNote,
+  onDeleteNote,
+  onHistoryCapture,
+  onMemory,
+  initialHistoryFilter = "all",
 }) {
   const preferences = snapshot.capture_preferences || DEFAULT_CAPTURE;
   const [planOpen, setPlanOpen] = useState(false),
@@ -977,6 +1208,13 @@ export function CallExtensions({
     [allLines, setAllLines] = useState(false),
     [query, setQuery] = useState(""),
     [endConfirm, setEndConfirm] = useState(false);
+  const [historyId, setHistoryId] = useState("");
+  const historyCall = (snapshot.call_history || []).find(
+    (call) => call.id === historyId,
+  );
+  const currentContact = (snapshot.connections || []).find(
+    (item) => item.destination === call.destination,
+  );
   useEffect(() => {
     setEditingPlan(null);
     setPlanOpen(false);
@@ -1031,6 +1269,10 @@ export function CallExtensions({
   };
   const enable = (kind) => {
     if (!isDemo) return;
+    if (onToggleCapture) {
+      onToggleCapture(kind);
+      return;
+    }
     setCaptureRequest(kind);
   };
   const confirm = () => {
@@ -1039,6 +1281,9 @@ export function CallExtensions({
       [captureRequest]: true,
       capturePermission: true,
       recordingPaused: false,
+      recording_saved: c.recording_saved || captureRequest === "recording",
+      transcript_saved:
+        c.transcript_saved || captureRequest === "transcription",
     }));
     setCaptureRequest(null);
     notify(
@@ -1049,27 +1294,38 @@ export function CallExtensions({
   };
   return (
     <>
-      {page === "calls" ? (
+      {page === "calls" || page === "memory" ? (
         <>
-          <Head title="Calls">
+          <Head
+            title="Calls"
+            description="Recent calls, recordings, transcripts and notes."
+          >
             <Btn label="New call" icon="plus" primary onClick={startNew} />
           </Head>
-          <section className="calls-live-section" aria-label="Live calls">
-            <h2>Live now</h2>
-            <FocusCall
-              call={call}
-              isDemo={isDemo}
-              navTo={navTo}
-              onListen={onListen}
-              onRoute={onRoute}
-              onRestart={onRestart}
-            />
-          </section>
-          <section className="saved-calls-section" aria-label="Saved calls">
+          {call.active && (
+            <section className="calls-live-section" aria-label="Live calls">
+              <h2>Live now</h2>
+              <FocusCall
+                call={call}
+                isDemo={isDemo}
+                navTo={navTo}
+                onListen={onListen}
+                onRoute={onRoute}
+                onRestart={onRestart}
+              />
+            </section>
+          )}
+          <CallHistoryList
+            records={snapshot.call_history || []}
+            onOpen={(item) => setHistoryId(item.id)}
+            initialFilter={initialHistoryFilter}
+          />
+          <details className="saved-calls-section call-shortcuts">
+            <summary>
+              Call shortcuts <small>{savedCalls.length}</small>
+            </summary>
             <div className="saved-calls-heading">
-              <h2>
-                Saved calls <small>{savedCalls.length}</small>
-              </h2>
+              <h2>Saved contacts & call briefs</h2>
               <label className="saved-calls-search">
                 <Icon name="search" size={18} />
                 <input
@@ -1077,7 +1333,7 @@ export function CallExtensions({
                   aria-label="Search saved calls"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search names, countries or numbers"
+                  placeholder="Search contacts or numbers"
                 />
               </label>
             </div>
@@ -1116,54 +1372,39 @@ export function CallExtensions({
                 ))}
               </div>
             ) : (
-              <div className="tools-empty-card">
-                <Icon name="calls" size={28} />
-                <h3>{query ? "No matching calls" : "No saved calls"}</h3>
-                <p>
-                  {query
-                    ? "Try another name, country or number."
-                    : "Create a call or add a connection to keep it here."}
-                </p>
-                <Btn label="New call" onClick={startNew} icon="plus" />
-              </div>
-            )}
-          </section>
-        </>
-      ) : page === "memory" ? (
-        <>
-          <Head
-            eyebrow="RECORDINGS & TRANSCRIPTS"
-            title="Transcripts & recordings"
-            description=""
-          >
-            {isDemo && call.active && (
-              <A to={navTo("call")} className="text-action">
-                Return to call <Icon name="arrow" size={15} />
-              </A>
-            )}
-          </Head>
-          {isDemo ? (
-            <Card className="tools-card" padding={0}>
-              <SampleRecording />
-            </Card>
-          ) : (
-            <div className="tools-empty-card">
-              <Icon name="record" size={30} />
-              <h2>No recordings yet</h2>
-              <p>
-                Live recording and transcription need a configured capture
-                backend. Your preferences can be saved now.
+              <p className="conversation-help">
+                {query
+                  ? "No matching contacts."
+                  : "Save a contact to call it again."}
               </p>
-              <A className="text-action" to="/studio/demo/memory/">
-                Try the sample recording and transcript
-                <Icon name="arrow" size={15} />
-              </A>
-            </div>
-          )}
-          <Preferences
-            preferences={preferences}
-            onSave={onSaveCapture}
-            isDemo={isDemo}
+            )}
+          </details>
+          <details className="call-defaults">
+            <summary>Defaults for new calls</summary>
+            <Preferences
+              preferences={preferences}
+              onSave={onSaveCapture}
+              isDemo={isDemo}
+            />
+          </details>
+          <ConversationDetail
+            call={historyCall}
+            onClose={() => setHistoryId("")}
+            onAddNote={onSaveNote}
+            onDeleteNote={onDeleteNote}
+            onCapture={onHistoryCapture}
+            onMemory={
+              onMemory &&
+              ((item) => {
+                const contact = connections.find(
+                  (contact) => contact.destination === item.destination,
+                );
+                if (contact) {
+                  setHistoryId("");
+                  onMemory(contact);
+                }
+              })
+            }
           />
         </>
       ) : (
@@ -1204,10 +1445,41 @@ export function CallExtensions({
                       </>
                     )}
                   </div>
+                  <CallCaptureControls
+                    call={call}
+                    onToggle={(kind) =>
+                      onToggleCapture
+                        ? onToggleCapture(kind)
+                        : call[kind]
+                          ? setCall((c) => ({ ...c, [kind]: false }))
+                          : enable(kind)
+                    }
+                  />
+                  {call.recording && (
+                    <Btn
+                      label={
+                        call.recordingPaused
+                          ? "Resume recording"
+                          : "Pause recording"
+                      }
+                      icon={call.recordingPaused ? "play" : "pause"}
+                      end={null}
+                      onClick={() =>
+                        setCall((c) => ({
+                          ...c,
+                          recordingPaused: !c.recordingPaused,
+                        }))
+                      }
+                    />
+                  )}
                   <Participants call={call} />
                   <div className="call-centre-wave">
                     <Wave muted={call.muted || !call.active} />
-                    <small>One familiar agent. You can join alongside.</small>
+                    <small>
+                      {call.joined
+                        ? "You joined the conversation."
+                        : "Listen in, or join when you need to."}
+                    </small>
                   </div>
                   <div className="tools-actions">
                     <Btn
@@ -1274,91 +1546,29 @@ export function CallExtensions({
                   onEnable={() => enable("transcription")}
                 />
               </div>
-              <div className="call-capture-grid">
-                <Card className="tools-card" padding={0}>
-                  <div className="capture-control-heading">
-                    <Icon name="record" />
-                    <Pill tone={call.recording ? "rose" : "muted"}>
-                      {call.recording
-                        ? call.recordingPaused
-                          ? "Paused"
-                          : "Recording"
-                        : "Off"}
-                    </Pill>
-                  </div>
-                  <h2>Recording</h2>
-                  <p>
-                    Recording is separate from joining. You can pause capture
-                    while the call continues.
-                  </p>
-                  {call.recording ? (
-                    <div className="tools-actions">
+              <Card className="tools-card" padding={0}>
+                {currentContact && (
+                  <div className="conversation-memory-preview">
+                    <strong>{currentContact.label} · Contact memory</strong>
+                    <p>
+                      {contactNotes(snapshot, currentContact.destination) ||
+                        "Save useful details for the next conversation."}
+                    </p>
+                    {onMemory && (
                       <Btn
-                        label={
-                          call.recordingPaused
-                            ? "Resume recording"
-                            : "Pause recording"
-                        }
-                        icon={call.recordingPaused ? "play" : "pause"}
+                        label="Open contact memory"
                         end={null}
-                        disabled={!call.active}
-                        onClick={() =>
-                          setCall((c) => ({
-                            ...c,
-                            recordingPaused: !c.recordingPaused,
-                          }))
-                        }
+                        onClick={() => onMemory(currentContact)}
                       />
-                      <Btn
-                        label="Stop recording"
-                        end={null}
-                        disabled={!call.active}
-                        onClick={() =>
-                          setCall((c) => ({
-                            ...c,
-                            recording: false,
-                            recordingPaused: false,
-                          }))
-                        }
-                      />
-                    </div>
-                  ) : (
-                    <Btn
-                      label="Start recording"
-                      end="plus"
-                      disabled={!call.active}
-                      onClick={() => enable("recording")}
-                    />
-                  )}
-                </Card>
-                <Card className="tools-card" padding={0}>
-                  <div className="capture-control-heading">
-                    <Icon name="transcript" />
-                    <Pill tone={call.transcription ? "sage" : "muted"}>
-                      {call.transcription ? "On" : "Off"}
-                    </Pill>
+                    )}
                   </div>
-                  <h2>Transcription</h2>
-                  <p>
-                    A searchable transcript can be requested with or without
-                    keeping the audio recording.
-                  </p>
-                  <Btn
-                    label={
-                      call.transcription
-                        ? "Stop transcription"
-                        : "Start transcription"
-                    }
-                    end={call.transcription ? null : "plus"}
-                    disabled={!call.active}
-                    onClick={() =>
-                      call.transcription
-                        ? setCall((c) => ({ ...c, transcription: false }))
-                        : enable("transcription")
-                    }
-                  />
-                </Card>
-              </div>
+                )}
+                <CallNotes
+                  call={call}
+                  onAdd={onSaveNote}
+                  onDelete={onDeleteNote}
+                />
+              </Card>
             </>
           )}
         </>

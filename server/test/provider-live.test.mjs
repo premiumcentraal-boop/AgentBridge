@@ -563,6 +563,24 @@ test("recording and call control verify provider ownership and consent, and expo
   assert.equal(words.transcripts.length, 1);
   assert.equal(words.transcripts[0].text, "Provider transcript");
   assert.equal(words.live_transcription, false);
+  const account = await h.database.first("SELECT id FROM ab_accounts");
+  const recent = await h.database.first(
+    "SELECT document FROM ab_live_workspaces WHERE account_id=?",
+    [account.id],
+  );
+  const older = JSON.parse(recent.document);
+  older.calls = older.calls.filter((item) => item.id !== id);
+  await h.database.run(
+    "UPDATE ab_live_workspaces SET document=? WHERE account_id=?",
+    [JSON.stringify(older), account.id],
+  );
+  const selected = await h.checked("live/calls/" + id + "/transcripts");
+  assert.equal(
+    selected.transcripts[0].call_id,
+    id,
+    "Historical transcripts can be retrieved without relying on the latest ten calls",
+  );
+  assert.equal(selected.transcripts[0].text, "Provider transcript");
   const foreign = {
     ...call,
     sid: randomUUID(),
@@ -571,6 +589,10 @@ test("recording and call control verify provider ownership and consent, and expo
     from: h.provider.owned.number,
   };
   h.provider.state.calls.push(foreign);
+  assert.equal(
+    (await h.request("live/calls/" + foreign.sid + "/transcripts")).status,
+    403,
+  );
   assert.equal(
     (
       await h.request("live/calls/" + foreign.sid + "/end", "POST", {
@@ -592,4 +614,88 @@ test("recording and call control verify provider ownership and consent, and expo
     confirm_delete: true,
   });
   assert.equal(h.provider.state.recordings.length, 0);
+});
+
+test("live contact context and notes survive provider sync and retain uncaptured call history", async (t) => {
+  const h = await harness(t);
+  await h.live();
+  const { connection } = await h.connection();
+  const memoryPath = "live/contacts/" + connection.id;
+  const before = h.provider.state.requests.length;
+  await h.checked(memoryPath + "/memory", "PATCH", {
+    notes: "Ask for Alex at reception.",
+  });
+  assert.equal(
+    h.provider.state.requests.length,
+    before,
+    "Saving context requires no carrier operation",
+  );
+  const response = await h.checked("live/calls/start", "POST", {
+    request_id: randomUUID(),
+    connection_id: connection.id,
+    callback_number: "+12125551234",
+    confirm_charges: true,
+  });
+  const id = response.call.id;
+  assert.equal(response.contact_context.notes, "Ask for Alex at reception.");
+  const callPath = "live/calls/" + id;
+  const { note } = await h.checked(callPath + "/notes", "POST", {
+    text: "Call back on Tuesday.",
+    at_seconds: 14,
+  });
+  const remote = h.provider.state.calls.find((c) => c.sid === id);
+  remote.status = "completed";
+  remote.duration = 42;
+  remote.end_time = new Date().toISOString();
+  const account = await h.database.first("SELECT id FROM ab_accounts");
+  const clearSync = async () => {
+    const row = await h.database.first(
+      "SELECT document FROM ab_live_workspaces WHERE account_id=?",
+      [account.id],
+    );
+    const doc = JSON.parse(row.document);
+    doc.last_sync = null;
+    await h.database.run(
+      "UPDATE ab_live_workspaces SET document=? WHERE account_id=?",
+      [JSON.stringify(doc), account.id],
+    );
+  };
+  await clearSync();
+  await h.checked("live/sync", "POST", {});
+  let overview = await h.checked("live/overview");
+  assert.equal(overview.call_history.length, 1);
+  assert.equal(overview.call_history[0].duration, 42);
+  assert.equal(overview.call_history[0].connection_id, connection.id);
+  assert.equal(
+    overview.call_history[0].destination,
+    connection.destination,
+    "A callback call retains the intended destination rather than becoming the operator contact",
+  );
+  assert.deepEqual(overview.call_history[0].notes, [note]);
+  const second = await h.checked(callPath + "/notes", "POST", {
+    text: "Confirm the address next time.",
+  });
+  h.provider.state.calls = [];
+  await clearSync();
+  await h.checked("live/sync", "POST", {});
+  overview = await h.checked("live/overview");
+  assert.equal(overview.calls.length, 0);
+  assert.equal(
+    overview.call_history[0].notes.length,
+    2,
+    "Calls remain in history when no longer in the recent carrier response",
+  );
+  const { context } = await h.checked(memoryPath + "/context");
+  assert.equal(context.previous_calls[0].duration, 42);
+  assert.equal(context.previous_calls[0].notes[1].id, second.note.id);
+  assert.deepEqual(
+    context.previous_calls[0].transcript_excerpt,
+    [],
+    "No transcript or audio is fabricated for an uncaptured call",
+  );
+  await h.checked(callPath + "/notes/" + note.id, "DELETE", {});
+  assert.equal(
+    (await h.checked("live/overview")).call_history[0].notes.length,
+    1,
+  );
 });

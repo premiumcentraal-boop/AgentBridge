@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { BotFace, StateTag } from "./grok-ui.jsx";
 import { Btn, DirectionArrow, Icon, Wave } from "./ui.jsx";
+import { CallCaptureControls } from "./conversations.jsx";
 
 export const callDuration = (seconds) =>
   `${Math.floor((seconds || 0) / 60)
@@ -17,6 +18,7 @@ export function ActiveCallCard({
   navigation = false,
   expandable = false,
   transcript = [],
+  onToggleCapture,
 }) {
   const [expanded, setExpanded] = useState(false);
   const detailsId = useId();
@@ -125,10 +127,17 @@ export function ActiveCallCard({
                   <p>
                     {call.transcription
                       ? "Waiting for words…"
-                      : "Transcription is off. Manage it in the call overview."}
+                      : "Turn on the transcript here to follow the conversation."}
                   </p>
                 )}
               </div>
+            )}
+            {expandable && (
+              <CallCaptureControls
+                call={call}
+                onToggle={onToggleCapture}
+                compact
+              />
             )}
           </div>
           {openOverview && (
