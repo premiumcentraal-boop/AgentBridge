@@ -110,6 +110,15 @@ async function reconcile(row,env,fetchImpl){
   };
   if(!isFirstPageLink(listing.links.self)||!isFirstPageLink(listing.links.first))
     return failed('INCOMPLETE_CARRIER_PAGINATION');
+  // Optional reverse/terminal navigation metadata must not contradict the
+  // single first-and-last page claim. Never follow these untrusted URLs.
+  if(listing.links.prev!==null&&listing.links.prev!==undefined)
+    return failed('INCOMPLETE_CARRIER_PAGINATION');
+  if(listing.links.last!==null&&listing.links.last!==undefined&&
+     (!isFirstPageLink(listing.links.last)||
+      new URL(listing.links.last).searchParams.get('page_number')!==
+      new URL(listing.links.self).searchParams.get('page_number')))
+    return failed('INCOMPLETE_CARRIER_PAGINATION');
   if(listing.links.next!==null&&listing.links.next!==undefined)
     return failed('PAGINATED_CARRIER_LOGS');
   // A full page without a next cursor cannot prove the provider did not truncate
