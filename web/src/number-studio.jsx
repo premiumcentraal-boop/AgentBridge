@@ -283,6 +283,7 @@ export function NumberWorkspace({
             className="connection-filter-toggle"
             aria-label={numberPage ? "Filter numbers" : "Filter connections"}
             aria-expanded={filtersOpen}
+            data-filter-active={country !== "all" || routingFilter !== "all"}
             aria-controls={listId + "filters"}
             onClick={() => setFiltersOpen((value) => !value)}
           >

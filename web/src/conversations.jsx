@@ -35,6 +35,13 @@ export function CallCaptureControls({ call, onToggle, compact = false }) {
         type="button"
         className={"capture-action" + (call.recording ? " is-recording" : "")}
         aria-pressed={Boolean(call.recording)}
+        data-control-state={
+          call.recording
+            ? call.recordingPaused
+              ? "paused"
+              : "recording"
+            : "off"
+        }
         aria-label={call.recording ? "Stop recording" : "Start recording"}
         disabled={!call.active || !onToggle}
         onClick={() => onToggle("recording")}
@@ -55,6 +62,7 @@ export function CallCaptureControls({ call, onToggle, compact = false }) {
           "capture-action" + (call.transcription ? " is-transcribing" : "")
         }
         aria-pressed={Boolean(call.transcription)}
+        data-control-state={call.transcription ? "enabled" : "off"}
         aria-label={
           call.transcription ? "Stop transcription" : "Start transcription"
         }

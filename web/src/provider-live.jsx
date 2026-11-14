@@ -184,6 +184,8 @@ export function SignalWireSettings({ onModeChange = () => location.reload() }) {
                 ? "Return to demo"
                 : "Use my SignalWire project"
             }
+            aria-pressed={Boolean(status.live_enabled)}
+            data-control-state={status.live_enabled ? "enabled" : "off"}
             disabled={busy}
             icon="connection"
             onClick={() =>
@@ -1230,6 +1232,13 @@ export function LiveWorkspace({
                     aria-pressed={recordings.some((r) =>
                       ["in-progress", "paused"].includes(r.status),
                     )}
+                    data-control-state={
+                      recordings.some((r) => r.status === "in-progress")
+                        ? "recording"
+                        : recordings.some((r) => r.status === "paused")
+                          ? "paused"
+                          : "off"
+                    }
                     disabled={busy || details.status !== "in-progress"}
                     onClick={() => {
                       const running = recordings.find((r) =>
@@ -1283,6 +1292,10 @@ export function LiveWorkspace({
                               : "Pause recording"
                           }
                           end={null}
+                          aria-pressed={r.status === "paused"}
+                          data-control-state={
+                            r.status === "paused" ? "paused" : "off"
+                          }
                           onClick={() =>
                             run(async () => {
                               await write(
