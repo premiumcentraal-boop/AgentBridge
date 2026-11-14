@@ -263,6 +263,32 @@ test("the hosted tester creates a real account, pairs an API-owned number, calls
     "Confirm the viewing address.",
   );
 
+  named(document.querySelector("main"), "Join call").click();
+  await until(() =>
+    document.querySelector('dialog[open][aria-label="Join call"]'),
+  );
+  const joinDialog = document.querySelector(
+    'dialog[open][aria-label="Join call"]',
+  );
+  field(joinDialog, "Microphone on").click();
+  named(joinDialog, "Join call").click();
+  await until(() => document.querySelector(".call-room.is-joined"));
+  named(document, "Mute agent").click();
+  for (let index = 0; index < 150; index++) {
+    snapshot = await api.snapshot();
+    if (
+      snapshot.demo_call.agentMuted &&
+      snapshot.demo_call.joined &&
+      snapshot.demo_call.userMuted === false
+    )
+      break;
+    await pause(10);
+  }
+  assert.equal(snapshot.demo_call.agentMuted, true);
+  assert.equal(snapshot.demo_call.joined, true);
+  assert.equal(snapshot.demo_call.userMuted, false);
+  named(document, "Leave call").click();
+  await until(() => !document.querySelector(".call-room.is-joined"));
   const settings = document.querySelector(
     '.floating-rail a[aria-label="Settings"]',
   );

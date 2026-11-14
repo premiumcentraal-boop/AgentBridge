@@ -105,6 +105,7 @@ export function finishDemoConversation(call) {
       ? sample.transcript.map((line) => ({ ...line }))
       : [],
     notes: call.notes || [],
+    participant_connections: call.participant_connections || [],
   };
 }
 

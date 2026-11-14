@@ -5,7 +5,7 @@ export function emptyWorkspace() {
   return {
     routing_numbers: [], connections: [], number_orders: [], call_plans: [], call_history: [], contact_memories: [], routes: [], events: [],
     settings: { experience: 'simple' }, capture_preferences: { ...DEFAULT_CAPTURE },
-    demo_call: { active: false, muted: false, elapsed: 0, joined: false, userMuted: true, recording: false, transcription: false, recordingPaused: false },
+    demo_call: { active: false, muted: false, elapsed: 0, joined: false, userMuted: true, agentMuted: false, participant_connections: [], recording: false, transcription: false, recordingPaused: false },
   };
 }
 export function accountSnapshot(document, account) {
