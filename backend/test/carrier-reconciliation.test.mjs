@@ -325,7 +325,12 @@ test('reservation creation clock-skew boundary is deterministic and never widens
   const base=row.created_at;
   for(const skew of [-121,-120,-119,0,119,120,121]){
     const local={...row,created_at:base+skew};
-    const p=provider();
+    // Pagination links must attest to this iteration's exact query window.
+    // A static fixture for the baseline timestamp is no longer valid when
+    // the reservation creation time is deliberately skewed.
+    const createdAfter=new Date((local.created_at-120)*1000).toISOString();
+    const first='https://example-space.signalwire.com/api/voice/logs?page_size=1000&created_after='+encodeURIComponent(createdAfter);
+    const p=provider(inbound,[child],{self:first,first});
     const result=await fetchCarrierReconciliation(local,env,p.fetchImpl);
     assert.equal(result.ok,true,JSON.stringify({skew,result}));
     assert.equal(p.calls.length,2);
