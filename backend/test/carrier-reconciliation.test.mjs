@@ -143,6 +143,28 @@ test('valid but orphaned parent UUIDs cannot hide extra billable legs',async()=>
     provider(inbound,[child,{...extra,parent_id:null}]).fetchImpl);
   assert.equal(unrelatedRoot.ok,true,JSON.stringify(unrelatedRoot));
 });
+test('cyclic carrier ancestry cannot masquerade as unrelated harmless records',async()=>{
+  const a='68313c74-b321-4c08-a3ea-7123449130ab';
+  const b='78313c74-b321-4c08-a3ea-7123449130ab';
+  const cases=[
+    [{id:a,parent_id:a,direction:'outbound',charge:0.25}],
+    [{id:a,parent_id:b,direction:'outbound',charge:0.25},
+      {id:b,parent_id:a,direction:'outbound',charge:0.25}],
+    [{id:a,parent_id:b,direction:'outbound',charge:0.25},
+      {id:b,parent_id:b,direction:'outbound',charge:0.25}]
+  ];
+  for(const records of cases){
+    const result=await fetchCarrierReconciliation(row,env,
+      provider(inbound,[child,...records]).fetchImpl);
+    assert.equal(result.code,'CYCLIC_CARRIER_LOG_PARENT',JSON.stringify(result));
+    assert.equal(result.ok,false);
+  }
+  // Legitimate unrelated trees, including mixed-case parent IDs, stay valid.
+  const good=await fetchCarrierReconciliation(row,env,
+    provider(inbound,[child,{id:a,parent_id:null},
+      {id:b,parent_id:a.toUpperCase()}]).fetchImpl);
+  assert.equal(good.ok,true,JSON.stringify(good));
+});
 test('nested outbound carrier legs cannot be omitted from the billed two-leg total',async()=>{
   const grandchild={id:'88313c74-b321-4c08-a3ea-7123449130ab',parent_id:CHILD,
     direction:'outbound-dial',from:DEST,to:'+442079460000',status:'completed',charge:0.25};
