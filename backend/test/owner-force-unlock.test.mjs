@@ -30,17 +30,19 @@ test('force-unlock requires the owner token, never the agent bearer token',async
 
 test('without force + reason a failed reconciliation keeps the lock and reports the carrier code',async t=>{
   const {env,DB,id}=await stuck(t);
-  t.mock.method(globalThis,'fetch',async()=>new Response('unavailable',{status:503}));
+  let carrierReads=0;
+  t.mock.method(globalThis,'fetch',async()=>{carrierReads++;return new Response('unavailable',{status:503});});
   for(const body of [{},{force:false,reason:'call ended in dashboard'},{force:true},{force:true,reason:'short'},
     {force:true,reason:'bad\u0000control chars here'}]){
     const r=await worker.fetch(unlock(id,body),env);
     assert.equal(r.status,409,JSON.stringify(body));
     const e=(await r.json()).error;
     assert.equal(e.code,'FORCE_REQUIRED');
-    assert.match(e.message,/INCOMPLETE_CARRIER_LOGS/);
+    assert.match(e.message,/SignalWire dashboard/);
   }
   for(const body of [{force:'yes',reason:'call ended in dashboard'},{force:true,reason:'x'.repeat(10),extra:1}])
     assert.equal((await worker.fetch(unlock(id,body),env)).status,422);
+  assert.equal(carrierReads,0,'invalid force requests must not trigger carrier API reads');
   assert.equal(status(DB,id),'connecting');
   assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions').get().n,0);
   // A new reservation is still refused while the stuck one holds the lock.
@@ -90,6 +92,7 @@ test('complete-looking carrier snapshot cannot silently release a reservation',a
   const attempt=await worker.fetch(unlock(id,{}),env);
   assert.equal(attempt.status,409);
   assert.equal((await attempt.json()).error.code,'FORCE_REQUIRED');
+  assert.equal(seen.length,2,'invalid force attempt does not fetch the carrier again');
   assert.equal(status(DB,id),'connecting');
   assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions').get().n,0);
   assert.equal(DB.raw.prepare('SELECT actual_cost_cents FROM reservation_carrier_legs WHERE reservation_id=?').get(id).actual_cost_cents,null);
