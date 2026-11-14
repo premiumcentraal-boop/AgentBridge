@@ -556,7 +556,7 @@ test('Voice Logs byte cap resists dishonest content-length and streamed overflow
     if(url.endsWith('/'+SEG))return new Response(JSON.stringify(inbound));
     const payload=JSON.stringify({data:[inbound,child],links:COMPLETE_LINKS});
     const stream=new ReadableStream({pull(controller){reads++;controller.enqueue(
-      new TextEncoder().encode(payload));controller.close();},
+      new TextEncoder().encode(payload));},
       cancel(){oversizedCancels++;}});
     return new Response(stream,{headers:{'content-length':String(oversized)}});
   };
