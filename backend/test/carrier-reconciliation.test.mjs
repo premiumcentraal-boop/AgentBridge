@@ -522,3 +522,43 @@ test('bounded near-full carrier pages reach completeness validation instead of 2
     new Response(url.endsWith('/'+SEG)?JSON.stringify(inbound):oversized));
   assert.equal(locked.ok,false);
 });
+
+
+test('Voice Logs byte cap resists dishonest content-length and streamed overflows',async()=>{
+  const oversized=1024*1024+1;
+  let cancellations=0;
+  let providerGets=0;
+  const streamed=async(url)=>{
+    providerGets++;
+    if(url.endsWith('/'+SEG))return new Response(JSON.stringify(inbound));
+    let sent=false;
+    return new Response(new ReadableStream({
+      pull(controller){
+        if(!sent){
+          sent=true;
+          controller.enqueue(new Uint8Array(oversized).fill(32));
+        }
+      },
+      cancel(){cancellations++;}
+    }),{headers:{'content-length':'2'}});
+  };
+  const rejected=await fetchCarrierReconciliation(row,env,streamed);
+  assert.equal(rejected.ok,false,JSON.stringify(rejected));
+  assert.equal(rejected.code,'INCOMPLETE_CARRIER_LOGS');
+  assert.equal(providerGets,2,'never follow pagination or retry with provider credentials');
+  assert.equal(cancellations,1,'cancel oversized response streams');
+
+  // A declared oversized body must be rejected even when the transport would
+  // otherwise supply a short, syntactically valid two-leg ledger.
+  let reads=0;
+  const inflated=async(url)=>{
+    if(url.endsWith('/'+SEG))return new Response(JSON.stringify(inbound));
+    const payload=JSON.stringify({data:[inbound,child],links:COMPLETE_LINKS});
+    const stream=new ReadableStream({pull(controller){reads++;controller.enqueue(
+      new TextEncoder().encode(payload));controller.close();}});
+    return new Response(stream,{headers:{'content-length':String(oversized)}});
+  };
+  const denied=await fetchCarrierReconciliation(row,env,inflated);
+  assert.equal(denied.code,'INCOMPLETE_CARRIER_LOGS');
+  assert.equal(reads,0,'oversized content-length rejected before reading body');
+});
