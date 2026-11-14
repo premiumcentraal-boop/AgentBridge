@@ -2,6 +2,26 @@
 
 ## Studio behavior
 
+**Join call** is the single entry for listening or speaking in the demo. The
+prejoin dialog defaults to microphone off, offers microphone on, and keeps the
+optional browser/phone preference. The joined room displays separate participant
+tiles and live captions. Joining does not enable saved transcription or recording.
+The room stays open when its fictional audio clip finishes, until the user leaves
+or ends the call.
+
+Agent mute silences only the agent's timed passages in the bundled demo clip;
+the recipient stays audible. Speaker mute silences all incoming demo audio.
+Microphone on/off is a separate simulated participant choice and never requests
+or transmits microphone audio. Adding a connection creates another demo tile and
+does not dial a number or create a real conference. Account demo room choices and
+up to six additional owned connections persist through the account API, while
+public sample changes remain in the tab. Canceling a pending join invalidates its
+play attempt; a late media promise cannot join or interrupt another attempt.
+
+Real carrier conferencing, per-participant remote mute and browser microphone
+transport remain unavailable pending a media service. The live provider interface
+does not substitute the demo room for those features.
+
 - **Home** opens on the live call, shortcuts and recent connections. Expanding the
   sample call exposes recording and transcript switches without leaving Home.
 - **Connections** manages contacts and their destination/routing-number pairs.

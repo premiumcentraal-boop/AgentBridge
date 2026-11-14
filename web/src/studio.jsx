@@ -161,6 +161,8 @@ export function Studio({ mode, setMode, isDemo }) {
       elapsed: 18,
       joined: false,
       userMuted: true,
+      agentMuted: false,
+      participant_connections: [],
       recording: false,
       transcription: false,
       recordingPaused: false,
@@ -264,6 +266,10 @@ export function Studio({ mode, setMode, isDemo }) {
       muted: Boolean(current.muted),
       joined: Boolean(current.joined),
       userMuted: current.userMuted !== false,
+      agentMuted: Boolean(current.agentMuted),
+      participant_connection_ids: (current.participant_connections || []).map(
+        (contact) => contact.id,
+      ),
       recording: Boolean(current.recording),
       transcription: Boolean(current.transcription),
       recordingPaused: Boolean(current.recordingPaused),
@@ -678,12 +684,14 @@ export function Studio({ mode, setMode, isDemo }) {
   const endCall = () => {
     if (sandbox) {
       samplePlayAttempt.current++;
-      if (call.listening) sampleAudioRef.current?.pause();
+      sampleAudioRef.current?.pause();
       setCall((c) => ({
         ...c,
         active: false,
         muted: false,
         joined: false,
+        userMuted: true,
+        agentMuted: false,
         recording: false,
         transcription: false,
         recordingPaused: false,
@@ -710,44 +718,87 @@ export function Studio({ mode, setMode, isDemo }) {
     setRoutingOpen(true);
   };
   const listenToSample = async (options = {}) => {
-    if (!sandbox || !call.active || !sampleAudioRef.current) return;
+    if (
+      !sandbox ||
+      !call.active ||
+      !sampleAudioRef.current ||
+      options.signal?.aborted
+    )
+      return false;
     const audio = sampleAudioRef.current;
     const attempt = ++samplePlayAttempt.current;
+    const cancel = () => {
+      if (attempt === samplePlayAttempt.current) {
+        samplePlayAttempt.current++;
+        audio.pause();
+      }
+    };
+    options.signal?.addEventListener("abort", cancel, { once: true });
     try {
       await audio.play();
-      if (attempt !== samplePlayAttempt.current) {
-        audio.pause();
-        return;
-      }
+      if (attempt !== samplePlayAttempt.current || options.signal?.aborted)
+        return false;
       setCall((c) => ({
         ...c,
         listening: true,
         playbackPaused: false,
+        sampleEnded: false,
         samplePosition: audio.currentTime,
         joined: true,
         userMuted:
           typeof options.userMuted === "boolean" ? options.userMuted : true,
         joinMethod: options.joinMethod || c.joinMethod || "browser",
       }));
-      notify("Listening.");
+      notify(
+        options.userMuted === false
+          ? "Joined · Demo microphone on."
+          : "Joined · Microphone off.",
+      );
+      return true;
     } catch {
       if (attempt === samplePlayAttempt.current)
-        notify("Playback could not start. Try the sample audio controls.");
+        notify("Playback could not start. Try joining again.");
+      return false;
+    } finally {
+      options.signal?.removeEventListener("abort", cancel);
     }
   };
   const leaveListening = () => {
     samplePlayAttempt.current++;
     sampleAudioRef.current?.pause();
-    setCall((c) => ({ ...c, listening: false, joined: false }));
+    setCall((c) => ({
+      ...c,
+      listening: false,
+      joined: false,
+      userMuted: true,
+    }));
     notify("Left call. The agent continues.");
   };
   useEffect(() => {
-    if (sampleAudioRef.current) sampleAudioRef.current.muted = call.muted;
+    if (sampleAudioRef.current) {
+      const position = sampleAudioRef.current.currentTime;
+      const agentSpeaking = SAMPLE_CALL.transcript.some(
+        (line) =>
+          line.speaker === "Agent" &&
+          line.start <= position &&
+          position <= line.end,
+      );
+      sampleAudioRef.current.muted = Boolean(
+        call.muted || (call.agentMuted && agentSpeaking),
+      );
+    }
     if (call.listening && (!call.active || !call.joined)) {
       sampleAudioRef.current?.pause();
       setCall((c) => ({ ...c, listening: false }));
     }
-  }, [call.active, call.joined, call.listening, call.muted]);
+  }, [
+    call.active,
+    call.joined,
+    call.listening,
+    call.muted,
+    call.agentMuted,
+    call.samplePosition,
+  ]);
   useEffect(
     () => () => {
       if (samplePlayAttempt.current) sampleAudioRef.current?.pause();
@@ -1219,6 +1270,7 @@ export function Studio({ mode, setMode, isDemo }) {
               joinOpen={joinOpen}
               setJoinOpen={setJoinOpen}
               onListen={listenToSample}
+              onLeave={leaveListening}
               onRoute={reviewRouting}
               onStartCall={sandbox ? startDemoCall : undefined}
               onToggleCapture={sandbox ? toggleCapture : undefined}
@@ -1403,9 +1455,16 @@ export function Studio({ mode, setMode, isDemo }) {
           />
           <div className="sample-listen-title">
             <strong>
-              {call.playbackPaused ? "Playback paused" : "Listening"}
+              {call.sampleEnded
+                ? "Demo audio finished"
+                : call.playbackPaused
+                  ? "Playback paused"
+                  : "Listening"}
             </strong>
-            <small>Example audio · Microphone off</small>
+            <small>
+              Demo call ·{" "}
+              {call.userMuted ? "Microphone off" : "Microphone on (demo)"}
+            </small>
           </div>
           <audio
             ref={sampleAudioRef}
@@ -1417,14 +1476,25 @@ export function Studio({ mode, setMode, isDemo }) {
               const position = event.currentTarget.currentTime;
               setCall((c) => ({ ...c, samplePosition: position }));
             }}
-            onPlay={() => setCall((c) => ({ ...c, playbackPaused: false }))}
+            onPlay={() =>
+              setCall((c) => ({
+                ...c,
+                playbackPaused: false,
+                sampleEnded: false,
+              }))
+            }
             onPause={() => setCall((c) => ({ ...c, playbackPaused: true }))}
             onEnded={() =>
-              setCall((c) => ({ ...c, listening: false, joined: false }))
+              setCall((c) => ({
+                ...c,
+                playbackPaused: true,
+                sampleEnded: true,
+                samplePosition: SAMPLE_CALL.duration,
+              }))
             }
           />
           <IconBtn
-            label="Leave listening"
+            label="Leave call audio"
             name="close"
             onClick={leaveListening}
           />

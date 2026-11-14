@@ -111,7 +111,7 @@ export async function workspaceRequest({ database, account, path, method, readBo
     const result = await update(document => {
       if (document.demo_call?.active) deny(409, 'CALL_ACTIVE', 'End the current demo call before starting another.');
       const { connection, number } = availableConnection(document, input.connection_id);
-      const call = { id: crypto.randomUUID(), connection_id: connection.id, active: true, muted: false, elapsed: 0, joined: false, userMuted: true, recording: false, transcription: false, recordingPaused: false, capturePermission: false, label: connection.label, routing_number: number.e164, destination: connection.destination, started_at: now() };
+      const call = { id: crypto.randomUUID(), connection_id: connection.id, active: true, muted: false, elapsed: 0, joined: false, userMuted: true, agentMuted: false, participant_connections: [], recording: false, transcription: false, recordingPaused: false, capturePermission: false, label: connection.label, routing_number: number.e164, destination: connection.destination, started_at: now() };
       call.contact_context = contactContext(document, connection);
       document.demo_call = call; addEvent(document, 'demo.call_started', 'Demo call started with ' + connection.label + '.'); return { call };
     });
@@ -119,8 +119,8 @@ export async function workspaceRequest({ database, account, path, method, readBo
   }
   if (path === 'demo-call' && method === 'PATCH') {
     const input = await readBody();
-    const booleans = ['active', 'muted', 'joined', 'userMuted', 'recording', 'transcription', 'recordingPaused', 'capturePermission'];
-    fields(input, ['call_id', ...booleans, 'proposed_route_id']);
+    const booleans = ['active', 'muted', 'joined', 'userMuted', 'agentMuted', 'recording', 'transcription', 'recordingPaused', 'capturePermission'];
+    fields(input, ['call_id', ...booleans, 'proposed_route_id', 'participant_connection_ids']);
     for (const key of booleans) if (input[key] !== undefined && typeof input[key] !== 'boolean') deny(422, 'INVALID_CALL_STATE', 'Call switches must be on or off.');
     const result = await update(document => {
       const call = document.demo_call;
@@ -128,6 +128,20 @@ export async function workspaceRequest({ database, account, path, method, readBo
       if (!call.active && input.active) deny(409, 'CALL_ENDED', 'Start a new demo call instead of reopening an ended call.');
       const next = { ...call };
       for (const key of booleans) if (input[key] !== undefined) next[key] = input[key];
+      if (input.participant_connection_ids !== undefined) {
+        const ids = input.participant_connection_ids;
+        if (!Array.isArray(ids) || ids.length > 6 || ids.some(id => typeof id !== 'string' || id.length > 100) || new Set(ids).size !== ids.length || ids.includes(call.connection_id)) deny(422, 'INVALID_PARTICIPANTS', 'Choose up to six different saved connections.');
+        const participants = ids.map(id => {
+          const existing = (call.participant_connections || []).find(contact => contact.id === id);
+          if (existing) return existing;
+          if (!call.active) deny(409, 'CALL_ENDED', 'This demo call has ended.');
+          const { connection } = availableConnection(document, id);
+          if (connection.destination === call.destination) deny(422, 'DUPLICATE_PARTICIPANT', 'This connection is already in the call.');
+          return { id: connection.id, label: connection.label, destination: connection.destination };
+        });
+        if (new Set(participants.map(contact => contact.destination)).size !== participants.length) deny(422, 'DUPLICATE_PARTICIPANT', 'Choose different destination numbers.');
+        next.participant_connections = participants;
+      }
       if ((next.recording || next.transcription) && !next.capturePermission) deny(422, 'PERMISSION_REQUIRED', 'Confirm capture permission before enabling it.');
       next.recording_saved = Boolean(call.recording_saved || next.recording);
       next.transcript_saved = Boolean(call.transcript_saved || next.transcription);

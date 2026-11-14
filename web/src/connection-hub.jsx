@@ -21,17 +21,10 @@ const place = (number) =>
         ? ["🇺🇸", "North America"]
         : ["🌐", "International"];
 
-export function FocusCall({ call, isDemo, navTo, onListen, onRestart }) {
+export function FocusCall({ call, isDemo, navTo, onRestart }) {
   const { go } = useRoute();
   return call.active ? (
-    <ActiveCallCard
-      call={call}
-      onOpen={() => go(navTo("call"))}
-      onJump={() => {
-        go(navTo("call"));
-        onListen();
-      }}
-    />
+    <ActiveCallCard call={call} onOpen={() => go(navTo("call"))} />
   ) : (
     <div className="number-empty">
       <h2>No active call</h2>

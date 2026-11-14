@@ -1,6 +1,19 @@
 # AgentBridge
 **Connect agents worldwide**
 
+## Join call room
+
+The demo uses one **Join call** entry. Choose microphone off or on before joining,
+then see an individual tile for the agent, each connection and yourself beside
+live captions. Agent mute, microphone mute and speaker mute are separate controls.
+You can add/remove saved connections to preview a larger room. Captions shown while
+joined are not saved unless transcript capture is explicitly enabled.
+
+The demo plays fictional audio and does not transmit a microphone or dial added
+participants. Real human joining and remote agent mute still require the live
+conferencing/media integration; SignalWire forwarding and recording keep their
+existing behavior.
+
 ## Contacts and call history
 
 The studio has one **Calls** page for live calls, recent conversations, recordings,

@@ -122,6 +122,20 @@ async function navigate(document, path) {
   link.click();
   await pause(100);
 }
+async function beginJoin(document, microphoneOn = false) {
+  named(document.querySelector("main"), "Join call").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Join call"]'),
+  );
+  const dialog = document.querySelector('dialog[open][aria-label="Join call"]');
+  if (microphoneOn) labelled(dialog, "Microphone on").click();
+  named(dialog, "Join call").click();
+  return dialog;
+}
+async function joinFixtureCall(document, microphoneOn = false) {
+  await beginJoin(document, microphoneOn);
+  await waitFor(() => document.querySelector(".call-room.is-joined"));
+}
 async function endFixtureCall(document) {
   named(document.querySelector("main"), "End call").click();
   await waitFor(() =>
@@ -289,7 +303,8 @@ test("working preview navigates real pages and keeps call state in the floating 
   );
   named(nav, "Open call and transcript").click();
   await waitFor(() => document.querySelector(".gb-call-layout"));
-  named(document.querySelector("main"), "Mute call").click();
+  await joinFixtureCall(document);
+  named(document.querySelector("main"), "Mute speakers").click();
   await waitFor(() =>
     document.querySelector('main button[aria-pressed="true"]'),
   );
@@ -305,7 +320,7 @@ test("working preview navigates real pages and keeps call state in the floating 
   named(nav, "Open call and transcript").click();
   await waitFor(() => document.querySelector(".gb-call-layout"));
   assert.equal(
-    named(document.querySelector("main"), "Unmute call").getAttribute(
+    named(document.querySelector("main"), "Unmute speakers").getAttribute(
       "aria-pressed",
     ),
     "true",
@@ -329,7 +344,7 @@ test("working preview navigates real pages and keeps call state in the floating 
   named(review, "Save routing choice").click();
   await waitFor(() =>
     document
-      .querySelector(".hub-routing-summary")
+      .querySelector(".call-room-route")
       ?.textContent.includes("New York office"),
   );
   assert.match(
@@ -654,7 +669,7 @@ test("mobile navigation is a dismissible left drawer with all destinations and a
   await waitFor(() => !drawer.open);
   await waitFor(() => document.querySelector(".gb-call-layout"));
   assert.match(document.querySelector("main").textContent, /Routing number/);
-  assert.ok(named(document.querySelector("main"), "Mute call"));
+  assert.ok(named(document.querySelector("main"), "Join call"));
   trigger.click();
   await waitFor(() => drawer.open);
   drawer.getBoundingClientRect = () => ({
@@ -680,12 +695,15 @@ test("mobile navigation is a dismissible left drawer with all destinations and a
     null,
     "Navigation opens the overview without joining",
   );
-  named(document.querySelector("main"), "Jump in").click();
+  named(document.querySelector("main"), "Join call").click();
   await waitFor(() =>
     document.querySelector('dialog[open][aria-label="Join call"]'),
   );
-  assert.equal(labelled(document, "Join muted").checked, true);
-  named(document, "Join call").click();
+  assert.equal(labelled(document, "Microphone off").checked, true);
+  named(
+    document.querySelector('dialog[open][aria-label="Join call"]'),
+    "Join call",
+  ).click();
   await waitFor(() =>
     document
       .querySelector(".call-participants")
@@ -698,7 +716,7 @@ test("mobile navigation is a dismissible left drawer with all destinations and a
   );
 });
 
-test("one-tap sample listening stays across pages and timed transcript follows playback while capture stays optional", async (t) => {
+test("joining with the microphone off keeps sample audio across pages and live captions stay separate from saved capture", async (t) => {
   const { dom, window, document, errors, requests } = setup(
     "file:///AgentBridge-Working-Website.html#/studio/demo/",
   );
@@ -722,7 +740,7 @@ test("one-tap sample listening stays across pages and timed transcript follows p
     "Open call and transcript",
   ).click();
   await waitFor(() => document.querySelector(".call-view-entry-actions"));
-  named(document.querySelector("main"), "Listen in").click();
+  await beginJoin(document);
   await waitFor(
     () => document.querySelector(".sample-listen-dock")?.hidden === false,
   );
@@ -736,11 +754,11 @@ test("one-tap sample listening stays across pages and timed transcript follows p
   await waitFor(() =>
     document
       .querySelector(".call-participants")
-      ?.textContent.includes("Muted on entry"),
+      ?.textContent.includes("Microphone off"),
   );
   assert.match(
     document.querySelector(".call-inline-transcript").textContent,
-    /Transcription off/,
+    /Live captions · Not saved/,
   );
   assert.ok(named(document, "Start recording"));
   named(document, "Start transcription").click();
@@ -759,9 +777,9 @@ test("one-tap sample listening stays across pages and timed transcript follows p
     document.querySelector(".live-transcript").textContent,
     /D E M O two zero four/,
   );
-  named(document, "Mute call").click();
+  named(document, "Mute speakers").click();
   await waitFor(() => audio.muted === true);
-  named(document, "Leave listening").click();
+  named(document, "Leave call audio").click();
   await waitFor(
     () => document.querySelector(".sample-listen-dock").hidden === true,
   );
@@ -795,13 +813,20 @@ test("blocked playback does not join and ending a call cancels a pending sample 
     "Open call and transcript",
   ).click();
   await waitFor(() => document.querySelector(".call-view-entry-actions"));
-  named(document.querySelector("main"), "Listen in").click();
+  await beginJoin(document);
   await waitFor(() =>
     document
       .querySelector(".toast-message")
       .textContent.includes("Playback could not start"),
   );
   assert.equal(document.querySelector(".sample-listen-dock").hidden, true);
+  named(
+    document.querySelector('dialog[open][aria-label="Join call"]'),
+    "Cancel",
+  ).click();
+  await waitFor(
+    () => !document.querySelector('dialog[open][aria-label="Join call"]'),
+  );
   let finishPlay;
   window.HTMLMediaElement.prototype.play = () =>
     new Promise((resolve) => {
@@ -812,7 +837,14 @@ test("blocked playback does not join and ending a call cancels a pending sample 
     "Open call and transcript",
   ).click();
   await waitFor(() => document.querySelector(".call-view-entry-actions"));
-  named(document.querySelector("main"), "Listen in").click();
+  await beginJoin(document);
+  named(
+    document.querySelector('dialog[open][aria-label="Join call"]'),
+    "Cancel",
+  ).click();
+  await waitFor(
+    () => !document.querySelector('dialog[open][aria-label="Join call"]'),
+  );
   await endFixtureCall(document);
   finishPlay();
   await waitFor(() => pauses >= 1);
@@ -912,7 +944,7 @@ test("international call planning saves optional capture choices and join defaul
   named(document, "Save capture and join preferences").click();
   await waitFor(() => document.querySelector(".tools-success"));
   await navigate(document, "/studio/demo/call/");
-  named(document, "Jump in").click();
+  named(document.querySelector("main"), "Join call").click();
   // Opening the dialog and applying saved preferences happen in separate
   // renders. Wait for the actual phone field before asserting its value.
   await waitFor(() =>
@@ -924,7 +956,10 @@ test("international call planning saves optional capture choices and join defaul
     labelled(document, "Number where I’ll join").value,
     "+31612345678",
   );
-  named(document, "Join call").click();
+  named(
+    document.querySelector('dialog[open][aria-label="Join call"]'),
+    "Join call",
+  ).click();
   await waitFor(() =>
     document
       .querySelector(".call-participants")
@@ -942,9 +977,12 @@ test("sample call joins and leaves without ending, requires capture permission a
   );
   t.after(() => dom.window.close());
   await waitFor(() => document.title === "Call | AgentBridge");
-  named(document, "Jump in").click();
+  named(document.querySelector("main"), "Join call").click();
   await waitFor(() => document.querySelector("dialog[open]"));
-  named(document, "Join call").click();
+  named(
+    document.querySelector('dialog[open][aria-label="Join call"]'),
+    "Join call",
+  ).click();
   await waitFor(() =>
     document
       .querySelector(".call-participants")
@@ -1303,8 +1341,12 @@ test("home live call expands and minimizes in place while its action opens the f
   );
   assert.equal(document.querySelector(".sample-listen-dock").hidden, true);
   const main = document.querySelector("main");
-  assert.ok(named(main, "Listen in"));
-  named(main, "Jump in").click();
+  assert.equal(
+    document.querySelectorAll(".call-view-entry-actions button").length,
+    1,
+  );
+  assert.ok(named(main, "Join call"));
+  named(main, "Join call").click();
   await waitFor(() =>
     document.querySelector('dialog[open][aria-label="Join call"]'),
   );
@@ -1314,7 +1356,7 @@ test("home live call expands and minimizes in place while its action opens the f
   await waitFor(
     () => !document.querySelector('dialog[open][aria-label="Join call"]'),
   );
-  named(main, "Jump in").click();
+  named(main, "Join call").click();
   await waitFor(() =>
     document.querySelector('dialog[open][aria-label="Join call"]'),
   );
@@ -1787,6 +1829,157 @@ test("quick capture switches, contact memory and highlights remain usable in the
   assert.equal(document.querySelector("main .active-call-card"), null);
   assert.ok(document.querySelector(".owned-number-card"));
   assert.deepEqual(requests, []);
+  assert.deepEqual(
+    errors.map((e) => e.message),
+    [],
+  );
+});
+
+test("one Join call entry opens a participant room with independent agent, microphone and speaker controls", async (t) => {
+  const { dom, window, document, errors, requests } = setup(
+    "file:///AgentBridge-Working-Website.html#/studio/demo/call/",
+  );
+  t.after(() => dom.window.close());
+  await waitFor(() => document.title === "Call | AgentBridge");
+  const entry = document.querySelector(".call-view-entry-actions");
+  assert.equal(entry.querySelectorAll("button").length, 1);
+  assert.equal(entry.textContent.trim(), "Join call");
+  assert.ok(
+    ![...entry.querySelectorAll("button")].some((button) =>
+      /Listen in|Jump in/.test(button.textContent),
+    ),
+  );
+  named(entry, "Join call").click();
+  await waitFor(() =>
+    document.querySelector('dialog[open][aria-label="Join call"]'),
+  );
+  const prejoin = document.querySelector(
+    'dialog[open][aria-label="Join call"]',
+  );
+  assert.equal(labelled(prejoin, "Microphone off").checked, true);
+  labelled(prejoin, "Microphone on").click();
+  named(prejoin, "Join call").click();
+  await waitFor(() => document.querySelector(".call-room.is-joined"));
+  const room = document.querySelector(".call-room");
+  assert.equal(room.querySelectorAll(".call-person").length, 3);
+  assert.match(room.querySelector(".self-person").textContent, /Unmuted/);
+  assert.match(
+    document.querySelector(".call-inline-transcript").textContent,
+    /Live captions · Not saved/,
+  );
+  assert.equal(
+    named(room, "Start transcription").getAttribute("aria-pressed"),
+    "false",
+  );
+  const audio = document.querySelector(".sample-listen-dock audio");
+  audio.currentTime = 1;
+  audio.dispatchEvent(new window.Event("timeupdate"));
+  named(room, "Mute agent").click();
+  await waitFor(() => audio.muted);
+  assert.match(room.querySelector(".agent-person").textContent, /Agent muted/);
+  assert.match(
+    room.querySelector(".self-person").textContent,
+    /Unmuted/,
+    "Agent mute must not change the microphone",
+  );
+  audio.currentTime = 8;
+  audio.dispatchEvent(new window.Event("timeupdate"));
+  await waitFor(() => !audio.muted);
+  assert.equal(
+    named(room, "Unmute agent").getAttribute("aria-pressed"),
+    "true",
+    "Muting the agent must leave the recipient audible",
+  );
+  named(room, "Mute microphone").click();
+  await waitFor(() =>
+    room.querySelector(".self-person").textContent.includes("Microphone off"),
+  );
+  assert.equal(
+    audio.muted,
+    false,
+    "Microphone mute must not mute incoming audio",
+  );
+  named(room, "Mute speakers").click();
+  await waitFor(() => audio.muted);
+  named(room, "Unmute speakers").click();
+  await waitFor(() => !audio.muted);
+  named(room, "Unmute agent").click();
+  named(room, "Add connection").click();
+  await waitFor(() =>
+    document.querySelector(
+      'dialog[open][aria-label="Add connection to demo call"]',
+    ),
+  );
+  const add = document.querySelector(
+    'dialog[open][aria-label="Add connection to demo call"]',
+  );
+  named(add, "Add to call").click();
+  await waitFor(() => room.querySelectorAll(".call-person").length === 4);
+  assert.match(room.textContent, /New York office/);
+  await navigate(document, "/studio/demo/connections/");
+  named(document, "Open call and transcript").click();
+  await waitFor(() => document.querySelector(".call-room.is-joined"));
+  assert.equal(
+    document.querySelectorAll(".call-person").length,
+    4,
+    "Participant cards survive studio navigation",
+  );
+  named(document, "Remove New York office from demo call").click();
+  await waitFor(() => document.querySelectorAll(".call-person").length === 3);
+  audio.dispatchEvent(new window.Event("ended"));
+  await waitFor(
+    () =>
+      document.querySelector(".sample-listen-title strong").textContent ===
+      "Demo audio finished",
+  );
+  assert.ok(
+    document.querySelector(".call-room.is-joined"),
+    "The demo audio ending must keep the joined room and transcript open",
+  );
+  named(document, "Leave call").click();
+  await waitFor(() => !document.querySelector(".call-room.is-joined"));
+  assert.equal(document.querySelector(".sample-listen-dock").hidden, true);
+  assert.ok(named(document.querySelector("main"), "Join call"));
+  assert.match(
+    document.querySelector(".live-card-top").textContent,
+    /Connected/,
+  );
+  assert.deepEqual(requests, []);
+  assert.deepEqual(
+    errors.map((e) => e.message),
+    [],
+  );
+});
+
+test("canceling a pending join cannot interrupt a later successful join or create a phantom participant", async (t) => {
+  const { dom, window, document, errors } = setup(
+    "file:///AgentBridge-Working-Website.html#/studio/demo/call/",
+  );
+  t.after(() => dom.window.close());
+  await waitFor(() => document.title === "Call | AgentBridge");
+  let resolveOld;
+  window.HTMLMediaElement.prototype.play = () =>
+    new Promise((resolve) => {
+      resolveOld = resolve;
+    });
+  await beginJoin(document);
+  const dialog = document.querySelector('dialog[open][aria-label="Join call"]');
+  named(dialog, "Cancel").click();
+  await waitFor(
+    () => !document.querySelector('dialog[open][aria-label="Join call"]'),
+  );
+  assert.equal(document.querySelectorAll(".self-person").length, 0);
+  let pauses = 0;
+  window.HTMLMediaElement.prototype.play = () => Promise.resolve();
+  window.HTMLMediaElement.prototype.pause = () => {
+    pauses++;
+  };
+  await joinFixtureCall(document);
+  resolveOld();
+  await pause(50);
+  assert.equal(pauses, 0, "An old play promise must not pause a newer session");
+  assert.equal(document.querySelectorAll(".self-person").length, 1);
+  assert.equal(document.querySelector(".sample-listen-dock").hidden, false);
   assert.deepEqual(
     errors.map((e) => e.message),
     [],

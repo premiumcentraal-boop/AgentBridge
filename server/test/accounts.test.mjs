@@ -165,3 +165,36 @@ test('contact memory, call notes and opt-in capture persist across calls and a s
  assert.equal(saved.contact_memories[0].notes,'Alex prefers an afternoon viewing.');
  assert.equal(second.fetched(),0);
 });
+
+test('demo participant and microphone choices are owned, bounded and distinct from capture and provider media', async t => {
+ const h=await harness(t);const {cookie}=await h.signup();const headers={Cookie:cookie};
+ const checked=async(path,method='GET',body)=>{
+  const response=await h.request('/api/studio/'+path,{method,headers,...(body===undefined?{}:{body:JSON.stringify(body)})});
+  assert.ok(response.ok,`${path}: ${response.status} ${await response.clone().text()}`);return response.json();
+ };
+ const create=async(candidate,label,destination)=>{
+  const {number}=await checked('number-orders','POST',{request_id:randomUUID(),provider:'signalwire',country:'US',area_code:'202',label,candidate});
+  return (await checked('connections','POST',{label,destination,country:'GB',routing_number_id:number.id})).connection;
+ };
+ const primary=await create('+12025550132','London','+442079460123');
+ const guest=await create('+12025550133','Second contact','+442079460124');
+ const {call}=await checked('demo-call/start','POST',{connection_id:primary.id});
+ await checked('demo-call','PATCH',{call_id:call.id,joined:true,userMuted:false,agentMuted:true,participant_connection_ids:[guest.id]});
+ let snapshot=await checked('overview');
+ assert.equal(snapshot.demo_call.userMuted,false);assert.equal(snapshot.demo_call.agentMuted,true);
+ assert.deepEqual(snapshot.demo_call.participant_connections,[{id:guest.id,label:guest.label,destination:guest.destination}]);
+ assert.equal(snapshot.demo_call.transcription,false,'Joining must not opt in to transcript storage');
+ assert.equal(snapshot.demo_call.recording,false);
+ for(const ids of [[guest.id,guest.id],[primary.id],Array.from({length:7},()=>randomUUID())]) {
+  const response=await h.request('/api/studio/demo-call',{method:'PATCH',headers,body:JSON.stringify({call_id:call.id,participant_connection_ids:ids})});
+  assert.equal(response.status,422);
+ }
+ assert.equal((await h.request('/api/studio/demo-call',{method:'PATCH',headers,body:JSON.stringify({call_id:call.id,participant_connection_ids:[randomUUID()]})})).status,404);
+ await checked('demo-call','PATCH',{call_id:call.id,active:false});
+ snapshot=await checked('overview');
+ assert.equal(snapshot.call_history[0].participant_connections[0].id,guest.id);
+ assert.equal(snapshot.call_history[0].has_transcript,false);
+ assert.equal(snapshot.call_history[0].has_recording,false);
+ assert.equal(snapshot.joining_enabled,false,'No conference feature is claimed for the real provider');
+ assert.equal(h.fetched(),0);
+});

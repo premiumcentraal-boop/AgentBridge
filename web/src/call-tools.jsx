@@ -1,12 +1,12 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { A } from "./context.jsx";
-import { Btn, Card, Icon, IconBtn, Pill, Wave } from "./ui.jsx";
+import { Btn, Card, Icon, Pill } from "./ui.jsx";
 import { BotFace } from "./grok-ui.jsx";
+import { CallRoom } from "./call-room.jsx";
 import { FocusCall } from "./connection-hub.jsx";
 import { ActiveCallCard, SavedCallCard } from "./studio-navigation.jsx";
 import {
-  CallCaptureControls,
   CallHistoryList,
   CallNotes,
   conversationClock,
@@ -407,86 +407,150 @@ function PlanDialog({
     </Dialog>
   );
 }
-export function JoinDialog({ open, onClose, onJoin, preferences }) {
-  const id = useId();
+export function JoinDialog({ open, onClose, onJoin, preferences, call }) {
+  const id = useId(),
+    attempt = useRef(null);
   const [method, setMethod] = useState("browser"),
     [number, setNumber] = useState(""),
     [muted, setMuted] = useState(true),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [joining, setJoining] = useState(false);
   useEffect(() => {
     if (open) {
       setMethod(preferences?.join_method || "browser");
       setNumber(preferences?.join_number || "");
       setMuted(true);
       setError("");
-    }
+      setJoining(false);
+    } else attempt.current?.abort();
   }, [open]);
-  const join = (e) => {
-    e.preventDefault();
+  useEffect(() => () => attempt.current?.abort(), []);
+  const close = () => {
+    attempt.current?.abort();
+    attempt.current = null;
+    setJoining(false);
+    onClose();
+  };
+  const join = async (event) => {
+    event.preventDefault();
     const clean = number.replace(/[\s().-]/g, "");
     if (method === "phone" && !validPhone(clean)) {
       setError("Use an international phone number starting with +.");
       return;
     }
-    onJoin({ joinMethod: method, userMuted: muted });
-    onClose();
+    const controller = new AbortController();
+    attempt.current = controller;
+    setJoining(true);
+    setError("");
+    try {
+      const success = await onJoin({
+        joinMethod: method,
+        userMuted: muted,
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+      if (success === false) {
+        setError("Audio couldn’t start. Try joining again.");
+        return;
+      }
+      attempt.current = null;
+      onClose();
+    } catch {
+      if (!controller.signal.aborted)
+        setError("Couldn’t join the call. Please try again.");
+    } finally {
+      if (!controller.signal.aborted) setJoining(false);
+    }
   };
   return (
     <Dialog
       maxHeight="calc(100dvh - 32px)"
       isOpen={open}
-      onOpenChange={(v) => !v && onClose()}
+      onOpenChange={(value) => !value && close()}
       width={560}
-      className="tools-dialog"
+      className="tools-dialog call-join-dialog"
       aria-label="Join call"
     >
       <DialogHeader
         className="tools-dialog-heading"
-        title="Jump in"
-        onOpenChange={onClose}
+        title="Join call"
+        onOpenChange={close}
       />
       <form className="tools-dialog-body" onSubmit={join}>
-        <div className="join-constellation">
-          <BotFace size={46} tone="teal" state="working" />
-          <i />
-          <span>L</span>
-          <i />
-          <span className="you">V</span>
+        <div className="join-call-preview">
+          <BotFace size={54} tone="teal" state="working" />
+          <div>
+            <strong>{call?.label || "Your call"}</strong>
+            <span>Your agent is already on the call.</span>
+          </div>
         </div>
-        <p className="join-intro">Join muted. Leave without ending the call.</p>
-        <fieldset className="join-methods">
-          <legend>Join from</legend>
-          <label
-            className={method === "browser" ? "selected" : ""}
-            htmlFor={id + "-browser"}
-          >
-            <input
-              id={id + "-browser"}
-              type="radio"
-              name={id + "-join"}
-              checked={method === "browser"}
-              onChange={() => setMethod("browser")}
-            />
-            <Icon name="browser" />
-            <strong>My browser</strong>
-            <small>Microphone in a configured live studio</small>
-          </label>
-          <label
-            className={method === "phone" ? "selected" : ""}
-            htmlFor={id + "-phone"}
-          >
-            <input
-              id={id + "-phone"}
-              type="radio"
-              name={id + "-join"}
-              checked={method === "phone"}
-              onChange={() => setMethod("phone")}
-            />
-            <Icon name="phone" />
-            <strong>My phone</strong>
-            <small>A callback with a configured conference</small>
-          </label>
+        <fieldset className="join-audio-choices">
+          <legend>How would you like to join?</legend>
+          {[
+            [
+              true,
+              "headphones",
+              "Microphone off",
+              "Listen first. Unmute whenever you’re ready.",
+            ],
+            [
+              false,
+              "mute",
+              "Microphone on",
+              "Join the conversation with your microphone on.",
+            ],
+          ].map(([off, icon, title, description]) => (
+            <label
+              className={muted === off ? "is-selected" : ""}
+              key={title}
+              htmlFor={id + (off ? "-muted" : "-speaking")}
+            >
+              <input
+                type="radio"
+                name={id + "-audio"}
+                id={id + (off ? "-muted" : "-speaking")}
+                checked={muted === off}
+                onChange={() => setMuted(off)}
+                disabled={joining}
+              />
+              <Icon name={icon} size={23} />
+              <strong>{title}</strong>
+              <small>{description}</small>
+            </label>
+          ))}
         </fieldset>
+        <details
+          className="join-more-options"
+          open={method === "phone" ? true : undefined}
+        >
+          <summary>
+            Join from {method === "phone" ? "your phone" : "your browser"}
+          </summary>
+          <fieldset className="join-methods">
+            <legend>Join from</legend>
+            {[
+              ["browser", "browser", "My browser"],
+              ["phone", "phone", "My phone"],
+            ].map(([value, icon, title]) => (
+              <label
+                key={value}
+                className={method === value ? "selected" : ""}
+                htmlFor={id + value}
+              >
+                <input
+                  type="radio"
+                  id={id + value}
+                  name={id + "-join"}
+                  checked={method === value}
+                  onChange={() => setMethod(value)}
+                  disabled={joining}
+                />
+                <Icon name={icon} />
+                <strong>{title}</strong>
+              </label>
+            ))}
+          </fieldset>
+        </details>
         {method === "phone" && (
           <label htmlFor={id + "-number"}>
             Number where I’ll join
@@ -494,33 +558,33 @@ export function JoinDialog({ open, onClose, onJoin, preferences }) {
               id={id + "-number"}
               type="tel"
               value={number}
-              onChange={(e) => setNumber(e.target.value)}
+              onChange={(event) => setNumber(event.target.value)}
               placeholder="+31 6 1234 5678"
               maxLength={24}
+              disabled={joining}
             />
           </label>
         )}
-        <label className="tools-check" htmlFor={id + "-muted"}>
-          <input
-            id={id + "-muted"}
-            type="checkbox"
-            checked={muted}
-            onChange={(e) => setMuted(e.target.checked)}
-          />
-          Join muted
-        </label>
-        <div className="tools-note">
-          <Icon name="shield" />
-          <p>Example audio. No microphone is requested.</p>
-        </div>
+        <p className="conversation-help">
+          Demo audio. Your microphone isn’t transmitted and no callback is
+          placed.
+        </p>
         {error && (
           <p className="tools-error" role="alert">
             {error}
           </p>
         )}
         <div className="tools-dialog-actions">
-          <Btn label="Cancel" end={null} onClick={onClose} />
-          <Btn label="Join call" primary type="submit" icon="join" end={null} />
+          <Btn label="Cancel" end={null} onClick={close} />
+          <Btn
+            label={joining ? "Joining…" : "Join call"}
+            primary
+            type="submit"
+            icon="join"
+            end={null}
+            disabled={joining}
+            className="call-room-join"
+          />
         </div>
       </form>
     </Dialog>
@@ -871,39 +935,9 @@ function Preferences({ preferences, onSave, isDemo }) {
     </Card>
   );
 }
-function Participants({ call }) {
-  return (
-    <div className="call-participants">
-      <div>
-        <BotFace
-          size={78}
-          state={call.active ? "working" : "idle"}
-          tone="teal"
-        />
-        <strong>Your agent</strong>
-        <small>Your agent</small>
-      </div>
-      <span className="participant-thread" />
-      <div>
-        <span className="participant-avatar recipient">L</span>
-        <strong>{call.label || "Contact"}</strong>
-        <small>Recipient</small>
-      </div>
-      {call.joined && (
-        <>
-          <span className="participant-thread" />
-          <div>
-            <span className="participant-avatar you">V</span>
-            <strong>You’re in</strong>
-            <small>{call.userMuted ? "Muted on entry" : "Unmuted"}</small>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
 function LiveCallTranscript({ call, allLines, setAllLines, onEnable }) {
   const position = call.listening ? call.samplePosition || 0 : call.elapsed;
+  const showing = call.transcription || call.joined;
   return (
     <Card
       className="tools-card live-transcript call-inline-transcript"
@@ -911,7 +945,7 @@ function LiveCallTranscript({ call, allLines, setAllLines, onEnable }) {
     >
       <div className="tools-list-heading">
         <h2>Transcript</h2>
-        {call.transcription && (
+        {showing && (
           <button
             className="text-action"
             type="button"
@@ -921,7 +955,7 @@ function LiveCallTranscript({ call, allLines, setAllLines, onEnable }) {
           </button>
         )}
       </div>
-      {call.transcription ? (
+      {showing ? (
         <div className="call-transcript-scroll">
           {sample.transcript
             .filter((line) => allLines || line.start <= position)
@@ -952,7 +986,11 @@ function LiveCallTranscript({ call, allLines, setAllLines, onEnable }) {
         </div>
       )}
       <p className="tools-fine">
-        {call.transcription ? "Example dialogue" : ""}
+        {showing
+          ? call.transcription
+            ? "Transcript saving is on · Example dialogue"
+            : "Live captions · Not saved"
+          : ""}
       </p>
     </Card>
   );
@@ -1192,6 +1230,7 @@ export function CallExtensions({
   joinOpen,
   setJoinOpen,
   onListen,
+  onLeave,
   onRoute,
   onStartCall,
   onToggleCapture,
@@ -1264,9 +1303,7 @@ export function CallExtensions({
     );
     setPlanOpen(true);
   };
-  const join = (v) => {
-    onListen(v);
-  };
+  const join = (v) => onListen(v);
   const enable = (kind) => {
     if (!isDemo) return;
     if (onToggleCapture) {
@@ -1309,7 +1346,6 @@ export function CallExtensions({
                 call={call}
                 isDemo={isDemo}
                 navTo={navTo}
-                onListen={onListen}
                 onRoute={onRoute}
                 onRestart={onRestart}
               />
@@ -1420,138 +1456,47 @@ export function CallExtensions({
             </div>
           ) : (
             <>
-              <div className="gb-call-layout">
-                <Card className="tools-live-card" padding={0}>
-                  <div className="live-card-top">
-                    <ActiveCallCard call={call} />
-                  </div>
-                  <div className="call-view-entry-actions">
-                    {call.active && (
-                      <>
-                        <Btn
-                          label={call.listening ? "Listening" : "Listen in"}
-                          icon="headphones"
-                          end={null}
-                          onClick={onListen}
-                          disabled={Boolean(call.listening)}
-                          aria-pressed={Boolean(call.listening)}
-                          data-control-state={
-                            call.listening ? "enabled" : "off"
-                          }
-                        />
-                        <Btn
-                          label={call.joined ? "Joined" : "Jump in"}
-                          icon="join"
-                          end={null}
-                          onClick={() => setJoinOpen(true)}
-                          disabled={Boolean(call.joined)}
-                          aria-pressed={Boolean(call.joined)}
-                          data-control-state={call.joined ? "enabled" : "off"}
-                        />
-                      </>
-                    )}
-                  </div>
-                  <CallCaptureControls
-                    call={call}
-                    onToggle={(kind) =>
-                      onToggleCapture
+              <div
+                className={
+                  "gb-call-layout call-room-layout" +
+                  (call.joined ? " is-joined" : "")
+                }
+              >
+                <CallRoom
+                  call={call}
+                  connections={connections}
+                  agentName={snapshot.account?.agent_name || "Your agent"}
+                  onJoin={() => setJoinOpen(true)}
+                  onLeave={onLeave}
+                  onMic={() =>
+                    setCall((c) => ({ ...c, userMuted: !c.userMuted }))
+                  }
+                  onAgentMute={() =>
+                    setCall((c) => ({ ...c, agentMuted: !c.agentMuted }))
+                  }
+                  onSpeakerMute={onMute}
+                  onEnd={() => setEndConfirm(true)}
+                  onRoute={() => onRoute()}
+                  onRestart={onRestart}
+                  onParticipants={(participants) =>
+                    setCall((c) => ({
+                      ...c,
+                      participant_connections: participants,
+                    }))
+                  }
+                  onCapture={(kind) =>
+                    kind === "pause"
+                      ? setCall((c) => ({
+                          ...c,
+                          recordingPaused: !c.recordingPaused,
+                        }))
+                      : onToggleCapture
                         ? onToggleCapture(kind)
                         : call[kind]
                           ? setCall((c) => ({ ...c, [kind]: false }))
                           : enable(kind)
-                    }
-                  />
-                  {call.recording && (
-                    <Btn
-                      label={
-                        call.recordingPaused
-                          ? "Resume recording"
-                          : "Pause recording"
-                      }
-                      icon={call.recordingPaused ? "play" : "pause"}
-                      end={null}
-                      aria-pressed={Boolean(call.recordingPaused)}
-                      data-control-state={
-                        call.recordingPaused ? "paused" : "off"
-                      }
-                      onClick={() =>
-                        setCall((c) => ({
-                          ...c,
-                          recordingPaused: !c.recordingPaused,
-                        }))
-                      }
-                    />
-                  )}
-                  <Participants call={call} />
-                  <div className="call-centre-wave">
-                    <Wave muted={call.muted || !call.active} />
-                    <small>
-                      {call.joined
-                        ? "You joined the conversation."
-                        : "Listen in, or join when you need to."}
-                    </small>
-                  </div>
-                  <div className="tools-actions">
-                    <Btn
-                      label={call.muted ? "Unmute call" : "Mute call"}
-                      icon={call.muted ? "muted" : "mute"}
-                      end={null}
-                      onClick={onMute}
-                      disabled={!call.active}
-                      aria-pressed={call.muted}
-                      data-control-state={call.muted ? "muted" : "off"}
-                    />
-                    {call.joined && (
-                      <>
-                        <Btn
-                          label={
-                            call.userMuted
-                              ? "Unmute microphone"
-                              : "Mute microphone"
-                          }
-                          icon={call.userMuted ? "muted" : "mute"}
-                          end={null}
-                          aria-pressed={Boolean(call.userMuted)}
-                          data-control-state={call.userMuted ? "muted" : "off"}
-                          onClick={() =>
-                            setCall((c) => ({ ...c, userMuted: !c.userMuted }))
-                          }
-                        />
-                        <Btn
-                          label="Leave call"
-                          end={null}
-                          onClick={() => {
-                            setCall((c) => ({ ...c, joined: false }));
-                            notify("Left call. The agent continues.");
-                          }}
-                        />
-                      </>
-                    )}
-                    {call.active ? (
-                      <Btn
-                        label="End call"
-                        icon="end"
-                        end={null}
-                        onClick={() => setEndConfirm(true)}
-                      />
-                    ) : (
-                      <Btn label="Restart call" onClick={onRestart} />
-                    )}
-                    <Btn
-                      label="Route call"
-                      icon="routes"
-                      end={null}
-                      disabled={!call.active}
-                      onClick={() => onRoute()}
-                    />
-                  </div>
-                  {call.proposedRoute && (
-                    <p className="hub-routing-summary">
-                      <Icon name="routes" size={16} /> Next route:{" "}
-                      {call.proposedRoute.label} · Saved
-                    </p>
-                  )}
-                </Card>
+                  }
+                />
                 <LiveCallTranscript
                   call={call}
                   allLines={allLines}
@@ -1633,6 +1578,7 @@ export function CallExtensions({
         onClose={() => setJoinOpen(false)}
         onJoin={join}
         preferences={preferences}
+        call={call}
       />
       {captureRequest && (
         <CapturePermission

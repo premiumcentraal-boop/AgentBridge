@@ -70,7 +70,9 @@ export function CallCaptureControls({ call, onToggle, compact = false }) {
         onClick={() => onToggle("transcription")}
       >
         <Icon name="transcript" size={17} />
-        <span>{call.transcription ? "Transcript on" : "Transcript off"}</span>
+        <span>
+          {call.transcription ? "Saving transcript" : "Save transcript"}
+        </span>
         <i aria-hidden="true" />
       </button>
     </div>
