@@ -551,14 +551,19 @@ test('Voice Logs byte cap resists dishonest content-length and streamed overflow
   // A declared oversized body must be rejected even when the transport would
   // otherwise supply a short, syntactically valid two-leg ledger.
   let reads=0;
+  let oversizedCancels=0;
   const inflated=async(url)=>{
     if(url.endsWith('/'+SEG))return new Response(JSON.stringify(inbound));
     const payload=JSON.stringify({data:[inbound,child],links:COMPLETE_LINKS});
     const stream=new ReadableStream({pull(controller){reads++;controller.enqueue(
-      new TextEncoder().encode(payload));controller.close();}});
+      new TextEncoder().encode(payload));controller.close();},
+      cancel(){oversizedCancels++;}});
     return new Response(stream,{headers:{'content-length':String(oversized)}});
   };
   const denied=await fetchCarrierReconciliation(row,env,inflated);
   assert.equal(denied.code,'INCOMPLETE_CARRIER_LOGS');
-  assert.equal(reads,0,'oversized content-length rejected before reading body');
+  // WHATWG streams may eagerly prefetch one chunk when Response is constructed.
+  // A header-based rejection must not actively drain the body; it must cancel it.
+  assert.ok(reads<=1,'oversized response is not actively drained');
+  assert.equal(oversizedCancels,1,'oversized response body is canceled');
 });
