@@ -724,3 +724,10 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Independent T0/T1 synthetic carrier snapshots demonstrated that terminal-looking list/detail reads cannot prove future billing finality. Updated `backend/src/index.mjs` so both owner `mark-ended` and `force-unlock` refuse automatic `completeReconciled` on a successful-looking Voice Logs result; `CARRIER_FINALITY_UNVERIFIED` retains the connecting lock.
 - Explicit owner `force:true` plus a reviewed reason remains the existing audited escape hatch; it marks the reservation failed, preserves usage accounting, and does not claim carrier confirmation. No provider operations or routing flags changed.
 - Replaced the previous auto-complete regression with tests for denial, unchanged ledger/lock, and audited manual recovery. This is conservative until authoritative provider finality semantics and D1 recovery are independently reviewed. PR remains draft and unmerged; exact-head CI must be checked separately.
+
+## 2026-11-14 — Force-unlock validation before carrier reads (draft PR #56)
+- Verified exact-head `807c725` GitHub Actions Quality gate #43647887844 passed both checks and secret-scan; no independent local execution in this run.
+- Removed the obsolete `completeReconciled` helper, preventing accidental reuse of a now-disallowed automatic billing-finality completion path.
+- Moved `force:true` and reviewed-reason validation ahead of read-only carrier reconciliation. Authenticated but malformed/no-force requests now return `FORCE_REQUIRED` without provider API traffic; a valid force request still reconciles read-only, records carrier code, writes audit and marks the reservation failed.
+- Extended regression assertions to require zero provider reads for invalid requests and no extra lookup after rejected no-force attempt. This intentionally changes the invalid-input diagnostic to a generic dashboard-review message; no chargeable routing, provider writes, merge or deployment.
+- Exact-head CI for the new commits remains to be checked; SignalWire finality and D1 recovery remain independent blockers.
