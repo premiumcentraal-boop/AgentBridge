@@ -85,7 +85,7 @@ test('missing or malformed pagination metadata cannot prove exhaustive child leg
 });
 test('full Voice Logs page without continuation remains locked even with expected child',async()=>{
   const unrelated=Array.from({length:998},(_,i)=>({
-    id:'unrelated-'+i,parent_id:null,direction:'outbound',to:'+13125550100'
+    id:'78313c74-b321-4c08-a3ea-'+i.toString(16).padStart(12,'0'),parent_id:null,direction:'outbound',to:'+13125550100'
   }));
   const full=provider(inbound,[child,...unrelated],COMPLETE_LINKS);
   const denied=await fetchCarrierReconciliation(row,env,full.fetchImpl);
@@ -111,6 +111,24 @@ test('malformed and duplicate carrier entries fail closed',async()=>{
   assert.equal(inboundCaseVariant.code,'AMBIGUOUS_CARRIER_LOG_ENTRIES');
   const valid=await fetchCarrierReconciliation(row,env,provider(inbound,[child,other]).fetchImpl);
   assert.equal(valid.ok,true);
+});
+test('malformed segment and parent IDs cannot conceal a third billable leg',async()=>{
+  const extra={...child,id:'68313c74-b321-4c08-a3ea-7123449130ab',charge:0.5};
+  for(const variant of [
+    {...extra,parent_id:'not-a-uuid'},
+    {...extra,parent_id:42},
+    {...extra,parent_id:{}},
+    {...extra,parent_id:''},
+    {...extra,parent_id:CHILD.slice(0,-1)},
+    {...extra,id:'malformed',parent_id:null}
+  ]){
+    const result=await fetchCarrierReconciliation(row,env,
+      provider(inbound,[child,variant]).fetchImpl);
+    assert.equal(result.code,'AMBIGUOUS_CARRIER_LOG_ENTRIES',JSON.stringify(result));
+  }
+  const unrelated=await fetchCarrierReconciliation(row,env,
+    provider(inbound,[child,{...extra,parent_id:null}]).fetchImpl);
+  assert.equal(unrelated.ok,true,JSON.stringify(unrelated));
 });
 test('nested outbound carrier legs cannot be omitted from the billed two-leg total',async()=>{
   const grandchild={id:'88313c74-b321-4c08-a3ea-7123449130ab',parent_id:CHILD,
@@ -185,7 +203,7 @@ test('missing or unexpected documented fields stay locked with a specific code, 
     [provider(drop(docInbound,'status'),[docChild],docLinks),'INBOUND_CARRIER_NOT_TERMINAL'],
     [provider(docInbound,[drop(docChild,'from')],docLinks),'OUTBOUND_LOG_MISMATCH'],
     [provider(docInbound,[{...docChild,from:'+13125550111'}],docLinks),'OUTBOUND_LOG_MISMATCH'],
-    [provider(docInbound,[{...docChild,id:'not-a-uuid'}],docLinks),'OUTBOUND_LOG_MISMATCH'],
+    [provider(docInbound,[{...docChild,id:'not-a-uuid'}],docLinks),'AMBIGUOUS_CARRIER_LOG_ENTRIES'],
     [provider({...docInbound,status:'ending'},[docChild],docLinks),'INBOUND_CARRIER_NOT_TERMINAL'],
     [provider(drop(docInbound,'charge'),[docChild],docLinks),'INBOUND_CHARGE_UNKNOWN'],
     [provider(drop(docInbound,'to'),[docChild],docLinks),'INBOUND_LOG_MISMATCH'],
@@ -291,7 +309,7 @@ test('reservation creation clock-skew boundary is deterministic and never widens
 
 test('high-volume unrelated Voice Logs preserve the completeness boundary',async()=>{
   const unrelated=Array.from({length:998},(_,i)=>({
-    id:'unrelated-volume-'+i,parent_id:null,direction:'outbound',
+    id:'78313c74-b321-4c08-a3ea-'+i.toString(16).padStart(12,'0'),parent_id:null,direction:'outbound',
     to:'+13125550100',status:'completed',charge:0.01
   }));
   // 999 unrelated records plus the two expected legs cannot fit one page.
