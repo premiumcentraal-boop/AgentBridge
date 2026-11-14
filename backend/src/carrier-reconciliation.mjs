@@ -137,14 +137,6 @@ async function reconcile(row,env,fetchImpl){
     // masquerade as distinct provider segments in the billing ledger.
     ids.add(entry.id.toLowerCase());
   }
-  // A valid-looking parent UUID that is absent from the returned ledger is
-  // not proof of an unrelated call. The omitted ancestor may conceal another
-  // billable leg, so never release a reservation from an orphaned call graph.
-  for(const entry of listing.data){
-    if(entry.parent_id!==null&&entry.parent_id!==undefined&&
-       !ids.has(entry.parent_id.toLowerCase()))
-      return failed('ORPHANED_CARRIER_LOG_PARENT');
-  }
   // The detail endpoint and list endpoint are independent reads. If the list
   // includes the inbound segment, contradictory terminal state or charges must
   // never be treated as verified evidence for releasing a reservation.
@@ -170,6 +162,16 @@ async function reconcile(row,env,fetchImpl){
     return failed('INBOUND_LOG_MISMATCH');
   if(!INBOUND_TERMINAL.has(inbound.status))return failed('INBOUND_CARRIER_NOT_TERMINAL');
   if(!safeMoney(inbound.charge))return failed('INBOUND_CHARGE_UNKNOWN');
+  // Preserve specific inbound evidence errors before evaluating unrelated
+  // graph orphans. Both paths remain fail-closed; diagnostics stay actionable.
+  // A valid-looking parent UUID that is absent from the returned ledger is
+  // not proof of an unrelated call. The omitted ancestor may conceal another
+  // billable leg, so never release a reservation from an orphaned call graph.
+  for(const entry of listing.data){
+    if(entry.parent_id!==null&&entry.parent_id!==undefined&&
+       !ids.has(entry.parent_id.toLowerCase()))
+      return failed('ORPHANED_CARRIER_LOG_PARENT');
+  }
   const children=listing.data.filter(x=>isObj(x)&&sameUuid(x.parent_id,inbound.id));
   // Exactly one outbound leg is expected in this one-destination trial.
   // Multiple children might be additional billable legs: manual review required.
