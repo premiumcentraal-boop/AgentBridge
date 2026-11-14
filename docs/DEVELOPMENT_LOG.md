@@ -660,3 +660,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Reject malformed segment UUIDs and non-null malformed parent UUIDs in any returned Voice Logs entry before accepting a two-leg ledger. Previously a third leg with a malformed parent could evade direct/nested relationship checks.
 - Add offline regressions for malformed parent types/strings and segment IDs; retain well-formed unrelated roots and update synthetic volume IDs to valid UUIDs.
 - This is fail-closed offline hardening only; real SignalWire contract, D1 behavior and exact-head CI remain verification gates. No routing flags, calls, purchases, payments, secrets, merges or deployment.
+
+## 2026-11-14 — Contradictory reverse/last pagination evidence (draft PR #49)
+- Strengthened read-only SignalWire Voice Logs single-page reconciliation: a non-null `links.prev` now retains the reservation lock, and an optional `links.last` must be a validated first-page link with the same explicit page marker as `links.self`. No provider-supplied navigation link is followed or receives credentials.
+- Added synthetic regression cases for contradictory previous/last links, malicious last-link hosts, unknown last-link filters, and valid null or matching terminal metadata. This conservative guard is pending exact-head CI and provider contract verification; undocumented link conventions could require manual recovery.
+- No carrier calls, paid routing, provider provisioning, payment, secrets, merge or deployment.
