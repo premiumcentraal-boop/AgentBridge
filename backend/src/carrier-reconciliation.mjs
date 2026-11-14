@@ -119,7 +119,9 @@ async function reconcile(row,env,fetchImpl){
   // segment identifiers: either could conceal another billable outbound leg.
   const ids=new Set();
   for(const entry of listing.data){
-    if(!isObj(entry)||typeof entry.id!=='string'||!entry.id||
+    if(!isObj(entry)||typeof entry.id!=='string'||!UUID.test(entry.id)||
+       (entry.parent_id!==null&&entry.parent_id!==undefined&&
+        (typeof entry.parent_id!=='string'||!UUID.test(entry.parent_id)))||
        ids.has(entry.id.toLowerCase()))
       return failed('AMBIGUOUS_CARRIER_LOG_ENTRIES');
     // UUID identifiers are case-insensitive; mixed-case duplicates must not
