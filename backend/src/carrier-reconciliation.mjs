@@ -137,6 +137,14 @@ async function reconcile(row,env,fetchImpl){
     // masquerade as distinct provider segments in the billing ledger.
     ids.add(entry.id.toLowerCase());
   }
+  // A valid-looking parent UUID that is absent from the returned ledger is
+  // not proof of an unrelated call. The omitted ancestor may conceal another
+  // billable leg, so never release a reservation from an orphaned call graph.
+  for(const entry of listing.data){
+    if(entry.parent_id!==null&&entry.parent_id!==undefined&&
+       !ids.has(entry.parent_id.toLowerCase()))
+      return failed('ORPHANED_CARRIER_LOG_PARENT');
+  }
   // The detail endpoint and list endpoint are independent reads. If the list
   // includes the inbound segment, contradictory terminal state or charges must
   // never be treated as verified evidence for releasing a reservation.
