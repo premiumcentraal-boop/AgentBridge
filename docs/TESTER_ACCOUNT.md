@@ -1,5 +1,7 @@
 # Real single-tester demo
 
+For open public email registration on Railway, use the [public signup deployment guide](RAILWAY_STUDIO.md). The single-tester restriction below applies only when public mode is disabled.
+
 The tester can also opt into [SignalWire development testing](SIGNALWIRE_LIVE_TESTING.md)
 with an encrypted, customer-supplied provider token. The demo behavior described
 below stays separate and remains the default. Real provider actions only occur

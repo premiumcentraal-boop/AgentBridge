@@ -28,6 +28,7 @@ export function AccountAuth({ signup = false, embedded = false }) {
       invite_token: "",
     }),
     [error, setError] = useState(""),
+    [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false);
   useEffect(() => {
     if (offline) return;
@@ -59,6 +60,7 @@ export function AccountAuth({ signup = false, embedded = false }) {
   const set = (key, next) =>
     setValue((current) => ({ ...current, [key]: next }));
   const platform = session?.auth_method === "chatgpt";
+  const emailSignup = signup && session?.email_verification_required;
   const body = (
     <>
       <span className="hub-kicker">AGENTBRIDGE ACCOUNT</span>
@@ -86,12 +88,30 @@ export function AccountAuth({ signup = false, embedded = false }) {
         <p>
           The account service needs to be configured before you can sign in.
         </p>
+      ) : notice ? (
+        <div className="account-email-notice" role="status">
+          <BotFace size={60} state="idle" />
+          <h3>Check your inbox.</h3>
+          <p>{notice}</p>
+          <Btn
+            label="Use another email"
+            onClick={() => {
+              setNotice("");
+              setError("");
+            }}
+          />
+          <A to="/signin/" className="gb-secondary-link">
+            Back to sign in
+          </A>
+        </div>
       ) : signup && !session.registration_available ? (
         <div>
           <p>
-            {session.account_exists
-              ? "The tester account is already registered."
-              : "Registration is available by private invitation."}
+            {session.signup_mode === "public"
+              ? "Email signup is being configured. Please try again shortly."
+              : session.account_exists
+                ? "The tester account is already registered."
+                : "Registration is available by private invitation."}
           </p>
           <A to="/signin/" className="gb-secondary-link">
             Sign in <Icon name="arrow" size={16} />
@@ -139,7 +159,7 @@ export function AccountAuth({ signup = false, embedded = false }) {
                     name: value.name,
                     email: value.email,
                     agent_name: value.agent_name,
-                    ...(platform
+                    ...(platform || emailSignup
                       ? {}
                       : {
                           password: value.password,
@@ -147,11 +167,18 @@ export function AccountAuth({ signup = false, embedded = false }) {
                         }),
                   }
                 : { email: value.email, password: value.password };
-              await accountRequest(signup ? "register" : "login", {
-                method: "POST",
-                body: JSON.stringify(payload),
-              });
+              const result = await accountRequest(
+                signup ? "register" : "login",
+                {
+                  method: "POST",
+                  body: JSON.stringify(payload),
+                },
+              );
               set("password", "");
+              if (result.verification_required) {
+                setNotice(result.message);
+                return;
+              }
               if (embedded) location.assign("/studio/");
               else go("/studio/");
             } catch (error) {
@@ -201,7 +228,7 @@ export function AccountAuth({ signup = false, embedded = false }) {
               />
             </label>
           )}
-          {!platform && (
+          {!platform && !emailSignup && (
             <label htmlFor={id + "password"}>
               Password
               <input
@@ -252,12 +279,17 @@ export function AccountAuth({ signup = false, embedded = false }) {
               ? "Already have an account? Sign in"
               : "Create your account"}
           </A>
+          {!signup && session.password_reset_available && (
+            <A to="/forgot-password/" className="gb-secondary-link">
+              Forgot password?
+            </A>
+          )}
         </form>
       )}
       <p className="signup-form-note">
         {session?.provider_live_enabled
           ? "Live testing · Your SignalWire project is billed for provider actions."
-          : "Demo mode · No real charges or live calls."}
+          : "Start in demo mode. Connect your own provider in Settings for live testing."}
       </p>
     </>
   );
@@ -290,6 +322,228 @@ export function AccountAuth({ signup = false, embedded = false }) {
         aria-label={signup ? "Create account" : "Account sign in"}
       >
         {body}
+      </section>
+    </main>
+  );
+}
+
+export function AccountEmail({ mode }) {
+  const { offline, go } = useRoute();
+  const id = useId();
+  const [session, setSession] = useState(null);
+  const [token, setToken] = useState("");
+  const [value, setValue] = useState({ email: "", password: "", confirm: "" });
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const forgot = mode === "forgot",
+    verify = mode === "verify";
+  useEffect(() => {
+    if (offline) return;
+    let alive = true;
+    const supplied = new URLSearchParams(location.hash.slice(1)).get("token");
+    if (supplied) {
+      setToken(/^[a-f0-9]{64}$/.test(supplied) ? supplied : "");
+      history.replaceState({}, "", location.pathname + location.search);
+    }
+    accountRequest("session")
+      .then((data) => {
+        if (alive) setSession(data);
+      })
+      .catch(() => {
+        if (alive)
+          setError("The account service is unavailable. Please try again.");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [mode, offline]);
+  const set = (key, next) =>
+    setValue((current) => ({ ...current, [key]: next }));
+  const available = session?.configured && session.signup_mode === "public";
+  const title = forgot
+    ? "Forgot your password?"
+    : verify
+      ? "One last connection."
+      : "Choose a new password.";
+  return (
+    <main id="main" tabIndex={-1} className="signup-page frame">
+      <div className="signup-intro">
+        <BotFace size={94} state="idle" />
+        <h1>
+          {forgot ? "Back in." : verify ? "You’re almost" : "A fresh"}
+          <br />
+          <span>
+            {forgot ? "Connected." : verify ? "connected." : "start."}
+          </span>
+        </h1>
+        <p>
+          {forgot
+            ? "We’ll email you a link to get back to your workspace."
+            : verify
+              ? "Verify your email and choose a password to open your studio."
+              : "Your numbers, connections and preferences stay right where you left them."}
+        </p>
+      </div>
+      <section className="signup-card" aria-label={title}>
+        <span className="hub-kicker">AGENTBRIDGE ACCOUNT</span>
+        <h2>{title}</h2>
+        {offline ? (
+          <p>Account emails need the hosted website.</p>
+        ) : !session ? (
+          <p role="status">{error || "Connecting to your account…"}</p>
+        ) : !available ? (
+          <p>Email account setup is not available on this deployment.</p>
+        ) : notice ? (
+          <div className="account-email-notice" role="status">
+            <h3>{forgot ? "Check your inbox." : "Password updated."}</h3>
+            <p>{notice}</p>
+            <A to="/signin/" className="gb-secondary-link">
+              Back to sign in <Icon name="arrow" size={16} />
+            </A>
+          </div>
+        ) : !forgot && !token ? (
+          <div>
+            <p>
+              Open the link in your email to continue. Links expire and can only
+              be used once.
+            </p>
+            <A
+              to={verify ? "/signup/" : "/forgot-password/"}
+              className="gb-secondary-link"
+            >
+              Request a new email
+            </A>
+          </div>
+        ) : forgot && !session.password_reset_available ? (
+          <p>
+            Password recovery is temporarily unavailable. Please try again
+            later.
+          </p>
+        ) : (
+          <form
+            onSubmit={async (event) => {
+              event.preventDefault();
+              setBusy(true);
+              setError("");
+              try {
+                if (!forgot && value.password !== value.confirm)
+                  throw new Error("Your passwords don’t match.");
+                const result = await accountRequest(
+                  forgot
+                    ? "forgot-password"
+                    : verify
+                      ? "verify-email"
+                      : "reset-password",
+                  {
+                    method: "POST",
+                    body: JSON.stringify(
+                      forgot
+                        ? { email: value.email }
+                        : { token, password: value.password },
+                    ),
+                  },
+                );
+                setValue((current) => ({
+                  ...current,
+                  password: "",
+                  confirm: "",
+                }));
+                if (verify) {
+                  setToken("");
+                  go("/studio/");
+                } else {
+                  setToken("");
+                  setNotice(
+                    result.message ||
+                      "Sign in with your new password. All previous sessions have been closed.",
+                  );
+                }
+              } catch (failure) {
+                setError(failure.message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {forgot ? (
+              <label htmlFor={id + "email"}>
+                Email address
+                <input
+                  id={id + "email"}
+                  type="email"
+                  autoComplete="email"
+                  required
+                  maxLength={254}
+                  value={value.email}
+                  onChange={(event) => set("email", event.target.value)}
+                />
+              </label>
+            ) : (
+              <>
+                <label htmlFor={id + "password"}>
+                  New password
+                  <input
+                    id={id + "password"}
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    minLength={12}
+                    maxLength={128}
+                    value={value.password}
+                    onChange={(event) => set("password", event.target.value)}
+                  />
+                  <small>At least 12 characters.</small>
+                </label>
+                <label htmlFor={id + "confirm"}>
+                  Confirm password
+                  <input
+                    id={id + "confirm"}
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    minLength={12}
+                    maxLength={128}
+                    value={value.confirm}
+                    onChange={(event) => set("confirm", event.target.value)}
+                  />
+                </label>
+              </>
+            )}
+            {error && (
+              <p className="form-error" role="alert">
+                {error}
+              </p>
+            )}
+            <Btn
+              type="submit"
+              primary
+              disabled={busy}
+              label={
+                busy
+                  ? "Please wait…"
+                  : forgot
+                    ? "Send reset link"
+                    : verify
+                      ? "Verify & open studio"
+                      : "Save new password"
+              }
+            />
+            {error && !forgot && (
+              <A
+                to={verify ? "/signup/" : "/forgot-password/"}
+                className="gb-secondary-link"
+              >
+                Request a new email
+              </A>
+            )}
+          </form>
+        )}
+        {!notice && (
+          <A to="/signin/" className="gb-secondary-link">
+            Sign in
+          </A>
+        )}
       </section>
     </main>
   );

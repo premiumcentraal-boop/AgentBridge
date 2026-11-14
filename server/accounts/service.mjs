@@ -2,15 +2,9 @@ import { AccountError, deny, emptyWorkspace, publicAccount } from './model.mjs';
 import { workspaceRequest } from './workspace.mjs';
 import { manageProvider, providerSummary, publicProviderError } from './provider-control.mjs';
 import { liveWorkspaceRequest } from './live-workspace.mjs';
+import { authLimit, digest, normalizeEmail as email, onlyFields as only, randomToken, validEmail, validName as named } from './auth-primitives.mjs';
+import { createEmailAuth } from './email-auth.mjs';
 
-const encode = new TextEncoder();
-const email = value => typeof value === 'string' ? value.trim().toLowerCase() : '';
-const validEmail = value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) && value.length <= 254;
-const named = value => typeof value === 'string' && value.trim().length > 0 && value.trim().length <= 80 && !/[\u0000-\u001f\u007f]/.test(value);
-const only = (value, keys) => { if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !keys.includes(key))) deny(422, 'INVALID_FIELDS', 'The request contains unsupported fields.'); };
-const hex = bytes => [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, '0')).join('');
-const digest = async text => hex(await crypto.subtle.digest('SHA-256', encode.encode(text)));
-const randomToken = () => hex(crypto.getRandomValues(new Uint8Array(32)));
 const cookieToken = request => request.headers.get('cookie')?.split(';').map(value => value.trim()).find(value => value.startsWith('ab_customer='))?.slice('ab_customer='.length);
 const privateHeaders = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
 export async function boundedAccountBody(request) {
@@ -27,8 +21,11 @@ export async function boundedAccountBody(request) {
   } catch (error) { if (error instanceof AccountError) throw error; deny(400, 'INVALID_BODY', 'Send a valid JSON object.'); }
   finally { reader.releaseLock(); }
 }
-export function createAccountService({ database, testerEmail, publicOrigin, passwords, platformIdentity = false, signupInviteHash, vaultKey, fetcher }) {
-  const allowedEmail = email(testerEmail), configured = validEmail(allowedEmail) && Boolean(database);
+export function createAccountService({ database, testerEmail, publicOrigin, passwords, platformIdentity = false, signupInviteHash, vaultKey, fetcher, signupMode, mailer }) {
+  // The private Sites identity flow stays private; public email accounts use the
+  // Node/Railway adapter and never trust browser-supplied identity headers.
+  const publicSignup = signupMode === 'public' && !platformIdentity;
+  const allowedEmail = email(testerEmail), configured = Boolean(database) && (publicSignup ? Boolean(passwords) : validEmail(allowedEmail));
   const method = platformIdentity ? 'chatgpt' : 'password';
   const secure = !publicOrigin?.startsWith('http://127.0.0.1') && !publicOrigin?.startsWith('http://localhost');
   const cookie = (token, age = 28800) => `ab_customer=${token}; HttpOnly; SameSite=Strict; Path=/api; Max-Age=${age}${secure ? '; Secure' : ''}`;
@@ -43,16 +40,10 @@ export function createAccountService({ database, testerEmail, publicOrigin, pass
     }
     const token = cookieToken(request);
     if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
-    return database.first('SELECT a.* FROM ab_accounts a JOIN ab_sessions s ON s.account_id=a.id WHERE s.token_hash=? AND s.expires_at>?', [await digest(token), Date.now()]);
+    return database.first('SELECT a.* FROM ab_accounts a JOIN ab_sessions s ON s.account_id=a.id WHERE s.token_hash=? AND s.expires_at>? AND (?=0 OR a.email_verified_at IS NOT NULL)', [await digest(token), Date.now(), publicSignup ? 1 : 0]);
   }
   async function limit(request, route, clientAddress) {
-    const bucket = await digest(route + ':' + (clientAddress || 'unknown'));
-    const expires = Date.now() + 15 * 60_000;
-    await database.run('DELETE FROM ab_auth_attempts WHERE expires_at<=?', [Date.now()]);
-    await database.run('INSERT INTO ab_auth_attempts(bucket,count,expires_at) VALUES(?,1,?) ON CONFLICT(bucket) DO UPDATE SET count=count+1', [bucket, expires]);
-    const row = await database.first('SELECT count FROM ab_auth_attempts WHERE bucket=?', [bucket]);
-    if (row.count > 10) deny(429, 'RATE_LIMITED', 'Too many attempts. Please try again in 15 minutes.');
-    return bucket;
+    return authLimit(database, route + ':' + (clientAddress || 'unknown'));
   }
   async function session(account) {
     if (platformIdentity) return {};
@@ -62,6 +53,7 @@ export function createAccountService({ database, testerEmail, publicOrigin, pass
     await database.run('INSERT INTO ab_sessions(token_hash,account_id,expires_at,created_at) VALUES(?,?,?,?)', [await digest(token), account.id, Date.now() + 8 * 60 * 60_000, stamp]);
     return { 'Set-Cookie': cookie(token) };
   }
+  const emailAuth = createEmailAuth({ database, passwords, mailer, session, json });
   return {
     async fetch(request, { clientAddress } = {}) {
       const path = new URL(request.url).pathname, verb = request.method;
@@ -79,9 +71,12 @@ export function createAccountService({ database, testerEmail, publicOrigin, pass
           const count = configured ? await database.first('SELECT COUNT(*) AS n FROM ab_accounts') : { n: 0 };
           const user = identity(request);
           const provider=current?await providerSummary(database,current.id,vaultKey):null;
-          return json(200, { configured, authenticated: Boolean(current), account: publicAccount(current), sandbox: Boolean(current), provider_live_enabled:provider?.live_enabled||false, mode: provider?.live_enabled?'live-testing':'demo', auth_method: method, registration_available: configured && count.n === 0 && (platformIdentity || /^[a-f0-9]{64}$/.test(signupInviteHash || "")), invitation_required: !platformIdentity, account_exists: count.n > 0, verified_email: platformIdentity && user?.subject && user.email === allowedEmail ? user.email : undefined, signin_url: '/signin-with-chatgpt?return_to=%2Fstudio%2F', signout_url: '/signout-with-chatgpt?return_to=%2Fsignin%2F' });
+          return json(200, { configured, authenticated: Boolean(current), account: publicAccount(current), sandbox: Boolean(current), provider_live_enabled:provider?.live_enabled||false, mode: provider?.live_enabled?'live-testing':'demo', auth_method: method, registration_available: configured && (publicSignup ? Boolean(mailer?.ready) : count.n === 0 && (platformIdentity || /^[a-f0-9]{64}$/.test(signupInviteHash || ""))), signup_mode: publicSignup ? 'public' : 'tester', email_verification_required: publicSignup, password_reset_available: publicSignup && Boolean(mailer?.ready), invitation_required: !platformIdentity && !publicSignup, account_exists: publicSignup ? undefined : count.n > 0, verified_email: platformIdentity && user?.subject && user.email === allowedEmail ? user.email : undefined, signin_url: '/signin-with-chatgpt?return_to=%2Fstudio%2F', signout_url: '/signout-with-chatgpt?return_to=%2Fsignin%2F' });
         }
-        if (!configured) deny(503, 'SETUP_REQUIRED', 'The tester account service needs to be configured.');
+        if (!configured) deny(503, 'SETUP_REQUIRED', 'The account service needs to be configured.');
+        if (authPath && publicSignup && verb === 'POST' && ['register', 'forgot-password', 'verify-email', 'reset-password'].includes(route)) {
+          return await emailAuth({ route, readBody: () => boundedAccountBody(request), clientAddress });
+        }
         if (authPath && route === 'register' && verb === 'POST') {
           const input = await boundedAccountBody(request); only(input, platformIdentity ? ['name', 'email', 'agent_name'] : ['name', 'email', 'agent_name', 'password', 'invite_token']);
           await limit(request, 'register', clientAddress);
@@ -106,10 +101,15 @@ export function createAccountService({ database, testerEmail, publicOrigin, pass
           if (platformIdentity) return json(200, { redirect: '/signin-with-chatgpt?return_to=%2Fstudio%2F' });
           const input = await boundedAccountBody(request); only(input, ['email', 'password']);
           const bucket = await limit(request, 'login', clientAddress);
+          if (publicSignup) {
+            await authLimit(database, 'login-global', { maximum: 300 });
+            await authLimit(database, 'login-email:' + email(input.email), { maximum: 30 });
+          }
           if (typeof input.password !== 'string' || input.password.length > 128 || input.password.length < 1) deny(401, 'INVALID_LOGIN', 'The email or password is not correct.');
           const account = await database.first("SELECT * FROM ab_accounts WHERE email=? AND auth_provider='password'", [email(input.email)]);
           const valid = await passwords.verify(input.password, account?.password_hash);
-          if (!account || account.email !== allowedEmail || !valid) deny(401, 'INVALID_LOGIN', 'The email or password is not correct.');
+          if (!account || (!publicSignup && account.email !== allowedEmail) || !valid) deny(401, 'INVALID_LOGIN', 'The email or password is not correct.');
+          if (publicSignup && !account.email_verified_at) deny(403, 'EMAIL_NOT_VERIFIED', 'Verify your email first. Use Create account or Forgot password to request a link.');
           await database.run('DELETE FROM ab_auth_attempts WHERE bucket=?', [bucket]);
           return json(200, { authenticated: true, sandbox: true, account: publicAccount(account), redirect: '/studio/' }, await session(account));
         }

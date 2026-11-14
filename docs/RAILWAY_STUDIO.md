@@ -1,172 +1,152 @@
 # AgentBridge on agentbridge.victor.ceo
 
-A **new, independent Railway service** hosts the public product page and private
-control studio. Victor's `/agentbridge` route frames only the public product,
-following Meridian's integration. The studio opens at the top level and cannot
-be framed. Deploy AgentBridge first, then release the Victor tab.
+The Railway service hosts the public product pages and the Node account API.
+Use the existing AgentBridge service if it already owns the domain; otherwise
+create a separate service from `premiumcentraal-boop/AgentBridge`. Victor and
+Meridian keep their current services. The checked-in `railway.json` builds the
+Node 24 Docker image and checks `/health`.
 
-This service is a workspace for **routing-number references, two-number connections, purchase requests, drafts, call plans, capture/join preferences and read-only backend inspection**.
-It does not load the telephony Worker, expose its webhooks, issue a live access
-number, approve a call, provision a number, take payment, or enable routing.
-The existing `backend/` Worker and its pending security PRs remain separate.
+## Public email signup
 
-## 1. Create the Railway service
-
-1. In the Railway project that holds Victor, choose **New service → GitHub repo**
-   and select `premiumcentraal-boop/AgentBridge`.
-2. For a review deployment, select `feat/victor-product-studio`. For an accepted
-   release, select the reviewed/merged commit. The root `railway.json` uses the
-   allowlisted Docker build, Node 24, bundled React/Astryx assets, a dependency-free
-   HTTP runtime, and `/health`. Build dependencies are installed from the pinned
-   web lockfile and removed after rendering the pages.
-3. Add **one persistent volume mounted at `/data`**. Use one replica. SQLite
-   data must not live on the ephemeral application filesystem. The entrypoint
-   prepares the dedicated mounted directory and drops to UID/GID 1000 before
-   accepting requests.
-4. Set these variables:
+1. Connect the service to the reviewed `main` release of the GitHub repository,
+   with the repository root as its root directory. Use the Dockerfile build.
+   Keep **one replica** and a durable volume mounted at **`/data`**. Take a volume
+   backup before upgrading an existing account database. New migrations run
+   transactionally on startup and preserve account IDs, workspaces, sessions,
+   provider credentials and routing records.
+2. In [Resend](https://resend.com/domains), add a dedicated sending domain such as
+   **`mail.agentbridge.victor.ceo`**. Add the exact DKIM/SPF records Resend shows
+   at the authoritative DNS provider, then wait for verification. These are
+   separate from the website's Railway CNAME. Disable click and open tracking
+   for account emails. Receiving email/MX setup is not required for sending;
+   preserve Victor's existing email records. Create a **sending-only API key**
+   restricted to this domain.
+3. Add these Railway **runtime variables** (never build arguments):
 
    | Variable | Value |
    | --- | --- |
-   | `NODE_ENV` | `production` (Docker default) |
+   | `NODE_ENV` | `production` |
    | `STUDIO_PUBLIC_ORIGIN` | `https://agentbridge.victor.ceo` |
-   | `STUDIO_DATABASE_PATH` | `/data/studio.sqlite` (Docker default) |
-   | `STUDIO_ACCESS_KEY_SHA256` | The hash generated in the next section |
+   | `STUDIO_SIGNUP_MODE` | `public` |
+   | `STUDIO_DATABASE_PATH` | `/data/studio.sqlite` |
+   | `STUDIO_ACCOUNT_DATABASE_PATH` | `/data/accounts.sqlite` |
+   | `RESEND_API_KEY` | Sending-only key; store as a secret |
+   | `AUTH_EMAIL_FROM` | `AgentBridge <accounts@mail.agentbridge.victor.ceo>` |
+   | `PROVIDER_CREDENTIALS_KEY` | Existing 64-character hex wrapping key, or generate once for a new database |
+   | `STUDIO_TRUST_RAILWAY_PROXY` | `true` only under the edge conditions below |
 
-   Railway supplies `PORT`. Never set `STUDIO_DEV_MODE=true` on Railway. Even
-   if mistakenly set, production mode ignores that development login.
-5. Deploy the service. `/health` must return `routing_enabled: false`.
+   Railway supplies `PORT` and `RAILWAY_ENVIRONMENT_ID`. Keep
+   `STUDIO_DEV_MODE` unset. `DEMO_TESTER_EMAIL`, `DEMO_SIGNUP_INVITE_SHA256` and
+   the old operator access key are not needed in public mode.
 
-## 2. Set up your private studio access
+   **Preserve an existing `PROVIDER_CREDENTIALS_KEY`.** Replacing it makes saved
+   provider credentials unreadable. For a genuinely new database, generate a
+   32-byte random hex key on your trusted machine, put it directly into Railway
+   secrets, and retain it in your password manager. Do not paste it into chat,
+   source, issue descriptions or URLs. Each customer enters their own SignalWire
+   credentials in Studio Settings; a shared customer carrier key is not used.
+4. In Railway **Settings → Networking**, confirm `agentbridge.victor.ceo` is
+   attached to this service and its HTTPS certificate is active. For a new
+   attachment, use the exact CNAME target Railway returns for `agentbridge`.
+   Keep the existing domain if it is already attached to the correct service.
+   `STUDIO_PUBLIC_ORIGIN` must match the origin visitors use. Writes from any
+   other origin are rejected.
+5. Deploy. Run the read-only probe from the repository:
 
-On your own trusted machine, with Node 22.13+ or Node 24:
+   ```sh
+   npm run launch:check -- https://agentbridge.victor.ceo
+   ```
 
-```sh
-npm run studio:key
-```
+6. In a fresh browser, sign up with your own email, open the received link,
+   choose a password and confirm the studio starts empty. Sign out and back in,
+   complete a password reset, and verify a second account cannot see the first
+   account's numbers, connections or settings. Restart the service and confirm
+   saved data remains. The probe does not send email or make a real call.
 
-Save the **original access key** in your password manager. Add only its SHA-256
-hash as `STUDIO_ACCESS_KEY_SHA256` in Railway, then redeploy. Open `/studio/`
-and sign in with the original key. Do not paste access keys into chat, source,
-URLs or the browser console. Without a configured hash, the private studio
-stays locked; the public page and `/studio/demo/` still work.
+## How signup works
 
-This is a single-operator workspace, not customer registration or multi-tenant
-SaaS. Login attempts are limited; sessions last eight hours, use secure HttpOnly
-SameSite cookies, and are invalidated by restart or redeployment. Persistent
-workspace data survives redeployment through the volume. Losing the key requires
-replacing its hash and redeploying; there is no password recovery endpoint.
+- `/signup/` asks for a name, email and agent name. The server sends a verification
+  link valid for one hour. It creates no account or session until that link is
+  confirmed and its holder chooses a password.
+- `/verify-email/` consumes the single-use token, hashes the password with scrypt,
+  creates a separate account/workspace and signs the user in. Opening the email's
+  link alone never consumes it, so email scanners cannot create an account.
+- `/signin/` uses the email and password. Sessions last eight hours and survive
+  service restarts. Cookies are Secure, HttpOnly and SameSite=Strict. Session and
+  email token values are stored only as hashes.
+- `/forgot-password/` sends a reset link valid for 30 minutes. Completing it at
+  `/reset-password/` revokes all old sessions and outstanding links for that email.
+  Responses do not disclose whether an email is already registered.
+- Names and passwords are not encoded into email URLs. Tokens are in fragments,
+  removed from browser history after the page loads, and submitted to the API in
+  same-origin POST bodies. They never enter server URL logs or referrer headers.
+- An existing unverified password tester must confirm an email link after moving
+  to public mode. Verification keeps that account's ID and saved workspace.
 
-## 3. Attach the subdomain
+Signup stays closed if the sending key, sender or HTTPS origin is missing or
+invalid. Already-verified users can still sign in while email configuration is
+unavailable. The owner-private ChatGPT Sites preview retains its existing verified
+tester flow; enabling this Railway mode does not make the preview public.
 
-1. Railway → service → Settings → Networking → **Custom domain**:
-   `agentbridge.victor.ceo`. Use the listening target port shown by the service.
-2. At the authoritative DNS provider for `victor.ceo`, add the **exact CNAME
-   target Railway returns** for `agentbridge`. Add any verification records
-   Railway requests. Do not invent or reuse Meridian's Railway target.
-3. Wait for domain verification and TLS issuance. Confirm the product page,
-   `/studio/demo/`, `/studio/`, and `/health` on the custom domain.
-4. If using a generated Railway domain temporarily, set `STUDIO_PUBLIC_ORIGIN`
-   to that exact HTTPS origin and redeploy before testing sign-in there. Restore
-   the custom origin for release; only one origin is accepted for writes.
-5. Release the matching `victor-ceo` change, then confirm the new tab,
-   `/agentbridge`, and the direct Control studio link on desktop and mobile.
+## Client IP and rate limits
 
-Public pages allow framing only by this service and `https://victor.ceo` /
-`https://www.victor.ceo`. Studio and API responses reject all framing, are
-uncached, and are excluded from indexing. Authentication must be top-level.
+Auth and email limits are durable, with separate limits per client, per email and
+globally. An email address can request at most three account emails per hour.
+Client auth limits are ten attempts in 15 minutes; email delivery has an additional
+global ceiling of 200 requests in 15 minutes, and password login 300.
 
-## 4. Optional: inspect an existing private backend
+By default, the Node server uses the socket peer and ignores forwarding headers.
+Behind a proxy, this conservatively shares one client bucket. On Railway, set
+`STUDIO_TRUST_RAILWAY_PROXY=true` **only when all untrusted traffic reaches this
+listener through Railway's public HTTP edge**. The app then validates and uses
+the edge's `X-Real-IP`, and requires Railway's injected environment ID as well.
+Do not expose this listener through a TCP proxy or to untrusted private-network
+callers in this mode. It never parses caller-supplied `X-Forwarded-For`.
+See [Railway request headers](https://docs.railway.com/networking/public-networking/specs-and-limits).
 
-The studio can inspect setup and assigned-number inventory from the existing
-private Worker. First review `STAGING_DEPLOY.md` and the unmerged security
-changes. Deploying this web studio does **not** deploy that Worker.
+## Product and carrier scope
 
-Add only these optional Railway variables:
+Every new account starts in demo mode. Live actions require the customer to save
+and verify their own SignalWire Space/Project/token and explicitly enable live
+testing. Import, number search/purchase, pairing, forwarding, test callbacks, call
+control and consented recording use the real provider API. See
+[SignalWire setup and verification limits](SIGNALWIRE_LIVE_TESTING.md).
 
-- `AGENTBRIDGE_BACKEND_URL`: HTTPS origin of the private Worker, no path,
-  embedded credentials, query or fragment.
-- `AGENTBRIDGE_ACCOUNT_TOKEN`: a private scoped **account** bearer token for that
-  Worker. Never use a carrier API token or an owner approval token here.
+Signup does not start a paid service, buy a number, activate a route or place a
+call. SignalWire bills each customer's own project. Live transcription, browser
+listen-in and joining an existing call as a third participant still need a public
+media/webhook service; those controls remain unavailable. The separate legacy
+`backend/` Worker is not deployed by this Docker service.
 
-Redeploy and use **Connection → Check connection**. The server calls only
-`get_bridge_setup` and `list_my_numbers`, with redirects disabled, timeouts and
-bounded responses. Credentials never reach client code. A connected status means
-those two tools responded; it is not proof of a working call or provider approval.
-No number is purchased and no carrier settings change.
+The account API scopes records, encrypted credentials and provider operations to
+the signed-in account. Public product pages allow framing by Victor; account,
+studio and API pages reject framing, use no-store and are excluded from indexing.
 
-## 5. Verify the release
+## Operation and rollback
 
-- Public page loads; Victor can frame the product.
-- Studio refuses framing and shows sign-in; demo shows a persistent demo banner.
-- Unauthenticated `GET /api/studio/overview` returns 401.
-- Create a draft, change guidance, export, sign out and sign back in.
-- Restart/redeploy: the session ends and the data remains on the volume.
-- Cross-origin API writes return 403. `/telephony/*`, `/mcp` and `/v1/*` are not
-  telephony endpoints on this service.
-- `/health` reports prototype mode and `routing_enabled: false`.
+Keep one instance while using SQLite and enable Railway volume backups. Retain
+the wrapping key separately from backups. Scale to a shared managed database
+before adding application replicas. Backups and account exports contain private
+destination numbers and must stay private.
 
-## Data and operations
+Roll back the application image without deleting the volume or the new migration
+history. Earlier single-tester code can still read the expanded account schema,
+but it cannot serve public users; restoring an operator-only image is not a public
+auth rollback. Do not reverse the migration by deleting customer accounts.
 
-Route drafts and call plans contain destination phone numbers; saved join preferences may contain an operator callback number. Only the signed-in operator can
-read or write them. Current limits: 200 route drafts and 200 call plans, latest 100 activity events
-in API responses. Export contains full destination numbers. Treat volume backups
-and exports as private. The service stores no live audio, transcripts or provider
-credentials in SQLite. The bundled public sample is a fictional synthetic MP3. Preferences do not activate live capture, joining or any provider operation. Studio preference changes affect its own presentation;
-they do not persist preferences in Grok Bot or change carrier policy.
+For an operator-only workspace, leave `STUDIO_SIGNUP_MODE` and `DEMO_TESTER_EMAIL`
+unset and follow `npm run studio:key`. For the old single-tester invitation flow,
+see [TESTER_ACCOUNT.md](TESTER_ACCOUNT.md).
 
-Use Railway volume backups appropriate to your account before relying on stored
-records. Never scale this SQLite service to multiple replicas. For multi-user
-commercial use, add an identity provider, authorization by tenant, a managed
-shared database, account recovery, retention controls and operational review.
-
-## Rollback
-
-Redeploy the last known-good AgentBridge image and the prior Victor release.
-Do not delete the volume. The studio creates only its own three `studio_*`
-tables; it never opens or migrates the carrier D1 database. The custom domain
-can stay attached to the service during rollback.
-
-## Local development
+## Local verification
 
 ```sh
 npm run setup:web
 npm run ci
-npm run dev
 ```
 
-The development server binds only to `127.0.0.1:3000`; an explicit development
-mode enables the key `local-development`. Persistent local records live in the
-git-ignored `data/` directory. This development key is never accepted in
-production. Open `/studio/demo/` for a browser-only sample workspace.
-
-## Calling extension pages and APIs
-
-The build now renders `/features/`, `/international-calling/`, `/call-memory/`
-and `/join-call/`, plus `/studio/{calls,memory}/` and matching demo paths.
-Private APIs add authenticated, same-origin `POST /api/studio/call-plans`,
-`POST /api/studio/call-plans/:id/archive` and
-`PATCH /api/studio/capture-preferences`. Plans/preferences appear in overview
-and export responses. Schema validation is shared with the UI, but the server
-validates every request again. State and provider-activation fields are not
-accepted from the client. SQLite adds its studio-only tables idempotently.
-
-The current private integration still calls only setup/number-discovery tools.
-Live dialing, capture, transcription and conference joining need further carrier
-and media integration; deploying the website does not implement or enable them.
-The browser/phone join in the sample requests neither microphone nor callback.
-`Permissions-Policy` continues to deny microphone access. A real browser join
-needs a deliberately scoped microphone/media permission policy and authorization.
-Sample playback permits only local/data media in CSP and contacts no audio host.
-See [CALLING_EXTENSIONS.md](CALLING_EXTENSIONS.md).
-
-## Routing-number inventory and purchase requests
-
-Additive SQLite tables store verified routing numbers, outside-number pairings
-and pending purchase requests. Legacy drafts are preserved. Private studio writes
-require login, the configured origin and bounded JSON. A browser cannot mark
-a number owned or an order paid. Each routing number has one current destination.
-
-The allowlisted Docker context now includes shared validation modules and the
-operator number-import script. The HTTP service still does not load the telephony
-Worker or expose provider mutation endpoints. Read [STUDIO_NUMBERS.md](STUDIO_NUMBERS.md)
-for SignalWire credentials, exact inventory verification, import and limitations.
+The account and DOM tests use a captured email transport. They verify database
+migration, isolated accounts, token reuse/races, password recovery and rendered
+forms without delivering real emails or making paid carrier requests. Actual DNS,
+Resend acceptance/inbox delivery and Railway rollout require the deployment's
+credentials and an end-to-end test on the custom domain.

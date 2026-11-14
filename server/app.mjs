@@ -4,9 +4,12 @@ import { readFile, stat } from 'node:fs/promises';
 import { resolve, extname, sep, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Readable } from 'node:stream';
+import { isIP } from 'node:net';
 import { createAccountService } from './accounts/service.mjs';
 import { openAccountDatabase } from './accounts/node-database.mjs';
 import { nodePasswords } from './accounts/passwords.mjs';
+import { createAuthEmail } from './accounts/email.mjs';
+import { vaultAvailable } from './accounts/credential-vault.mjs';
 import { openStore } from './store.mjs';
 import { inspectIntegration } from './integration.mjs';
 import { validateCallPlan, validateCapture } from '../shared/call-plans.mjs';
@@ -19,9 +22,11 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=u
 const digest = text => createHash('sha256').update(text).digest();
 
 export function createApp({ env = process.env, store = openStore(env.STUDIO_DATABASE_PATH || resolve(ROOT, 'data/studio.sqlite')), fetcher, accountDatabase } = {}) {
-  const customerMode = Boolean(env.DEMO_TESTER_EMAIL);
+  const publicSignup = env.STUDIO_SIGNUP_MODE === 'public';
+  const customerMode = publicSignup || Boolean(env.DEMO_TESTER_EMAIL);
   const customerDatabase = customerMode ? accountDatabase || openAccountDatabase(env.STUDIO_ACCOUNT_DATABASE_PATH || resolve(dirname(env.STUDIO_DATABASE_PATH || resolve(ROOT,'data/studio.sqlite')), 'accounts.sqlite')) : null;
-  const customerAPI = createAccountService({ database: customerDatabase, testerEmail: env.DEMO_TESTER_EMAIL, publicOrigin: env.STUDIO_PUBLIC_ORIGIN || 'https://agentbridge.victor.ceo', passwords: nodePasswords, signupInviteHash: env.DEMO_SIGNUP_INVITE_SHA256, vaultKey:env.PROVIDER_CREDENTIALS_KEY,fetcher });
+  const mailer = createAuthEmail({ apiKey: env.RESEND_API_KEY, from: env.AUTH_EMAIL_FROM, publicOrigin: env.STUDIO_PUBLIC_ORIGIN, fetcher });
+  const customerAPI = createAccountService({ database: customerDatabase, testerEmail: env.DEMO_TESTER_EMAIL, publicOrigin: env.STUDIO_PUBLIC_ORIGIN || 'https://agentbridge.victor.ceo', passwords: nodePasswords, signupInviteHash: env.DEMO_SIGNUP_INVITE_SHA256, vaultKey:env.PROVIDER_CREDENTIALS_KEY, fetcher, signupMode: env.STUDIO_SIGNUP_MODE, mailer });
   const sessions = new Map(), attempts = new Map();
   const keyHash = /^[a-f0-9]{64}$/.test(env.STUDIO_ACCESS_KEY_SHA256 || '') ? Buffer.from(env.STUDIO_ACCESS_KEY_SHA256, 'hex') : null;
   const isDev = env.STUDIO_DEV_MODE === 'true' && env.NODE_ENV !== 'production';
@@ -36,7 +41,7 @@ export function createApp({ env = process.env, store = openStore(env.STUDIO_DATA
   const server = http.createServer(async (req, res) => {
     let pathname;
     try { pathname = decodeURIComponent(new URL(req.url, 'http://local').pathname); } catch { res.writeHead(400).end(); return; }
-    const privatePath = pathname.startsWith('/api/') || pathname.startsWith('/studio') || pathname.startsWith('/app') || /^\/(signup|signin)(?:\/|$)/.test(pathname);
+    const privatePath = pathname.startsWith('/api/') || pathname.startsWith('/studio') || pathname.startsWith('/app') || /^\/(signup|signin|verify-email|forgot-password|reset-password)(?:\/|$)/.test(pathname);
     res.setHeader('Content-Security-Policy', privatePath ? STUDIO_CSP : PUBLIC_CSP);
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -66,11 +71,15 @@ export function createApp({ env = process.env, store = openStore(env.STUDIO_DATA
         const headers = new Headers();
         for (const [key, value] of Object.entries(req.headers)) if (value !== undefined) headers.set(key, Array.isArray(value) ? value.join(', ') : value);
         const request = new Request(new URL(req.url, env.STUDIO_PUBLIC_ORIGIN || 'https://agentbridge.victor.ceo'), { method: req.method, headers, ...(!['GET','HEAD'].includes(req.method) ? { body: Readable.toWeb(req), duplex: 'half' } : {}) });
-        const response = await customerAPI.fetch(request, { clientAddress: req.socket.remoteAddress });
+        // Opt in only on Railway's public HTTP edge, with no untrusted direct or
+        // private listener access. Never trust X-Forwarded-For from a browser.
+        const edgeIP = req.headers['x-real-ip'];
+        const trustedEdge = env.STUDIO_TRUST_RAILWAY_PROXY === 'true' && Boolean(env.RAILWAY_ENVIRONMENT_ID) && typeof edgeIP === 'string' && isIP(edgeIP);
+        const response = await customerAPI.fetch(request, { clientAddress: trustedEdge ? edgeIP : req.socket.remoteAddress });
         if (response) { res.writeHead(response.status, Object.fromEntries(response.headers)); res.end(Buffer.from(await response.arrayBuffer())); return; }
       }
       if (customerMode && (pathname.startsWith('/studio/demo/') || pathname === '/app' || pathname === '/app/')) { res.writeHead(302,{Location:pathname.startsWith('/studio/demo/')?'/studio/'+pathname.slice('/studio/demo/'.length):'/studio/'});res.end();return; }
-      if (pathname === '/health' && ['GET','HEAD'].includes(req.method)) return json(200, { service: 'agentbridge-studio', mode: customerMode ? 'account-demo' : 'prototype', accounts_configured: customerMode, routing_enabled: false });
+      if (pathname === '/health' && ['GET','HEAD'].includes(req.method)) return json(200, { service: 'agentbridge-studio', mode: customerMode ? publicSignup ? 'public-accounts' : 'account-demo' : 'prototype', accounts_configured: customerMode, public_signup_enabled: publicSignup && mailer.ready, email_configured: mailer.ready, secure_provider_storage: vaultAvailable(env.PROVIDER_CREDENTIALS_KEY), carrier_access: 'per-account-opt-in', routing_enabled: false });
       if (pathname.startsWith('/api/')) {
         // Prevent cross-origin session changes, including CSRF via a framed product.
         if (!['GET','HEAD'].includes(req.method)) {
