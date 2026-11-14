@@ -229,7 +229,10 @@ async function ownerRoute(request,url,env){
     if(!checked.ok)return error('CARRIER_RECONCILIATION_REQUIRED',
       'Carrier has not yet confirmed both call legs and charges: '+checked.code+
       '. If the call has definitely ended in the SignalWire dashboard, use owner force-unlock.',409);
-    // A terminal two-leg snapshot is not authoritative billing finality.\n    // Keep the durable reservation locked until a reviewed carrier-finality\n    // contract exists; owner recovery remains separately authenticated/audited.\n    return error('CARRIER_FINALITY_UNVERIFIED',\n      'Carrier logs look terminal, but later billable legs cannot yet be excluded. Use audited owner force-unlock only after independent dashboard review.',409);
+    // A terminal two-leg snapshot is not authoritative billing finality.
+    // Keep the durable reservation locked until a reviewed carrier-finality
+    // contract exists; owner recovery remains separately authenticated/audited.
+    return error('CARRIER_FINALITY_UNVERIFIED',\n      'Carrier logs look terminal, but later billable legs cannot yet be excluded. Use audited owner force-unlock only after independent dashboard review.',409);
   }
   if(action==='force-unlock'){
     // Owner-only escape hatch for a reservation stuck in 'connecting' (for
@@ -246,8 +249,10 @@ async function ownerRoute(request,url,env){
     let carrierCode='NO_CARRIER_SEGMENT';
     if(row.provider==='signalwire'&&row.provider_segment_id){
       const checked=await fetchCarrierReconciliation(row,env);
-      // A complete-looking snapshot is not proof that no later billable leg\n      // will be indexed. Never silently release the lock on this path.\n      if(checked.ok){carrierCode='CARRIER_FINALITY_UNVERIFIED';}\n      else carrierCode=checked.code;
-      carrierCode=checked.code;
+      // A complete-looking snapshot is not proof that no later billable leg
+      // will be indexed. Never silently release the lock on this path.
+      if(checked.ok){carrierCode='CARRIER_FINALITY_UNVERIFIED';}
+      else carrierCode=checked.code;
     }
     const reason=typeof input.reason==='string'?input.reason.trim():'';
     if(input.force!==true||reason.length<8||reason.length>500||/[\u0000-\u001f\u007f]/.test(reason))
