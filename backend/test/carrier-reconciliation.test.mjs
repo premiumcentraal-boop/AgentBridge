@@ -14,8 +14,8 @@ const env={US_BRIDGE_DID:DID,SIGNALWIRE_SPACE:'example-space',
   SIGNALWIRE_PROJECT_ID:PROJECT,SIGNALWIRE_VOICE_API_TOKEN:SECRET};
 const inbound={id:SEG,status:'completed',direction:'inbound',to:DID,charge:0.01};
 const child={id:CHILD,parent_id:SEG,direction:'outbound',from:DID,to:DEST,status:'completed',charge:0.02};
-const COMPLETE_LINKS={self:'https://example-space.signalwire.com/api/voice/logs?page_size=1000',
-  first:'https://example-space.signalwire.com/api/voice/logs?page_size=1000'};
+const COMPLETE_LINKS={self:'https://example-space.signalwire.com/api/voice/logs?page_size=1000&created_after=2027-01-15T07%3A58%3A00.000Z',
+  first:'https://example-space.signalwire.com/api/voice/logs?page_size=1000&created_after=2027-01-15T07%3A58%3A00.000Z'};
 function provider(inRow=inbound,children=[child],links=COMPLETE_LINKS,includeInbound=true){
   const calls=[];
   const fetchImpl=async(url,options)=>{
@@ -205,8 +205,8 @@ const docChild={billing_ms:30000,charge:0.0085,charge_details:[{description:'Out
   created_at:'2027-01-15T08:00:20Z',direction:'outbound-dial',duration:25,duration_ms:25010,
   from:DID,id:CHILD,parent_id:SEG,qos_metrics:null,source:'realtime_api',status:'ended',to:DEST,
   type:'relay_pstn_call',url:null};
-const docLinks={self:'https://example-space.signalwire.com/api/voice/logs?page_number=0&page_size=1000',
-  first:'https://example-space.signalwire.com/api/voice/logs?page_size=1000'};
+const docLinks={self:'https://example-space.signalwire.com/api/voice/logs?page_number=0&page_size=1000&created_after=2027-01-15T07%3A58%3A00.000Z',
+  first:'https://example-space.signalwire.com/api/voice/logs?page_size=1000&created_after=2027-01-15T07%3A58%3A00.000Z'};
 test('documented Voice Logs shapes reconcile: ended status, outbound-dial direction, unrelated logs ignored',async()=>{
   const unrelated={...docChild,id:'78313c74-b321-4c08-a3ea-7123449130ab',parent_id:null,to:'+13125550100'};
   const p=provider(docInbound,[docInbound,unrelated,docChild],undefined);
@@ -421,6 +421,25 @@ test('UUID case variants cannot conceal extra direct or nested billable legs',as
   const nestedUpper=await fetchCarrierReconciliation(row,env,
     provider(inbound,[upperChild,{...grandchild,parent_id:CHILD}]).fetchImpl);
   assert.equal(nestedUpper.code,'UNVERIFIED_NESTED_OUTBOUND_LEGS',JSON.stringify(nestedUpper));
+});
+
+test('pagination links must attest to the exact requested time window and page size',async()=>{
+  const base='https://example-space.signalwire.com/api/voice/logs';
+  const cases=[
+    {...COMPLETE_LINKS,self:base+'?page_size=1000'},
+    {...COMPLETE_LINKS,first:base+'?created_after='+encodeURIComponent(new Date((row.created_at-120)*1000).toISOString())},
+    {...COMPLETE_LINKS,self:base},
+    {...COMPLETE_LINKS,last:base+'?page_number=0'},
+    {...COMPLETE_LINKS,self:COMPLETE_LINKS.self+'&created_after='+encodeURIComponent(new Date((row.created_at-120)*1000).toISOString())},
+    {...COMPLETE_LINKS,first:COMPLETE_LINKS.first+'&page_size=1000'}
+  ];
+  for(const links of cases){
+    const p=provider(inbound,[child],links);
+    const result=await fetchCarrierReconciliation(row,env,p.fetchImpl);
+    assert.equal(result.code,'INCOMPLETE_CARRIER_PAGINATION');
+    assert.equal(p.calls.length,2);
+  }
+  assert.equal((await fetchCarrierReconciliation(row,env,provider().fetchImpl)).ok,true);
 });
 
 test('reverse and terminal pagination metadata cannot contradict a single-page ledger',async()=>{
