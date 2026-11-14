@@ -709,3 +709,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 ## 2026-11-14 — Streamed Voice Logs response-budget regression (draft PR #49)
 - Added offline adversarial response tests for the 1 MiB Voice Logs limit: a streamed body exceeding the cap while falsely advertising a two-byte Content-Length, and a short valid ledger falsely advertising an oversized Content-Length. Both must retain the reservation lock; the former must cancel the stream and neither may trigger extra carrier requests.
 - This tests the existing bounded reader's fail-closed integration without changing paid-routing logic, provider configuration, or spending policy. Exact-head CI is pending; no independent local Node run (container GitHub DNS unavailable). Real SignalWire response semantics and D1 reconciliation remain unverified. No calls, purchases, routing enablement, merges or deployment.
+
+## 2026-11-14 — Voice Logs byte-cap CI fixture correction (draft PR #49)
+- Investigated exact-head `0f6faef` Quality gate #43615779654: 228/229 Node tests passed; the new oversized Content-Length mock asserted zero `ReadableStream.pull` calls, but WHATWG streams may prefetch one chunk at construction before application code reads the body. Secret scan passed.
+- Updated the negative regression to tolerate at most one eager prefetch, keep the mock stream open, and require cancellation. The production `readBoundedWebhookBody` remains unchanged: it rejects oversized Content-Length before requesting a reader, and fails closed.
+- Follow-up exact-head CI must pass before review; no independent local Node run, provider access, paid calls, routing changes, deployment or merge. SignalWire contract and D1 recovery remain release blockers.
