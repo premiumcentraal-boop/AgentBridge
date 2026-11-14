@@ -705,3 +705,7 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Raised the read-only list response byte ceiling from 256 KiB to 1 MiB while retaining the 1,000-record completeness guard, 8-second per-fetch timeout, strict pagination validation and fail-closed handling of oversized responses.
 - Added synthetic tests for a 999-record JSON payload larger than 256 KiB, a 1,000-record page, and an over-1-MiB response. No provider credentials or live calls used.
 - This is an offline liveness improvement, not a verified SignalWire response-size contract. Provider pagination/indexing semantics and production authorization remain blocked by issue #50. PR remains draft, unmerged and undeployed; exact-head CI must be checked independently.
+
+## 2026-11-14 — Streamed Voice Logs response-budget regression (draft PR #49)
+- Added offline adversarial response tests for the 1 MiB Voice Logs limit: a streamed body exceeding the cap while falsely advertising a two-byte Content-Length, and a short valid ledger falsely advertising an oversized Content-Length. Both must retain the reservation lock; the former must cancel the stream and neither may trigger extra carrier requests.
+- This tests the existing bounded reader's fail-closed integration without changing paid-routing logic, provider configuration, or spending policy. Exact-head CI is pending; no independent local Node run (container GitHub DNS unavailable). Real SignalWire response semantics and D1 reconciliation remain unverified. No calls, purchases, routing enablement, merges or deployment.
