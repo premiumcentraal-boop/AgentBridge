@@ -696,3 +696,7 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Canonicalize absent page numbers to zero for the last/self comparison while retaining exact origin, path, filter, page-size and first-page validation. Any nonzero, duplicated or malformed page marker remains fail-closed; no pagination URLs are followed.
 - Added six deterministic positive/negative cases, including an explicit later page and duplicate page markers. These tests are written but not independently executed at commit time; exact-head CI and authoritative provider semantics remain release gates.
 - No carrier calls, purchases, payments, secrets, routing activation, merges or deployment.
+
+## 2026-11-14 — Pagination normalization syntax regression (PR #49, pending review)
+- Exact-head Quality gate for `ba68901` failed at `npm run check` before tests: `backend/src/carrier-reconciliation.mjs:120` had one extra closing parenthesis in the optional `links.last` comparison. [CI #43590102873](https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/43590102873).
+- Removed the unmatched parenthesis only; pagination checks and fail-closed billing behavior are unchanged. Re-run exact-head CI before claiming success; carrier contract and real billing remain unverified. No calls, purchases, routing, merges or deployment.
