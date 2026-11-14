@@ -390,8 +390,8 @@ test('pagination metadata cannot falsely claim a complete first-page ledger',asy
     assert.equal(p.calls.length,2,'must not follow untrusted pagination metadata');
   }
   for(const links of [
-    {...COMPLETE_LINKS,self:base+'?page_number=0'},
-    {...COMPLETE_LINKS,first:base+'?page_number=0'},
+    {...COMPLETE_LINKS,self:COMPLETE_LINKS.self+'&page_number=0'},
+    {...COMPLETE_LINKS,first:COMPLETE_LINKS.first+'&page_number=0'},
     {...COMPLETE_LINKS,self:base+'?page_size=1000&created_after='+encodeURIComponent(new Date((row.created_at-120)*1000).toISOString())}
   ]){
     const result=await fetchCarrierReconciliation(row,env,provider(inbound,[child],links).fetchImpl);
