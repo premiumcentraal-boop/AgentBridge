@@ -736,3 +736,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Exact-head Quality gate for `053add648` failed 4/209 Node tests in `backend/test/owner-force-unlock.test.mjs` (run https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/43652995391); secret scan passed. The `reason` control-character regex in `backend/src/index.mjs` contained doubled backslashes, so it interpreted the intended Unicode escapes as literal pattern characters, rejected valid human reasons, and accepted a control-character reason. This also blocked audited manual recovery.
 - Changed only the regex to the actual JS Unicode escape class `[\u0000-\u001f\u007f]`; retained force=true, length, owner token, audit and carrier checks. Existing tests cover both valid manual recovery and invalid control characters. No routing, payment, call, merge or deployment.
 - Verification of the correction: source diff inspected; exact-head CI pending. Keep PR draft until its own checks pass.
+
+
+## 2026-11-15 — Stale owner recovery audit hardening (draft PR #56)
+- Reordered force-unlock's transactional batch to conditionally update the connecting reservation before inserting its audit event. The audit `INSERT ... SELECT` is gated by SQLite `changes()=1`, preventing a stale/losing recovery from recording a false successful unlock.
+- Required D1 `batch()` for this owner recovery boundary rather than allowing the sequential test-stand-in fallback. Added synthetic stale-state and missing-batch regression cases in `backend/test/owner-force-unlock.test.mjs`.
+- This is an unmerged review-branch change, not a deployment. A successful batch must still be reviewed for real Cloudflare D1 semantics; a missing/ambiguous audit result is a 503 requiring manual database inspection. Local Node tests were unavailable due to GitHub DNS resolution; exact-head CI must be checked before approval.
