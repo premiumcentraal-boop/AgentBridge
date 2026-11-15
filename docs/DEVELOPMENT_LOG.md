@@ -571,3 +571,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Tightened fail-closed pagination validation: only absent or explicit null `links.next` is terminal; false, zero and object cursors no longer bypass the pagination guard.
 - Added offline regression inputs for these malformed cursor shapes. A non-null cursor remains untrusted and never triggers a follow-up fetch or unlock.
 - Previous exact-head `f432ae2` Quality gate #43359731037 passed before this change. New commits require exact-head CI. Real SignalWire response semantics and D1 validation remain manual release gates; no calls, routing activation, deployment or merges.
+
+## 2026-11-15 — D1 migration preflight baseline and tracking guard (draft, unmerged)
+- Read-only preflight previously treated an empty D1 database as safe and recommended additive migration 0001, which immediately fails because `reservations` is absent. It also trusted recorded migration names even when their corresponding schema objects were absent.
+- Preflight now refuses to recommend migration application unless both base tables exist, and rejects history/schema drift instead of silently skipping missing objects. Added deterministic negative tests for missing base tables and mismatched migration history; kept no-write and explicit backup/operator approval behavior.
+- This does **not** create or approve a production baseline migration. Existing databases still require manually verified schema, backups and an operator-approved bootstrap path. Cloudflare D1 execution and exact-head CI require separate verification. No calls, paid routing, carrier changes, merges or deployments.
