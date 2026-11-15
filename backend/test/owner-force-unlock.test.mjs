@@ -149,3 +149,20 @@ test('force-unlock refuses nontransactional storage before any recovery writes',
   assert.equal(status(DB,id),'connecting');
   assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,0);
 });
+
+test('audit insertion failure rolls back the reservation transition atomically',async t=>{
+  const {env,DB,id}=await stuck(t);
+  t.mock.method(globalThis,'fetch',async()=>new Response('unavailable',{status:503}));
+  // A valid table can still reject inserts (disk/constraint/trigger failures).
+  // The reservation must remain connecting if the audit cannot commit.
+  DB.raw.exec(`CREATE TRIGGER reject_force_unlock_audit
+    BEFORE INSERT ON owner_actions
+    BEGIN SELECT RAISE(ABORT, 'synthetic audit failure'); END`);
+  const r=await worker.fetch(unlock(id,{force:true,reason:'Carrier dashboard confirms call termination'}),env);
+  assert.equal(r.status,503);
+  assert.equal((await r.json()).error.code,'AUDIT_STORAGE_UNAVAILABLE');
+  assert.equal(status(DB,id),'connecting','failed audit must roll back the state change');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,0);
+  const busy=await worker.fetch(api('/v1/reservations','POST',{destination:DEST,idempotency_key:'audit-failure-busy'}),env);
+  assert.equal(busy.status,409,'failed recovery must retain the account lock');
+});
