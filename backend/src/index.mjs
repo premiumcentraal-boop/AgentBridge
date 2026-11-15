@@ -248,14 +248,22 @@ async function ownerRoute(request,url,env){
       else carrierCode=checked.code;
     }
     try{
-      const results=await runAtomic(env,[
-        env.DB.prepare("INSERT INTO owner_actions (id,reservation_id,action,prior_status,carrier_code,reason,created_at) VALUES (?,?,'force_unlock','connecting',?,?,?)")
-          .bind(crypto.randomUUID(),row.id,carrierCode,reason,now),
+      // D1 batch executes in one transaction. Update first: a stale competing
+      // recovery must not create a success-looking audit record. SQLite changes()
+      // in the next statement refers to the immediately preceding UPDATE.
+      // Never use the sequential runAtomic stand-in for this security boundary.
+      if(typeof env.DB.batch!=='function')
+        return error('AUDIT_STORAGE_UNAVAILABLE','Transactional recovery is unavailable',503);
+      const results=await env.DB.batch([
         env.DB.prepare("UPDATE reservations SET status='failed',completed_at=? WHERE id=? AND status='connecting'")
-          .bind(now,row.id)
+          .bind(now,row.id),
+        env.DB.prepare("INSERT INTO owner_actions (id,reservation_id,action,prior_status,carrier_code,reason,created_at) SELECT ?,?,'force_unlock','connecting',?,?,? WHERE changes()=1")
+          .bind(crypto.randomUUID(),row.id,carrierCode,reason,now)
       ]);
-      if(results?.[1]?.meta?.changes!==1)
+      if(results?.[0]?.meta?.changes!==1)
         return error('CANNOT_UNLOCK','Reservation state changed during unlock',409);
+      if(results?.[1]?.meta?.changes!==1)
+        return error('AUDIT_STORAGE_UNAVAILABLE','Recovery audit was not confirmed; verify database state before retrying',503);
     }catch{
       return error('AUDIT_STORAGE_UNAVAILABLE','Force unlock not applied: apply migration 0003 (owner_actions) first.',503);
     }
