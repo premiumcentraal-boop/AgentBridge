@@ -290,3 +290,30 @@ test('AFTER UPDATE trigger restoring connecting cannot commit an audited false u
     destination:DEST,idempotency_key:'reverted-transition-busy'}),env);
   assert.equal(busy.status,409,'false unlock cannot admit another reservation');
 });
+
+
+test('BEFORE INSERT RAISE(IGNORE) cannot suppress read-only recovery rollback assertion',async t=>{
+  const {env,DB,id}=await stuck(t);
+  t.mock.method(globalThis,'fetch',async()=>new Response('unavailable',{status:503}));
+  // Suppress the old deliberately invalid INSERT into reservations. This
+  // previously turned a missing audit into a committed unaudited unlock.
+  DB.raw.exec(`CREATE TRIGGER suppress_invalid_assertion
+    BEFORE INSERT ON reservations
+    WHEN NEW.account_id IS NULL
+    BEGIN SELECT RAISE(IGNORE); END`);
+  DB.raw.exec(`CREATE TRIGGER silently_drop_recovery_audit
+    BEFORE INSERT ON owner_actions
+    WHEN NEW.action='force_unlock'
+    BEGIN SELECT RAISE(IGNORE); END`);
+  const response=await worker.fetch(unlock(id,{
+    force:true,reason:'Carrier dashboard confirms call ended'
+  }),env);
+  assert.equal(response.status,503);
+  assert.equal((await response.json()).error.code,'AUDIT_STORAGE_UNAVAILABLE');
+  assert.equal(status(DB,id),'connecting','failed assertion must roll back the state transition');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,0);
+  const busy=await worker.fetch(api('/v1/reservations','POST',{
+    destination:DEST,idempotency_key:'suppressed-assertion-busy'
+  }),env);
+  assert.equal(busy.status,409,'unaudited recovery cannot release the durable lock');
+});
