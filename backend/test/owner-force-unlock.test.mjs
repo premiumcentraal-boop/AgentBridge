@@ -218,3 +218,41 @@ test('simultaneous duplicate owner recovery commits exactly one audit and one un
   assert.equal(audit[0].action,'force_unlock');
   assert.match(audit[0].reason,/operator [AB]$/);
 });
+
+test('silently ignored reservation UPDATE cannot create an orphan audit or unlock',async t=>{
+  const {env,DB,id}=await stuck(t);
+  t.mock.method(globalThis,'fetch',async()=>new Response('unavailable',{status:503}));
+  // The row still exists and is connecting, but the UPDATE is silently skipped.
+  // The following INSERT must not audit a transition that never happened.
+  DB.raw.exec(`CREATE TRIGGER ignore_force_unlock_transition
+    BEFORE UPDATE OF status ON reservations
+    WHEN NEW.status='failed' AND OLD.status='connecting'
+    BEGIN SELECT RAISE(IGNORE); END`);
+  const r=await worker.fetch(unlock(id,{force:true,reason:'Carrier dashboard confirmed termination'}),env);
+  assert.equal(r.status,503);
+  assert.equal((await r.json()).error.code,'AUDIT_STORAGE_UNAVAILABLE');
+  assert.equal(status(DB,id),'connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,0);
+  assert.equal((await worker.fetch(api('/v1/reservations','POST',{
+    destination:DEST,idempotency_key:'ignored-transition-busy'}),env)).status,409);
+});
+
+test('missing D1 change metadata never produces a successful owner recovery response',async t=>{
+  const {env,DB,id}=await stuck(t);
+  t.mock.method(globalThis,'fetch',async()=>new Response('unavailable',{status:503}));
+  const originalBatch=env.DB.batch.bind(env.DB);
+  env.DB.batch=async statements=>{
+    const results=await originalBatch(statements);
+    // Simulate a storage adapter that committed but did not return trustworthy
+    // affected-row metadata. Never claim a verified unlock on this response.
+    return results.map(result=>({meta:{}}));
+  };
+  const r=await worker.fetch(unlock(id,{force:true,reason:'Carrier dashboard confirmed termination'}),env);
+  assert.notEqual(r.status,200,'ambiguous storage metadata cannot confirm recovery');
+  assert.equal(r.status,409,'current handler conservatively rejects ambiguous update metadata');
+  assert.equal((await r.json()).error.code,'CANNOT_UNLOCK');
+  // This intentionally documents a post-commit ambiguity: the DB may already
+  // have committed, so operators must inspect durable state before retrying.
+  assert.equal(status(DB,id),'failed');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,1);
+});
