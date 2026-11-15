@@ -761,3 +761,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 ## 2026-11-15 — Concurrent owner recovery regression (draft PR #56)
 - Added a deterministic two-request barrier at the transactional D1 batch boundary to exercise simultaneous authenticated owner force-unlock requests against the same `connecting` reservation. The test requires exactly one HTTP 200, one HTTP 409 `CANNOT_UNLOCK`, one `failed` reservation and exactly one matching durable `force_unlock` audit event.
 - This closes the remaining duplicate-request test coverage item in P0 issue #57 at the source level. Exact-head CI and independent Cloudflare D1 semantics verification are still required; test added on the existing draft PR branch, not merged or deployed. No provider calls, credentials, payments, number purchases or routing activation.
+
+## 2026-11-15 — Ignored transition and ambiguous metadata recovery hardening (draft PR #56)
+- Added an offline SQLite trigger regression for a silently ignored `connecting` → `failed` UPDATE: no audit is inserted, the lock remains, and the owner endpoint fails closed. This complements the existing ignored-audit INSERT and concurrent duplicate recovery tests.
+- Added a D1 adapter fault-injection regression where a transactional batch commits successfully but omits affected-row metadata. Changed owner recovery to return 503 `AUDIT_STORAGE_UNAVAILABLE` rather than the misleading 409 stale-state classification when update metadata is ambiguous. The committed state can be `failed` with an audit; operators must inspect durable state before retrying.
+- Changes remain on draft PR #56; exact-head CI and independent Wrangler D1 validation pending. No calls, payments, provider provisioning, routing activation, merge or deployment.
