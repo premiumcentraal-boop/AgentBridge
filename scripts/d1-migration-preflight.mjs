@@ -24,8 +24,14 @@ export const MIGRATION_FILES=['0001_routing_controls.sql','0002_approval_binding
  * This plan is the guard: it only ever lists 0001 when NONE of its columns exist.
  * 0002/0003 are CREATE ... IF NOT EXISTS and safe to re-run.
  */
+function migrationPresent(state,file){
+  return ({'0001_routing_controls.sql':state.v1,'0002_approval_bindings.sql':state.v2,
+    '0003_owner_actions.sql':state.v3,'0004_inbound_call_log.sql':state.v4})[file]==='complete';
+}
 export function migrationPlan(state,applied=[]){
   if(state.unsafe)return {safe:false,apply:[],baseline:[]};
+  // A recorded migration is not proof its schema survived a restore or drift.
+  if(applied.some(f=>MIGRATION_FILES.includes(f)&&!migrationPresent(state,f)))return {safe:false,apply:[],baseline:[]};
   const done=new Set(applied);
   const present={'0001_routing_controls.sql':state.v1==='complete',
     '0002_approval_bindings.sql':state.v2==='complete','0003_owner_actions.sql':state.v3==='complete',
@@ -49,9 +55,12 @@ export function classifyMigrationState(columns,tables){
   const v2=next.length===0?'absent':next.length===V2.length?'complete':'PARTIAL';
   const v3=V3.every(x=>tab.has(x))?'complete':'absent';
   const v4=V4.every(x=>tab.has(x))?'complete':'absent';
-  const unsafe=v1==='PARTIAL'||v2==='PARTIAL'||(v2==='complete'&&v1!=='complete')||
+  // ALTER TABLE in 0001 cannot bootstrap a fresh database. Missing base tables
+  // must block the plan even if all migration-specific columns are absent.
+  const missingBase=!tab.has('accounts')||!tab.has('reservations');
+  const unsafe=missingBase||v1==='PARTIAL'||v2==='PARTIAL'||(v2==='complete'&&v1!=='complete')||
     (v3==='complete'&&v2!=='complete')||(v4==='complete'&&v1!=='complete');
-  return {v1,v2,v3,v4,unsafe,reasons:unsafe?['Schema is inconsistent. Do not apply migrations before backup and manual reconciliation.']:[]};
+  return {v1,v2,v3,v4,unsafe,reasons:unsafe?[missingBase?'Missing base accounts/reservations tables. Initialize only through an approved baseline process; do not apply additive migrations.':'Schema is inconsistent. Do not apply migrations before backup and manual reconciliation.']:[]};
 }
 function parseWranglerJson(raw){
   const trimmed=String(raw).trim();
@@ -83,6 +92,10 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
     const tracked=tables.includes('d1_migrations');
     const applied=tracked?inspect(database,mode,'SELECT name FROM d1_migrations').map(x=>x.name):[];
     const plan=migrationPlan(state,applied);
+    if(!state.unsafe&&!plan.safe){
+      state.unsafe=true;
+      state.reasons.push('Migration history claims applied objects that are absent. Stop and reconcile from backup.');
+    }
     console.log(JSON.stringify({mode,database,...state,tracked,applied,plan},null,2));
     if(state.unsafe){
       console.error('BLOCKED: partial schema; inspect D1 backup before any write.');
