@@ -714,3 +714,78 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Investigated exact-head `0f6faef` Quality gate #43615779654: 228/229 Node tests passed; the new oversized Content-Length mock asserted zero `ReadableStream.pull` calls, but WHATWG streams may prefetch one chunk at construction before application code reads the body. Secret scan passed.
 - Updated the negative regression to tolerate at most one eager prefetch, keep the mock stream open, and require cancellation. The production `readBoundedWebhookBody` remains unchanged: it rejects oversized Content-Length before requesting a reader, and fails closed.
 - Follow-up exact-head CI must pass before review; no independent local Node run, provider access, paid calls, routing changes, deployment or merge. SignalWire contract and D1 recovery remain release blockers.
+
+## 2026-11-14 — Synthetic delayed-leg billing-finality counterexample (draft review)
+- Added `backend/test/carrier-finality-snapshots.test.mjs` on an isolated branch based on draft PR #49. Two deterministic read-only provider snapshots show that the current reconciler accepts a seemingly complete A/B ledger at T0, but correctly rejects a subsequently indexed third outbound leg at T1. This is a **documented gap**, not a fix or evidence of real SignalWire indexing behavior.
+- The test intentionally records existing T0 acceptance; passing tests must **not** be interpreted as proof of billing finality or authorization to unlock paid routes. P0 issue #50 remains blocked on authoritative provider guarantees or an approved alternative.
+- Local Node checks were unavailable because the runtime could not resolve github.com; exact-head CI must be inspected before review. No real carrier requests, routing changes, merges or deployment.
+
+## 2026-11-14 — Manual-only billing finality gate (draft PR #56)
+- Independent T0/T1 synthetic carrier snapshots demonstrated that terminal-looking list/detail reads cannot prove future billing finality. Updated `backend/src/index.mjs` so both owner `mark-ended` and `force-unlock` refuse automatic `completeReconciled` on a successful-looking Voice Logs result; `CARRIER_FINALITY_UNVERIFIED` retains the connecting lock.
+- Explicit owner `force:true` plus a reviewed reason remains the existing audited escape hatch; it marks the reservation failed, preserves usage accounting, and does not claim carrier confirmation. No provider operations or routing flags changed.
+- Replaced the previous auto-complete regression with tests for denial, unchanged ledger/lock, and audited manual recovery. This is conservative until authoritative provider finality semantics and D1 recovery are independently reviewed. PR remains draft and unmerged; exact-head CI must be checked separately.
+
+## 2026-11-14 — Force-unlock validation before carrier reads (draft PR #56)
+- Verified exact-head `807c725` GitHub Actions Quality gate #43647887844 passed both checks and secret-scan; no independent local execution in this run.
+- Removed the obsolete `completeReconciled` helper, preventing accidental reuse of a now-disallowed automatic billing-finality completion path.
+- Moved `force:true` and reviewed-reason validation ahead of read-only carrier reconciliation. Authenticated but malformed/no-force requests now return `FORCE_REQUIRED` without provider API traffic; a valid force request still reconciles read-only, records carrier code, writes audit and marks the reservation failed.
+- Extended regression assertions to require zero provider reads for invalid requests and no extra lookup after rejected no-force attempt. This intentionally changes the invalid-input diagnostic to a generic dashboard-review message; no chargeable routing, provider writes, merge or deployment.
+- Exact-head CI for the new commits remains to be checked; SignalWire finality and D1 recovery remain independent blockers.
+
+### 2026-11-14 — Correct owner force-unlock reason validation (draft PR #56)
+- Exact-head Quality gate for `053add648` failed 4/209 Node tests in `backend/test/owner-force-unlock.test.mjs` (run https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/43652995391); secret scan passed. The `reason` control-character regex in `backend/src/index.mjs` contained doubled backslashes, so it interpreted the intended Unicode escapes as literal pattern characters, rejected valid human reasons, and accepted a control-character reason. This also blocked audited manual recovery.
+- Changed only the regex to the actual JS Unicode escape class `[\u0000-\u001f\u007f]`; retained force=true, length, owner token, audit and carrier checks. Existing tests cover both valid manual recovery and invalid control characters. No routing, payment, call, merge or deployment.
+- Verification of the correction: source diff inspected; exact-head CI pending. Keep PR draft until its own checks pass.
+
+
+## 2026-11-15 — Stale owner recovery audit hardening (draft PR #56)
+- Reordered force-unlock's transactional batch to conditionally update the connecting reservation before inserting its audit event. The audit `INSERT ... SELECT` is gated by SQLite `changes()=1`, preventing a stale/losing recovery from recording a false successful unlock.
+- Required D1 `batch()` for this owner recovery boundary rather than allowing the sequential test-stand-in fallback. Added synthetic stale-state and missing-batch regression cases in `backend/test/owner-force-unlock.test.mjs`.
+- This is an unmerged review-branch change, not a deployment. A successful batch must still be reviewed for real Cloudflare D1 semantics; a missing/ambiguous audit result is a 503 requiring manual database inspection. Local Node tests were unavailable due to GitHub DNS resolution; exact-head CI must be checked before approval.
+
+### 2026-11-15 — Atomic owner recovery audit fault injection (draft PR #56)
+- Added `backend/test/owner-force-unlock.test.mjs` regression using a SQLite `BEFORE INSERT` trigger that raises `ABORT` during `owner_actions` insertion. Acceptance: HTTP 503, reservation remains `connecting`, no owner audit record, and a subsequent reservation stays blocked. This extends the missing-audit-table and stale-state tests from issue #57 to cover a valid audit table rejecting writes.
+- Test-only change; no carrier calls, secrets, routing activation, deployment or merge. Verify exact-head GitHub Actions and Cloudflare D1 transactional batch semantics before manual approval. Provider billing finality remains unverified.
+
+## 2026-11-15 — Fail-closed zero-row audit assertion (draft PR #56)
+- Addressed issue #57's SQLite `RAISE(IGNORE)` counterexample: a D1 batch can commit the reservation update even if the audit INSERT silently changes zero rows. Added a third statement inside the same batch that deliberately violates `reservations.account_id NOT NULL` when the immediately preceding audit INSERT has `changes()!=1`, causing transactional rollback rather than relying on post-commit metadata.
+- Added a synthetic `BEFORE INSERT ON owner_actions ... RAISE(IGNORE)` regression requiring HTTP 503, unchanged `connecting` status, no audit event, and continued reservation lock. The existing success, stale-race and ABORT-trigger tests remain.
+- This is a draft review-branch fix; local git checkout/tests were blocked by GitHub DNS resolution. Exact-head CI and independent Cloudflare D1 batch semantics review remain required before manual merge. No calls, purchases, paid routing, secrets, deployment or merges.
+
+
+### 2026-11-15 — classify stale recovery rollback after transactional audit assertion (draft PR #56)
+- Exact-head CI for `06a2a5f` [run 43685619758](https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/43685619758) failed 1/213 tests: stale concurrent recovery returned 503 instead of expected 409; secret scan passed. The new transaction-internal assertion correctly rolled back the zero-row update, but the catch path conflated stale state with storage failure.
+- After rollback, the catch path now re-reads the connecting reservation: absent/non-connecting maps to 409 `CANNOT_UNLOCK`; still connecting or failed re-read remains 503 `AUDIT_STORAGE_UNAVAILABLE`. No fallback unlock or routing activation added. Existing stale-race and audit-failure tests cover both classifications.
+- Source correction committed on draft branch; exact-head CI and Cloudflare D1 semantics must be independently verified before merge. No carrier calls, payments, deployment or merge.
+
+## 2026-11-15 — Concurrent owner recovery regression (draft PR #56)
+- Added a deterministic two-request barrier at the transactional D1 batch boundary to exercise simultaneous authenticated owner force-unlock requests against the same `connecting` reservation. The test requires exactly one HTTP 200, one HTTP 409 `CANNOT_UNLOCK`, one `failed` reservation and exactly one matching durable `force_unlock` audit event.
+- This closes the remaining duplicate-request test coverage item in P0 issue #57 at the source level. Exact-head CI and independent Cloudflare D1 semantics verification are still required; test added on the existing draft PR branch, not merged or deployed. No provider calls, credentials, payments, number purchases or routing activation.
+
+## 2026-11-15 — Ignored transition and ambiguous metadata recovery hardening (draft PR #56)
+- Added an offline SQLite trigger regression for a silently ignored `connecting` → `failed` UPDATE: no audit is inserted, the lock remains, and the owner endpoint fails closed. This complements the existing ignored-audit INSERT and concurrent duplicate recovery tests.
+- Added a D1 adapter fault-injection regression where a transactional batch commits successfully but omits affected-row metadata. Changed owner recovery to return 503 `AUDIT_STORAGE_UNAVAILABLE` rather than the misleading 409 stale-state classification when update metadata is ambiguous. The committed state can be `failed` with an audit; operators must inspect durable state before retrying.
+- Changes remain on draft PR #56; exact-head CI and independent Wrangler D1 validation pending. No calls, payments, provider provisioning, routing activation, merge or deployment.
+
+## 2026-11-15 — Verify durable audit row inside owner recovery transaction (draft PR #56)
+- Reproduced a SQLite counterexample: an AFTER INSERT trigger deletes the new owner_actions row, but SQLite changes() still reports the INSERT as one changed row. The previous zero-row assertion could commit a failed reservation without a durable force_unlock audit.
+- Changed the transaction-internal assertion to query the exact newly generated audit UUID and deliberately violate the existing NOT NULL constraint unless precisely one matching audit row survives. Added an AFTER INSERT DELETE trigger regression requiring HTTP 503, unchanged connecting lock, no audit row and denial of another reservation.
+- Offline Python sqlite3 reproduction demonstrated both the old committed-without-audit behavior and the new rollback behavior. Repository CI and Cloudflare D1 still require independent verification. No calls, purchases, secrets, paid routing, merge or deployment.
+
+## 2026-11-15 — Fail closed when post-update trigger restores recovery lock (draft PR #56, unmerged)
+- Reproduced a SQLite counterexample: an AFTER UPDATE trigger can restore a reservation from failed to connecting while the original UPDATE reports changes()=1. The prior transaction then inserted a force-unlock audit and returned success despite the reservation still being locked.
+- The transaction-internal assertion now requires both the exact owner_actions audit ID and the final reservation status failed. A mismatch deliberately violates the NOT NULL account_id constraint and rolls back the entire D1 batch.
+- Added an offline fault-injection regression asserting HTTP 503, unchanged connecting lock, zero audit rows and a rejected second reservation.
+- Isolated Python sqlite3 reproduction succeeded; repository test and real Cloudflare D1 batch behavior require exact-head CI and independent Wrangler validation. This remains draft/unmerged. No calls, purchases, forwarding activation, payments, merges or deployments.
+
+## 2026-11-15 — Read-only transactional recovery assertion (draft PR #56)
+- Reproduced an additional SQLite audit-integrity counterexample: a BEFORE INSERT trigger on reservations with RAISE(IGNORE) can suppress the deliberately invalid assertion INSERT, while a separate trigger suppresses the owner audit, allowing the unlock to commit.
+- Replaced the triggerable invalid INSERT with a read-only SELECT CASE assertion using SQLite's documented integer-overflow behavior for abs(INT64_MIN). It checks the exact audit ID and final failed reservation state inside the same D1 batch, so failed invariants must abort the transaction without any INSERT target.
+- Added a two-trigger deterministic regression that requires HTTP 503, no audit, the connecting lock retained and subsequent reservation denied. Independent Python sqlite3 verification: normal path committed (failed state + one audit); suppressed-audit path raised integer overflow and rolled back (connecting + zero audits).
+- Full Node repository tests and real Wrangler D1 behavior were not executed in this sprint. Exact-head GitHub CI and actual D1 transactional semantics remain manual review gates. No calls, paid routing, secrets, merges or deployment.
+
+## 2026-11-15 — Verify full owner recovery audit payload transactionally (draft PR #56)
+- Followed up issue #57's SQLite audit-mutation counterexample. The read-only transaction assertion now checks the exact audit UUID, reservation ID, force_unlock action, connecting prior status, carrier code, sanitized operator reason and creation timestamp, as well as the final failed reservation state.
+- Added a deterministic AFTER INSERT trigger regression that mutates the audit action and reason; the required behavior is HTTP 503, rollback to connecting, zero owner audit rows and continued denial of a new reservation.
+- Independent Python sqlite3 check of the equivalent SQL passed: normal transaction committed with one matching audit; mutated audit raised OperationalError (integer overflow) and rolled back with connecting status and zero audits. Full Node repository tests unavailable locally because GitHub DNS resolution failed; exact-head GitHub CI and real Wrangler D1 semantics still require verification.
+- No provider calls, purchases, secrets, paid routing, merge or deployment. PR remains draft and manual approval gates remain intact.
