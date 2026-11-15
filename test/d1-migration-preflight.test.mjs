@@ -17,12 +17,12 @@ test('schema preflight discriminates absent, complete and partial without writin
 });
 test('migration plan never schedules 0001 when its columns already exist (0001 is not re-runnable)',()=>{
   const fresh=migrationPlan(classifyMigrationState([],[]),[]);
-  assert.deepEqual(fresh,{safe:true,apply:MIGRATION_FILES,baseline:[]});
-  const manual=migrationPlan(classifyMigrationState(v1,['provider_events']),[]);
+  assert.deepEqual(fresh,{safe:false,apply:[],baseline:[]});
+  const manual=migrationPlan(classifyMigrationState(v1,[...base,'provider_events']),[]);
   assert.deepEqual(manual.baseline,['0001_routing_controls.sql']);
   assert.ok(!manual.apply.includes('0001_routing_controls.sql'));
   assert.deepEqual(manual.apply,['0002_approval_bindings.sql','0003_owner_actions.sql','0004_inbound_call_log.sql']);
-  const tracked=migrationPlan(classifyMigrationState(v1,v2),['0001_routing_controls.sql','0002_approval_bindings.sql']);
+  const tracked=migrationPlan(classifyMigrationState(v1,[...base,...v2]),['0001_routing_controls.sql','0002_approval_bindings.sql']);
   assert.deepEqual(tracked,{safe:true,apply:['0003_owner_actions.sql','0004_inbound_call_log.sql'],baseline:[]});
   assert.deepEqual(migrationPlan(classifyMigrationState(v1.slice(0,2),base),[]),{safe:false,apply:[],baseline:[]});
   const sql=baselineSql(['0001_routing_controls.sql']);
