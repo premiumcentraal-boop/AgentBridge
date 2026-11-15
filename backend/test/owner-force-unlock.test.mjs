@@ -249,8 +249,8 @@ test('missing D1 change metadata never produces a successful owner recovery resp
   };
   const r=await worker.fetch(unlock(id,{force:true,reason:'Carrier dashboard confirmed termination'}),env);
   assert.notEqual(r.status,200,'ambiguous storage metadata cannot confirm recovery');
-  assert.equal(r.status,409,'current handler conservatively rejects ambiguous update metadata');
-  assert.equal((await r.json()).error.code,'CANNOT_UNLOCK');
+  assert.equal(r.status,503,'missing metadata is storage uncertainty, not a confirmed stale-state conflict');
+  assert.equal((await r.json()).error.code,'AUDIT_STORAGE_UNAVAILABLE');
   // This intentionally documents a post-commit ambiguity: the DB may already
   // have committed, so operators must inspect durable state before retrying.
   assert.equal(status(DB,id),'failed');
