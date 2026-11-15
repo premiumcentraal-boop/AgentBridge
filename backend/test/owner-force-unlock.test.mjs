@@ -270,3 +270,23 @@ test('force-unlock rolls back when an AFTER INSERT trigger removes the audit row
   const busy=await worker.fetch(api('/v1/reservations','POST',{destination:DEST,idempotency_key:'stuck-after-audit-delete'}),env);
   assert.equal(busy.status,409,'reservation lock must remain held');
 });
+
+test('AFTER UPDATE trigger restoring connecting cannot commit an audited false unlock',async t=>{
+  const {env,DB,id}=await stuck(t);
+  t.mock.method(globalThis,'fetch',async()=>new Response('unavailable',{status:503}));
+  // SQLite reports changes()=1 for the outer UPDATE even though this trigger
+  // reverses its transition. Audit existence alone is not sufficient proof.
+  DB.raw.exec(`CREATE TRIGGER revert_force_unlock_transition
+    AFTER UPDATE OF status ON reservations
+    WHEN NEW.status='failed' AND OLD.status='connecting'
+    BEGIN UPDATE reservations SET status='connecting' WHERE id=NEW.id; END`);
+  const r=await worker.fetch(unlock(id,{force:true,reason:'Carrier dashboard confirmed call ended'}),env);
+  assert.equal(r.status,503);
+  assert.equal((await r.json()).error.code,'AUDIT_STORAGE_UNAVAILABLE');
+  assert.equal(status(DB,id),'connecting','reverted transition must retain lock');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,0,
+    'audit and state transition must roll back together');
+  const busy=await worker.fetch(api('/v1/reservations','POST',{
+    destination:DEST,idempotency_key:'reverted-transition-busy'}),env);
+  assert.equal(busy.status,409,'false unlock cannot admit another reservation');
+});
