@@ -271,7 +271,16 @@ async function ownerRoute(request,url,env){
       if(results?.[1]?.meta?.changes!==1)
         return error('AUDIT_STORAGE_UNAVAILABLE','Recovery audit was not confirmed; verify database state before retrying',503);
     }catch{
-      return error('AUDIT_STORAGE_UNAVAILABLE','Force unlock not applied: apply migration 0003 (owner_actions) first.',503);
+      // A competing recovery may have changed the row before our atomic batch.
+      // Distinguish that stale-state conflict from a storage failure only after
+      // the transaction has rolled back; never report successful recovery here.
+      try{
+        const current=await connectingRow(env,row.id);
+        if(!current)return error('CANNOT_UNLOCK','Reservation state changed during unlock',409);
+      }catch{
+        // Database unavailable: retain the conservative storage-error result.
+      }
+      return error('AUDIT_STORAGE_UNAVAILABLE','Transactional recovery or audit failed; verify database state before retrying',503);
     }
     return json({id:row.id,status:'failed',force_unlocked:true,carrier_code:carrierCode,
       warning:'Unlocked without carrier proof. Check the SignalWire dashboard for any still-active call and its charges. This call still counts toward the daily cap.'});
