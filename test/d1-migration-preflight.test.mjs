@@ -58,3 +58,20 @@ test('D1 preflight blocks migration-history drift instead of silently skipping m
   const complete=classifyMigrationState(v1,[...base,'provider_events']);
   assert.equal(migrationPlan(complete,['0001_routing_controls.sql']).safe,true);
 });
+
+test('D1 preflight rejects unknown, duplicate and malformed migration history',()=>{
+  const state=classifyMigrationState(v1,[...base,...v2,'owner_actions','inbound_call_log']);
+  const valid=[...MIGRATION_FILES];
+  assert.deepEqual(migrationPlan(state,valid),{safe:true,apply:[],baseline:[]});
+  for(const history of [
+    [...valid,'0005_unrecognized.sql'],
+    [...valid,'0001_routing_controls.sql'],
+    [...valid,''],
+    [...valid,null],
+    [...valid,17],
+    '0001_routing_controls.sql',
+    null
+  ]){
+    assert.deepEqual(migrationPlan(state,history),{safe:false,apply:[],baseline:[]});
+  }
+});
