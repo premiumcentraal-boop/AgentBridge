@@ -581,3 +581,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Reviewed PR #58's committed tests against its fail-closed implementation and found a guaranteed mismatch: the old `migrationPlan(classifyMigrationState([], []))` expectation still asserted `safe:true`, while the new base-table guard correctly returns `safe:false`. Other positive fixtures omitted `accounts`/`reservations` and therefore exercised the unsafe branch instead of the intended migration-plan behavior.
 - Updated the existing regression suite to expect denial on empty databases and to include both base tables for valid migration-plan fixtures. No production migration, provider setting, paid routing, or database was modified.
 - Verification: static source/test comparison completed; full local Node tests and isolated Wrangler D1 were not run. Exact-head GitHub Actions must pass before review; PR remains draft and unmerged.
+
+
+## 2026-11-15 — Reject unrecognized D1 migration history (draft PR #58)
+- Read-only migration preflight previously ignored unknown names in `d1_migrations` and duplicate rows in the supplied history, potentially reporting an apparently clean migration state despite unrecognized or inconsistent tracking. The migration plan now fails closed for unknown, malformed and duplicate entries, without issuing D1 writes.
+- Added deterministic regression cases for valid history and unknown, duplicate, empty, null, non-string and non-array history. This deliberately blocks databases with newer migration versions until the preflight inventory is explicitly updated and reviewed; it does not rewrite or discard history.
+- Previous exact-head quality gate for `5906b74` passed (run #43764000014). These new commits require their own exact-head CI. Local Wrangler D1 behavior and actual production migration history remain unverified. No merges, deployments, calls, purchases or paid routing activation.
