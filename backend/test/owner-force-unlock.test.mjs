@@ -256,3 +256,17 @@ test('missing D1 change metadata never produces a successful owner recovery resp
   assert.equal(status(DB,id),'failed');
   assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,1);
 });
+
+
+test('force-unlock rolls back when an AFTER INSERT trigger removes the audit row',async t=>{
+  const {env,DB,id}=await stuck(t);
+  t.mock.method(globalThis,'fetch',async()=>new Response('unavailable',{status:503}));
+  DB.raw.exec(`CREATE TRIGGER erase_force_unlock_audit AFTER INSERT ON owner_actions
+    WHEN NEW.action='force_unlock' BEGIN DELETE FROM owner_actions WHERE id=NEW.id; END`);
+  const r=await worker.fetch(unlock(id,{force:true,reason:'Carrier dashboard confirmed call ended'}),env);
+  assert.equal(r.status,503);
+  assert.equal(status(DB,id),'connecting','missing durable audit must roll back unlock');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,0);
+  const busy=await worker.fetch(api('/v1/reservations','POST',{destination:DEST,idempotency_key:'stuck-after-audit-delete'}),env);
+  assert.equal(busy.status,409,'reservation lock must remain held');
+});
