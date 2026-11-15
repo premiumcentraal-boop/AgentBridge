@@ -183,3 +183,38 @@ test('silently ignored audit INSERT rolls back recovery before lock release',asy
   const busy=await worker.fetch(api('/v1/reservations','POST',{destination:DEST,idempotency_key:'ignored-audit-busy'}),env);
   assert.equal(busy.status,409,'failed audit cannot free the durable reservation lock');
 });
+
+
+test('simultaneous duplicate owner recovery commits exactly one audit and one unlock',async t=>{
+  const {env,DB,id}=await stuck(t);
+  t.mock.method(globalThis,'fetch',async()=>new Response('unavailable',{status:503}));
+  // Both requests are independently authorized. Only one may consume the
+  // connecting state, even if both read it before their transactional batch.
+  const originalBatch=env.DB.batch.bind(env.DB);
+  let waiting=[];
+  env.DB.batch=async statements=>{
+    if(waiting){
+      const ready=waiting;
+      await new Promise(resolve=>{
+        ready.push(resolve);
+        if(ready.length===2){
+          waiting=null;
+          for(const release of ready)release();
+        }
+      });
+    }
+    return originalBatch(statements);
+  };
+  const responses=await Promise.all([
+    worker.fetch(unlock(id,{force:true,reason:'Dashboard confirmed ended, operator A'}),env),
+    worker.fetch(unlock(id,{force:true,reason:'Dashboard confirmed ended, operator B'}),env)
+  ]);
+  assert.deepEqual(responses.map(r=>r.status).sort((a,b)=>a-b),[200,409]);
+  const loser=responses.find(r=>r.status===409);
+  assert.equal((await loser.json()).error.code,'CANNOT_UNLOCK');
+  assert.equal(status(DB,id),'failed');
+  const audit=DB.raw.prepare("SELECT action,reason FROM owner_actions WHERE reservation_id=?").all(id);
+  assert.equal(audit.length,1,'exactly one durable owner action');
+  assert.equal(audit[0].action,'force_unlock');
+  assert.match(audit[0].reason,/operator [AB]$/);
+});
