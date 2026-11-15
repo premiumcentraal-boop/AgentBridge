@@ -235,7 +235,7 @@ async function ownerRoute(request,url,env){
     // Validate intent before any provider lookup. Malformed/no-force requests
     // must not amplify read-only carrier API traffic or consume rate limits.
     const reason=typeof input.reason==='string'?input.reason.trim():'';
-    if(input.force!==true||reason.length<8||reason.length>500||/[\\u0000-\\u001f\\u007f]/.test(reason))
+    if(input.force!==true||reason.length<8||reason.length>500||/[\u0000-\u001f\u007f]/.test(reason))
       return error('FORCE_REQUIRED','Confirm in the SignalWire dashboard that the call ended, then retry with force=true and a reason (8-500 characters).',409);
     const row=await connectingRow(env,m[1]);
     if(!row)return error('CANNOT_UNLOCK','Reservation is not stuck in connecting',409);
