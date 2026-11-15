@@ -264,7 +264,9 @@ async function ownerRoute(request,url,env){
         // using RAISE(IGNORE) can silently suppress an INSERT without throwing.
         // Require the exact audit row to exist at transaction end, not merely
         // changes()=1: an AFTER INSERT trigger can remove it while changes()
-        // still reports one inserted row. Also verify the reservation remains\n        // failed: an AFTER UPDATE trigger can restore 'connecting' even though\n        // the original UPDATE reported one changed row. Either mismatch rolls back.
+        // still reports one inserted row. Also verify the reservation remains
+        // failed: an AFTER UPDATE trigger can restore 'connecting' even though
+        // the original UPDATE reported one changed row. Either mismatch rolls back.
         env.DB.prepare("INSERT INTO reservations (account_id) SELECT NULL WHERE (SELECT COUNT(*) FROM owner_actions WHERE id=?)!=1 OR (SELECT COUNT(*) FROM reservations WHERE id=? AND status='failed')!=1").bind(auditId,row.id)
       ]);
       if(results?.[0]?.meta?.changes!==1)
