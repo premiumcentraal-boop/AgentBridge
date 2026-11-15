@@ -123,3 +123,29 @@ test('mark-ended points the owner at force-unlock when carrier proof is unavaila
   assert.equal(r.status,409);
   assert.match((await r.json()).error.message,/force-unlock/);
 });
+
+test('stale concurrent recovery cannot leave an orphan force-unlock audit',async t=>{
+  const {env,DB,id}=await stuck(t);
+  t.mock.method(globalThis,'fetch',async()=>new Response('unavailable',{status:503}));
+  const originalBatch=env.DB.batch.bind(env.DB);
+  env.DB.batch=async statements=>{
+    // Simulate another request winning between the owner read and atomic batch.
+    DB.raw.prepare("UPDATE reservations SET status='failed' WHERE id=?").run(id);
+    return originalBatch(statements);
+  };
+  const r=await worker.fetch(unlock(id,{force:true,reason:'Confirmed terminated in carrier dashboard'}),env);
+  assert.equal(r.status,409);
+  assert.equal((await r.json()).error.code,'CANNOT_UNLOCK');
+  assert.equal(status(DB,id),'failed');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,0);
+});
+
+test('force-unlock refuses nontransactional storage before any recovery writes',async t=>{
+  const {env,DB,id}=await stuck(t);
+  t.mock.method(globalThis,'fetch',async()=>new Response('unavailable',{status:503}));
+  env.DB.batch=undefined;
+  const r=await worker.fetch(unlock(id,{force:true,reason:'Confirmed terminated in carrier dashboard'}),env);
+  assert.equal(r.status,503);
+  assert.equal(status(DB,id),'connecting');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,0);
+});
