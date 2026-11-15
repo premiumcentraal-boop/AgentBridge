@@ -267,7 +267,7 @@ async function ownerRoute(request,url,env){
         env.DB.prepare("INSERT INTO reservations (account_id) SELECT NULL WHERE changes()!=1")
       ]);
       if(results?.[0]?.meta?.changes!==1)
-        return error('CANNOT_UNLOCK','Reservation state changed during unlock',409);
+        return error('AUDIT_STORAGE_UNAVAILABLE','Recovery result is ambiguous; inspect durable reservation and audit state before retrying',503);
       if(results?.[1]?.meta?.changes!==1)
         return error('AUDIT_STORAGE_UNAVAILABLE','Recovery audit was not confirmed; verify database state before retrying',503);
     }catch{
