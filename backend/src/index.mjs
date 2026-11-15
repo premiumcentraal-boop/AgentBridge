@@ -254,17 +254,18 @@ async function ownerRoute(request,url,env){
       // Never use the sequential runAtomic stand-in for this security boundary.
       if(typeof env.DB.batch!=='function')
         return error('AUDIT_STORAGE_UNAVAILABLE','Transactional recovery is unavailable',503);
+      const auditId=crypto.randomUUID();
       const results=await env.DB.batch([
         env.DB.prepare("UPDATE reservations SET status='failed',completed_at=? WHERE id=? AND status='connecting'")
           .bind(now,row.id),
         env.DB.prepare("INSERT INTO owner_actions (id,reservation_id,action,prior_status,carrier_code,reason,created_at) SELECT ?,?,'force_unlock','connecting',?,?,? WHERE changes()=1")
-          .bind(crypto.randomUUID(),row.id,carrierCode,reason,now),
+          .bind(auditId,row.id,carrierCode,reason,now),
         // Assert audit insertion succeeded *inside* the transaction. A trigger
         // using RAISE(IGNORE) can silently suppress an INSERT without throwing.
-        // A zero-row audit makes this INSERT deliberately violate the NOT NULL
-        // account_id constraint, forcing D1 batch to roll back the unlock.
-        // The assertion writes nothing when the preceding audit inserted one row.
-        env.DB.prepare("INSERT INTO reservations (account_id) SELECT NULL WHERE changes()!=1")
+        // Require the exact audit row to exist at transaction end, not merely
+        // changes()=1: an AFTER INSERT trigger can remove it while changes()
+        // still reports one inserted row. A missing row forces rollback.
+        env.DB.prepare("INSERT INTO reservations (account_id) SELECT NULL WHERE (SELECT COUNT(*) FROM owner_actions WHERE id=?)!=1").bind(auditId)
       ]);
       if(results?.[0]?.meta?.changes!==1)
         return error('AUDIT_STORAGE_UNAVAILABLE','Recovery result is ambiguous; inspect durable reservation and audit state before retrying',503);
