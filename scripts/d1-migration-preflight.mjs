@@ -31,7 +31,7 @@ function migrationPresent(state,file){
 export function migrationPlan(state,applied=[]){
   if(state.unsafe)return {safe:false,apply:[],baseline:[]};
   // A recorded migration is not proof its schema survived a restore or drift.
-  if(applied.some(f=>MIGRATION_FILES.includes(f)&&!migrationPresent(state,f)))return {safe:false,apply:[],baseline:[]};
+  if(!Array.isArray(applied)||applied.some(f=>typeof f!=='string'||!MIGRATION_FILES.includes(f)||!migrationPresent(state,f))||new Set(applied).size!==applied.length)return {safe:false,apply:[],baseline:[]};
   const done=new Set(applied);
   const present={'0001_routing_controls.sql':state.v1==='complete',
     '0002_approval_bindings.sql':state.v2==='complete','0003_owner_actions.sql':state.v3==='complete',
