@@ -777,3 +777,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - The transaction-internal assertion now requires both the exact owner_actions audit ID and the final reservation status failed. A mismatch deliberately violates the NOT NULL account_id constraint and rolls back the entire D1 batch.
 - Added an offline fault-injection regression asserting HTTP 503, unchanged connecting lock, zero audit rows and a rejected second reservation.
 - Isolated Python sqlite3 reproduction succeeded; repository test and real Cloudflare D1 batch behavior require exact-head CI and independent Wrangler validation. This remains draft/unmerged. No calls, purchases, forwarding activation, payments, merges or deployments.
+
+## 2026-11-15 — Read-only transactional recovery assertion (draft PR #56)
+- Reproduced an additional SQLite audit-integrity counterexample: a BEFORE INSERT trigger on reservations with RAISE(IGNORE) can suppress the deliberately invalid assertion INSERT, while a separate trigger suppresses the owner audit, allowing the unlock to commit.
+- Replaced the triggerable invalid INSERT with a read-only SELECT CASE assertion using SQLite's documented integer-overflow behavior for abs(INT64_MIN). It checks the exact audit ID and final failed reservation state inside the same D1 batch, so failed invariants must abort the transaction without any INSERT target.
+- Added a two-trigger deterministic regression that requires HTTP 503, no audit, the connecting lock retained and subsequent reservation denied. Independent Python sqlite3 verification: normal path committed (failed state + one audit); suppressed-audit path raised integer overflow and rolled back (connecting + zero audits).
+- Full Node repository tests and real Wrangler D1 behavior were not executed in this sprint. Exact-head GitHub CI and actual D1 transactional semantics remain manual review gates. No calls, paid routing, secrets, merges or deployment.
