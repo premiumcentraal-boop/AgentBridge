@@ -602,3 +602,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Identified a fail-open schema-integrity gap: reservation account_id and idempotency_key columns could exist without their required composite UNIQUE constraint, permitting duplicate reservation idempotency keys within one account. This is an offline schema counterexample, not proof of production exploitation.
 - Added read-only index_list/index_xinfo inspection and fail-closed exact ordered-key validation, rejecting absent, nonunique, partial, expression-based, reordered or extra-key indexes. Added deterministic negative and positive Node regression fixtures. No schema writes, provider actions, calls or routing activation.
 - Exact-head CI and isolated Wrangler D1 execution remain mandatory verification gates; changes are draft, unmerged and undeployed. Existing manual backup and approval requirements remain intact.
+
+## 2026-11-16 — D1 uniqueness regression CI repair (draft PR #58)
+- Inspected exact-head Quality gate #43798253610 for `50578f8`: secret-scan passed; checks failed with 219/220 tests passing. The new uniqueness regression used overescaped parentheses in its JavaScript regular expression and rejected the correct fail-closed error message.
+- Corrected the test assertion only, retaining the existing index validation and all negative test scenarios. Source commit `c1aa6a63b8b4504365b08f6902f6decd08ac55a2`.
+- Full exact-head CI on this follow-up commit and isolated Wrangler D1 behavior are pending verification; no local repository test execution, carrier actions, merge, or deployment.
