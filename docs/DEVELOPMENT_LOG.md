@@ -591,3 +591,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 ## 2026-11-15 — D1 critical schema constraints inspection (draft PR #58)
 - Extended the read-only migration preflight beyond table/column names: inspect reservation primary key and required NOT NULL fields, and when owner_actions exists inspect required columns, NOT NULL/primary-key properties and its RESTRICT foreign key to reservations. Fail closed on mismatches, including restored or manually-created lookalike tables.
 - Added deterministic regression fixtures for valid constraints, nullable account ownership, missing owner audit reason and weakened/missing foreign keys. This is a partial structural gate: unique indexes, CHECK constraints, exact column affinities and actual Wrangler D1 semantics remain unverified and require separate review. No migration applied, no carrier actions, no merge or deployment.
+
+
+## 2026-11-16 — Verify D1 reservation ownership foreign key (draft PR #58)
+- Source review found the structural preflight checked owner_actions → reservations but not reservations.account_id → accounts.id. A lookalike reservations table with no ownership foreign key could pass the prior critical-schema check, undermining the account-isolation assumptions in the data model.
+- Added read-only `PRAGMA foreign_key_list(reservations)` inspection and fail-closed verification of the expected account_id → accounts.id ON DELETE RESTRICT relation; added negative regression fixtures for missing, CASCADE and wrong-target ownership constraints, plus a baseline-only case.
+- This does not alter database schema or execute migrations. The preflight still needs unique-index, CHECK-constraint, affinity and isolated Wrangler D1 verification. Exact-head CI must pass before manual review; PR remains draft, unmerged and undeployed. No calls, carrier resources, payment processing or paid routing were enabled.
