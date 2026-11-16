@@ -652,3 +652,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - GitHub Actions run #43959804046 failed at `npm run check` because the newly added preflight drift guard contained literal escaped newline sequences inside JavaScript source. The Node parser raised `SyntaxError: Invalid or unexpected token` before tests could run; secret scan passed.
 - Replaced those literal sequences with real source line breaks in `scripts/d1-migration-preflight.mjs` without changing the intended schema/history drift comparisons. Commit `3557972005c2944bb6f0088e3db18d13fc36342d`.
 - Exact-head CI after the correction remains to be confirmed. Actual pinned Wrangler D1 compatibility remains unverified; PR stays draft, unmerged, routing off, no calls or deployment.
+
+## 2026-11-16 — Repair CLI drift fixture syntax after exact-head CI failure (PR #58, draft)
+- GitHub Actions quality gate #43969925475 at `432b492a` failed during `npm test`: 237/238 test entries passed, but `test/d1-migration-cli.test.mjs` failed module parsing at line 57 due to literal escaped newline tokens in the scenario array. The previous production-script syntax correction was insufficient; `npm run check` did not include this test file.
+- Replaced the unintended literal escaped newlines in the fake-Wrangler fixture and scenario array with actual source line breaks, preserving the intended schema-drift and migration-history-drift scenarios. No production routing, database schema, carrier settings or secrets changed.
+- Verification: diagnosis from Actions job logs; test correction committed as `c63475b`. Exact-head CI and disposable local Wrangler D1 remain required before manual review. PR stays draft and unmerged; no deployment or paid calls.
