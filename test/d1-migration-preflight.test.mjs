@@ -75,3 +75,22 @@ test('D1 preflight rejects unknown, duplicate and malformed migration history',(
     assert.deepEqual(migrationPlan(state,history),{safe:false,apply:[],baseline:[]});
   }
 });
+
+
+test('critical schema constraints fail closed on structurally counterfeit tables',async()=>{
+  const {validateCriticalSchema}=await import('../scripts/d1-migration-preflight.mjs');
+  const names=['id','account_id','destination','idempotency_key','status','created_at','expires_at'];
+  const reservation=names.map(name=>({name,pk:name==='id'?1:0,notnull:name==='id'?0:1}));
+  const ownerNames=['id','reservation_id','action','prior_status','carrier_code','reason','created_at'];
+  const owner=ownerNames.map(name=>({name,pk:name==='id'?1:0,notnull:name==='id'?0:1}));
+  const fk=[{from:'reservation_id',table:'reservations',to:'id',on_delete:'RESTRICT'}];
+  assert.deepEqual(validateCriticalSchema(reservation,owner,fk,true),[]);
+  assert.deepEqual(validateCriticalSchema(reservation,[],[],false),[]);
+  const nullable=reservation.map(x=>({...x,notnull:x.name==='account_id'?0:x.notnull}));
+  assert.match(validateCriticalSchema(nullable,owner,fk,true).join(' '),/reservations.account_id constraint mismatch/);
+  const missingOwner=owner.filter(x=>x.name!=='reason');
+  assert.match(validateCriticalSchema(reservation,missingOwner,fk,true).join(' '),/owner_actions.reason missing/);
+  const weakenedFk=[{...fk[0],on_delete:'CASCADE'}];
+  assert.match(validateCriticalSchema(reservation,owner,weakenedFk,true).join(' '),/foreign key missing or weakened/);
+  assert.match(validateCriticalSchema(reservation,owner,[],true).join(' '),/foreign key missing/);
+});
