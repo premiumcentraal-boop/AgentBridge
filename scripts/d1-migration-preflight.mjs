@@ -90,6 +90,21 @@ export function validateCriticalSchema(reservationColumns,ownerColumns,ownerFore
   }
   return failures;
 }
+// Verify the exact account-scoped idempotency key, not merely the column names.
+// Partial, expression-based, reversed, or non-unique indexes do not establish
+// the database invariant relied upon by replay-safe reservation creation.
+export function validateIdempotencyIndex(indexList,indexDetails){
+  if(!Array.isArray(indexList)||!Array.isArray(indexDetails))return ['reservation idempotency index metadata unavailable'];
+  const valid=indexList.some(index=>{
+    if(Number(index.unique)!==1||Number(index.partial)!==0||typeof index.name!=='string')return false;
+    const columns=indexDetails.find(entry=>entry.name===index.name)?.columns;
+    if(!Array.isArray(columns))return false;
+    const keys=columns.filter(column=>Number(column.key)===1).sort((a,b)=>Number(a.seqno)-Number(b.seqno));
+    return keys.length===2&&keys.every((column,i)=>Number.isInteger(Number(column.cid))&&Number(column.cid)>=0&&
+      column.name===['account_id','idempotency_key'][i]&&Number(column.seqno)===i);
+  });
+  return valid?[]:['reservations UNIQUE(account_id,idempotency_key) missing or weakened'];
+}
 function parseWranglerJson(raw){
   const trimmed=String(raw).trim();
   let parsed;
@@ -126,6 +141,11 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
       tables.includes('owner_actions'),
       inspect(database,mode,'PRAGMA foreign_key_list(reservations)')
     );
+    const indexes=inspect(database,mode,'PRAGMA index_list(reservations)');
+    const indexDetails=indexes.filter(index=>Number(index.unique)===1&&Number(index.partial)===0&&typeof index.name==='string')
+      .map(index=>({name:index.name,columns:inspect(database,mode,
+        "SELECT seqno, cid, name, \"key\" FROM pragma_index_xinfo('"+index.name.replaceAll("'","''")+"')")}));
+    structuralFailures.push(...validateIdempotencyIndex(indexes,indexDetails));
     if(structuralFailures.length){state.unsafe=true;state.reasons.push(...structuralFailures);}
     const plan=migrationPlan(state,applied);
     if(!state.unsafe&&!plan.safe){
