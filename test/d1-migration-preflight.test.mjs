@@ -127,3 +127,34 @@ test('idempotency uniqueness preflight rejects missing, partial, reversed and ex
   assert.deepEqual(validateIdempotencyIndex([{name:'wrong',unique:0,partial:0},index],
     [{name:'wrong',columns:keys},...details(keys)]),[]);
 });
+
+
+test('real SQLite catalog rejects weakened account-scoped uniqueness and foreign keys',async()=>{
+  const {spawnSync}=await import('node:child_process');
+  const {validateCriticalSchema,validateIdempotencyIndex}=await import('../scripts/d1-migration-preflight.mjs');
+  const python=[
+    'import json,sqlite3,sys',
+    'db=sqlite3.connect(":memory:")',
+    'db.execute("PRAGMA foreign_keys=ON")',
+    'db.execute("CREATE TABLE accounts(id TEXT PRIMARY KEY)")',
+    'fk=" REFERENCES accounts(id) ON DELETE RESTRICT" if sys.argv[1]!="missing-fk" else ""',
+    'uq=", UNIQUE(account_id,idempotency_key)" if sys.argv[1]!="missing-unique" else ""',
+    'db.execute("CREATE TABLE reservations(id TEXT PRIMARY KEY, account_id TEXT NOT NULL"+fk+", destination TEXT NOT NULL, idempotency_key TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL"+uq+")")',
+    'q=lambda s:[dict(zip([x[0] for x in db.execute(s).description],r)) for r in db.execute(s)]',
+    'indexes=q("PRAGMA index_list(reservations)")',
+    'details=[{"name":i["name"],"columns":q("PRAGMA index_xinfo(\'"+i["name"].replace("\'","\'\'")+"\')")} for i in indexes if i["unique"] and not i["partial"]]',
+    'print(json.dumps({"columns":q("PRAGMA table_info(reservations)"),"fk":q("PRAGMA foreign_key_list(reservations)"),"indexes":indexes,"details":details}))'
+  ].join('\n');
+  for(const [fixture,expectedValid] of [['valid',true],['missing-unique',false],['missing-fk',false]]){
+    const run=spawnSync('python3',['-c',python,fixture],{encoding:'utf8',timeout:10000});
+    assert.equal(run.status,0,fixture+': '+run.stderr);
+    const data=JSON.parse(run.stdout);
+    const failures=[
+      ...validateCriticalSchema(data.columns,[],[],false,data.fk),
+      ...validateIdempotencyIndex(data.indexes,data.details)
+    ];
+    assert.equal(failures.length===0,expectedValid,fixture+': '+failures.join('; '));
+    if(fixture==='missing-unique')assert.match(failures.join(' '),/UNIQUE\(account_id,idempotency_key\)/);
+    if(fixture==='missing-fk')assert.match(failures.join(' '),/account ownership foreign key/);
+  }
+});
