@@ -9,6 +9,7 @@ import {
   ContactMemoryDialog,
 } from "./conversations.jsx";
 import "./provider-live.css";
+import { TranscriptionSettings, TranscribeRecording, AgentReportedCalls, SavedTranscript } from './launch-settings.jsx';
 
 export async function providerRequest(path, options = {}) {
   const response = await fetch("/api/studio/" + path, {
@@ -823,6 +824,9 @@ export function LiveWorkspace({
     providerRequest("live/calls/" + selectedCall + "/recordings")
       .then((r) => alive && setRecordings(r.recordings))
       .catch((e) => alive && setError(e.message));
+    providerRequest('transcription/calls/' + selectedCall)
+      .then(r=>alive&&setTranscripts(r.transcripts))
+      .catch(e=>alive&&setError(e.message));
     return () => {
       alive = false;
     };
@@ -987,6 +991,7 @@ export function LiveWorkspace({
     return (
       <div className="live-workspace">
         <SignalWireSettings onModeChange={onModeChange} />
+        <TranscriptionSettings />
         {account && (
           <AccountProfile
             account={account}
@@ -1283,6 +1288,7 @@ export function LiveWorkspace({
                     />
                   )}
                   <div className="provider-actions">
+                    {r.status === 'completed' && <TranscribeRecording recording={r} onSaved={value=>{setTranscripts(old=>[value,...old.filter(t=>t.id!==value.id)]);refresh();}}/>}
                     {["in-progress", "paused"].includes(r.status) && (
                       <>
                         <Btn
@@ -1364,7 +1370,7 @@ export function LiveWorkspace({
                         const result = await providerRequest(
                           "live/calls/" + details.id + "/transcripts",
                         );
-                        setTranscripts(result.transcripts);
+                        setTranscripts(old=>[...old.filter(t=>t.source==='xai'),...result.transcripts]);
                       })
                     }
                   />
@@ -1376,9 +1382,7 @@ export function LiveWorkspace({
                       recordings.some((r) => r.id === t.recording_id),
                   )
                   .map((t) => (
-                    <p className="live-transcript" key={t.id}>
-                      {t.text}
-                    </p>
+                    <SavedTranscript key={t.id} transcript={t} onDeleted={()=>{setTranscripts(old=>old.filter(item=>item.id!==t.id));refresh();}}/>
                   ))}
                 {!transcripts.some(
                   (t) =>
@@ -1386,8 +1390,7 @@ export function LiveWorkspace({
                     recordings.some((r) => r.id === t.recording_id),
                 ) && (
                   <p className="conversation-help">
-                    No transcript loaded. This retrieves existing provider
-                    transcripts; live transcription is not connected.
+                    No saved transcript. Choose Transcribe on a completed recording, or load an existing provider transcript.
                   </p>
                 )}
               </section>
@@ -1432,6 +1435,7 @@ export function LiveWorkspace({
                 onOpen={openCall}
                 initialFilter={initialHistoryFilter}
               />
+              <AgentReportedCalls />
             </>
           )}
         </>

@@ -22,6 +22,20 @@
       "when": 1794614400000,
       "tag": "0002_public_email_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1794787200000,
+      "tag": "0003_agent_connections",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1794787200001,
+      "tag": "0004_saved_transcription",
+      "breakpoints": true
     }
   ]
 }

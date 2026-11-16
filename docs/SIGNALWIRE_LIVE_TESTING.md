@@ -28,8 +28,7 @@ credential verification, loading the studio, or refreshing provider status.
    and completed states returned by SignalWire; it does not claim connection
    before the provider does.
 
-The existing one-tester registration restriction remains. This is private
-development testing, not open customer onboarding or a resale billing service.
+Public Node/Railway signup is available when email verification is configured; the private Sites preview retains one verified tester. Carrier billing remains with the customer’s provider project.
 
 ## Implemented provider paths
 
@@ -45,6 +44,7 @@ development testing, not open customer onboarding or a resale billing service.
   and deletion. Recordings stay in the customer's SignalWire project. No
   automatic retention/deletion schedule is claimed.
 - Retrieval of existing provider-generated transcripts for managed recordings.
+- Explicit saved-audio transcription using a separately encrypted xAI key; see [Saved transcription](SAVED_TRANSCRIPTION.md).
 
 **Live utterance transcription, browser listen-in, and adding a third human to
 an existing call are not enabled.** SignalWire live transcription uses SWML

@@ -1,4 +1,5 @@
 import { deny, emptyWorkspace, publicAccount } from "./model.mjs";
+import {agentReturnPath} from '../../shared/return-path.mjs';
 import {
   authLimit,
   digest,
@@ -27,7 +28,7 @@ export function createEmailAuth({
   async function requestEmail(input, purpose, clientAddress) {
     onlyFields(
       input,
-      purpose === "verify" ? ["email", "name", "agent_name"] : ["email"],
+      purpose === "verify" ? ["email", "name", "agent_name", "return_to"] : ["email"],
     );
     await authLimit(database, "email-ip:" + (clientAddress || "unknown"));
     // This independent ceiling also protects a deployment with misconfigured proxy trust.
@@ -81,6 +82,7 @@ export function createEmailAuth({
             ? JSON.stringify({
                 name: account?.name || input.name.trim(),
                 agent_name: account?.agent_name || input.agent_name.trim(),
+                return_to: agentReturnPath(input.return_to),
               })
             : null,
           now + (purpose === "verify" ? 60 : 30) * 60_000,
@@ -94,6 +96,7 @@ export function createEmailAuth({
         email,
         token,
         requestId: crypto.randomUUID(),
+        returnTo: purpose === 'verify' ? agentReturnPath(input.return_to) : undefined,
       });
     }
     // Existing/nonexistent addresses get the same status and response shape.
@@ -172,6 +175,7 @@ export function createEmailAuth({
       sql: `UPDATE ab_email_tokens SET consumed_by=? WHERE email=? AND consumed_by IS NULL AND ${guard}`,
       params: [claim, token.email, ...args],
     });
+    if(purpose==='reset') statements.push({sql:`UPDATE ab_agent_grants SET revoked_at=? WHERE account_id=? AND revoked_at IS NULL AND ${guard}`,params:[now,accountId,...args]});
     try {
       await database.batch(statements);
     } catch (error) {
@@ -208,7 +212,7 @@ export function createEmailAuth({
         authenticated: true,
         sandbox: true,
         account: publicAccount(account),
-        redirect: "/studio/",
+        redirect: agentReturnPath(JSON.parse(token.profile || '{}').return_to),
       },
       await session(account),
     );

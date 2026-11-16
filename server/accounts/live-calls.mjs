@@ -177,6 +177,7 @@ export async function startTestCall({
     Url: script.url,
     Method: "POST",
     Timeout: 30,
+    TimeLimit: 300,
     Record: false,
   });
   if (!UUID.test(call.sid || "")) throw new ProviderError(502, true);

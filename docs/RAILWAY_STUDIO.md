@@ -113,7 +113,10 @@ control and consented recording use the real provider API. See
 [SignalWire setup and verification limits](SIGNALWIRE_LIVE_TESTING.md).
 
 Signup does not start a paid service, buy a number, activate a route or place a
-call. SignalWire bills each customer's own project. Live transcription, browser
+call. SignalWire bills each customer's own project. Saved recording transcription
+uses an optional customer xAI key; see [Saved transcription](SAVED_TRANSCRIPTION.md).
+The account-aware [Grok connector](GROK_CONNECTOR.md) uses OAuth at `/mcp`.
+Live transcription, browser
 listen-in and joining an existing call as a third participant still need a public
 media/webhook service; those controls remain unavailable. The separate legacy
 `backend/` Worker is not deployed by this Docker service.
@@ -150,3 +153,5 @@ migration, isolated accounts, token reuse/races, password recovery and rendered
 forms without delivering real emails or making paid carrier requests. Actual DNS,
 Resend acceptance/inbox delivery and Railway rollout require the deployment's
 credentials and an end-to-end test on the custom domain.
+
+The full release and backup gates are in [Release readiness](RELEASE_READINESS.md) and [Operations](RELEASE_OPERATIONS.md).

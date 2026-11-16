@@ -1,6 +1,7 @@
 # Start closed. Include the web build sources and the Node studio runtime.
 **
 !package.json
+!package-lock.json
 !index.html
 !favicon.svg
 !_headers
@@ -10,11 +11,15 @@
 scripts/**
 !scripts/build-site.mjs
 !scripts/import-studio-number.mjs
+!scripts/backup-accounts.mjs
 !shared/
 shared/**
 !shared/call-plans.mjs
 !shared/numbers.mjs
 !shared/conversations.mjs
+!shared/phone.mjs
+!shared/release.mjs
+!shared/return-path.mjs
 !web/
 web/**
 !web/package.json
@@ -49,6 +54,8 @@ design/**
 !server/
 server/**
 !server/*.mjs
+!server/agents/
+!server/agents/*.mjs
 !server/accounts/
 !server/accounts/*.mjs
 !server/accounts/migrations/

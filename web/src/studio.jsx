@@ -36,6 +36,8 @@ import {
   finishDemoConversation,
   recoverSampleTranscript,
 } from "../../shared/conversations.mjs";
+import { AgentsStudio } from "./agents.jsx";
+import { TranscriptionSettings, AgentReportedCalls, SetupChecklist } from './launch-settings.jsx';
 import { SignalWireSettings, LiveWorkspace } from "./provider-live.jsx";
 import {
   AccountAuth,
@@ -1218,7 +1220,10 @@ export function Studio({ mode, setMode, isDemo }) {
           </div>
         )}
         <main className="workspace-main" id="main" tabIndex={-1}>
-          {liveMode && page !== "design" ? (
+          {page==='overview' && session.account && <SetupChecklist/>}
+          {page === "agents" ? (
+            <AgentsStudio api={api} isDemo={isDemo} />
+          ) : liveMode && page !== "design" ? (
             <LiveWorkspace
               initialHistoryFilter={current === "memory" ? "recording" : "all"}
               page={page}
@@ -1253,6 +1258,7 @@ export function Studio({ mode, setMode, isDemo }) {
               }}
             />
           ) : ["calls", "memory", "call"].includes(page) ? (
+            <>
             <CallExtensions
               page={page}
               snapshot={snapshot}
@@ -1280,6 +1286,8 @@ export function Studio({ mode, setMode, isDemo }) {
               onMemory={setMemoryContact}
               initialHistoryFilter={current === "memory" ? "recording" : "all"}
             />
+            {session.account && <AgentReportedCalls/>}
+            </>
           ) : ["overview", "numbers", "connections", "routes"].includes(
               page,
             ) ? (
@@ -1705,6 +1713,7 @@ function Settings({
   return (
     <>
       {providerSettings && <SignalWireSettings />}
+      {providerSettings && <TranscriptionSettings />}
       {account && <AccountProfile account={account} onSave={saveAccount} />}
       <PageHead eyebrow="" title="Settings" description="" />
       <div className="studio-data-source">

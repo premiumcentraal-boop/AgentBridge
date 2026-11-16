@@ -4,6 +4,9 @@ import { manageProvider, providerSummary, publicProviderError } from './provider
 import { liveWorkspaceRequest } from './live-workspace.mjs';
 import { authLimit, digest, normalizeEmail as email, onlyFields as only, randomToken, validEmail, validName as named } from './auth-primitives.mjs';
 import { createEmailAuth } from './email-auth.mjs';
+import { agentWorkspaceRequest } from '../agents/api.mjs';
+import { transcriptionRequest } from './transcription.mjs';
+import { exportAccount, deleteAccount } from './lifecycle.mjs';
 
 const cookieToken = request => request.headers.get('cookie')?.split(';').map(value => value.trim()).find(value => value.startsWith('ab_customer='))?.slice('ab_customer='.length);
 const privateHeaders = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
@@ -21,7 +24,7 @@ export async function boundedAccountBody(request) {
   } catch (error) { if (error instanceof AccountError) throw error; deny(400, 'INVALID_BODY', 'Send a valid JSON object.'); }
   finally { reader.releaseLock(); }
 }
-export function createAccountService({ database, testerEmail, publicOrigin, passwords, platformIdentity = false, signupInviteHash, vaultKey, fetcher, signupMode, mailer }) {
+export function createAccountService({ database, testerEmail, publicOrigin, passwords, platformIdentity = false, signupInviteHash, vaultKey, fetcher, signupMode, mailer, agentExternal = false, callingCountries = ['US'] }) {
   // The private Sites identity flow stays private; public email accounts use the
   // Node/Railway adapter and never trust browser-supplied identity headers.
   const publicSignup = signupMode === 'public' && !platformIdentity;
@@ -119,6 +122,19 @@ export function createAccountService({ database, testerEmail, publicOrigin, pass
           return json(200, { ok: true, redirect: platformIdentity ? '/signout-with-chatgpt?return_to=%2Fsignin%2F' : '/signin/' }, { 'Set-Cookie': cookie('', 0) });
         }
         if (!current) deny(401, 'UNAUTHORIZED', 'Sign in to your AgentBridge account.');
+        if(authPath && route==='export' && verb==='GET')return json(200,await exportAccount(database,current),{'Content-Disposition':'attachment; filename="agentbridge-account.json"'});
+        if(authPath && route==='account' && verb==='DELETE') {
+          const result=await deleteAccount({database,account:current,input:await boundedAccountBody(request),passwords,platformIdentity});
+          return json(200,result,{'Set-Cookie':cookie('',0)});
+        }
+        if (studioPath && route.startsWith('transcription/')) {
+          const result = await transcriptionRequest({database,account:current,path:route,method:verb,readBody:()=>boundedAccountBody(request),vaultKey,fetcher});
+          if(result)return json(result.status,result.body);
+        }
+        if (studioPath && route.startsWith('agents')) {
+          const result = await agentWorkspaceRequest({ database, account: current, path: route, method: verb, readBody: () => boundedAccountBody(request), origin: publicOrigin || new URL(request.url).origin, external: agentExternal && !platformIdentity, allowedCountries: callingCountries, vaultKey });
+          if (result) return json(result.status, result.body);
+        }
         if(studioPath&&(route.startsWith('provider/')||route.startsWith('live/'))) {
           const args={database,account:current,path:route,method:verb,readBody:()=>boundedAccountBody(request),vaultKey,fetcher};
           const result=route.startsWith('provider/')?await manageProvider(args):await liveWorkspaceRequest({...args,path:route.slice(5)});

@@ -8,6 +8,8 @@ import {
 } from "@astryxdesign/core/SegmentedControl";
 export { Button, Card, Badge, SegmentedControl, SegmentedControlItem };
 const paths = {
+  agents:
+    "M9 21H3v-3a5 5 0 0 1 10 0M11 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M18 8v10M13 13h10",
   numbers:
     "M5 3h14v18H5zM9 6h6M9 18h6M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01",
   connections:
