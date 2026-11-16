@@ -633,3 +633,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Exact-head Quality gate #43902400499 at `c1d302a` failed: 226/227 Node tests passed, with `test/d1-migration-cli.test.mjs:58` throwing `Unexpected non-whitespace character after JSON`. The fixture writes one JSON-encoded SQL statement per line, but the test split on a literal backslash-n instead of a newline before parsing.
 - Corrected the test log parser to split on actual newlines. No production preflight logic, carrier configuration, routing policy or database schema changed.
 - Exact-head CI for this correction and disposable Wrangler D1 verification remain pending. The branch remains draft, unmerged and undeployed; no calls, purchases, payments or routing activation.
+
+## 2026-11-16 — Reject ambiguous Wrangler JSON envelopes (draft PR #58; pending review)
+- Tightened read-only migration preflight to require exactly one Wrangler JSON result with explicit success=true and a results array; previously extra results were silently ignored and missing success was treated as success.
+- Extended fake-Wrangler CLI regression with missing-success, multiple-result and object-response fixtures, all expected to fail closed without SQL writes or migration recommendations.
+- Exact-head CI and disposable local Wrangler D1 compatibility remain unverified for this commit. No routing activation, carrier calls, purchases, payments, merges or deployments.
