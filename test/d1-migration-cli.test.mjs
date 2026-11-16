@@ -53,8 +53,8 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
       ['missing-success',1,/Unexpected D1 query response/],
       ['extra-results',1,/Unexpected D1 query response/],
       ['object-response',1,/Unexpected D1 query response/],
-      ['unknown-history',1,/Migration history claims applied objects/],
-      ['duplicate-history',1,/Migration history claims applied objects/]
+      ['unknown-history',1,/BLOCKED: partial schema/],
+      ['duplicate-history',1,/BLOCKED: partial schema/]
     ]){
       const log=join(dir,scenario+'.queries');
       const run=spawnSync(process.execPath,[join(dir,'scripts','d1-migration-preflight.mjs'),'--local','disposable'],{
@@ -63,6 +63,13 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
       });
       assert.equal(run.status,status,scenario+': '+run.stderr);
       assert.match(run.stderr,pattern,scenario);
+      if(['unknown-history','duplicate-history'].includes(scenario)){
+        const report=JSON.parse(run.stdout);
+        assert.equal(report.unsafe,true,scenario+': history must be unsafe');
+        assert.equal(report.plan.safe,false,scenario+': no migration plan');
+        assert.deepEqual(report.plan.apply,[],scenario+': no apply recommendation');
+        assert.match(report.reasons.join(' '),/Migration history claims applied objects/,scenario);
+      }
       const queries=readFileSync(log,'utf8').trim().split('\n').map(JSON.parse);
       assert.ok(queries.every(sql=>/^(PRAGMA |SELECT )/i.test(sql)),scenario+': no writes');
       if(scenario==='missing-unique')assert.ok(!queries.includes('SELECT name FROM d1_migrations'),'must not trust invalid tracker');
