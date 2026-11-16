@@ -617,3 +617,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Issue #59 identified that the preflight trusted migration history rows without checking `d1_migrations` table constraints. Added read-only tracker column and unique-index introspection before reading any tracker rows, requiring the Wrangler-style id primary key, name TEXT and unique name index, and nonnullable applied_at.
 - Added negative/positive metadata regression cases for missing/partial/expression/composite uniqueness, missing name, nullable timestamp and missing primary key. No tracker repair, D1 mutation, carrier action or paid routing enabled.
 - Verification remains subject to exact-head CI and disposable Wrangler D1 inspection of the installed Wrangler version; this change is draft, unmerged and undeployed.
+
+## 2026-11-16 — Real SQLite migration tracker regression (draft PR #58)
+- Added a Python sqlite3-backed Node regression that creates genuine tracker tables and reads PRAGMA table_info/index_list/index_xinfo. The validator must accept the documented Wrangler-style tracker and fail closed for missing uniqueness, partial/composite uniqueness, nullable timestamp, and incorrect primary key.
+- Previous exact-head `4070fe8b` GitHub Actions Quality gate #43859712790 passed; the new test commits require a fresh exact-head run. This tests SQLite catalogs, not Wrangler D1 itself; actual pinned Wrangler tracker shape and disposable D1 execution remain release blockers.
+- No database writes outside in-memory SQLite fixtures, provider calls, paid routing, secrets, merges or deployment.
