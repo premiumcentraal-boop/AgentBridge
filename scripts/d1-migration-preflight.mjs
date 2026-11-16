@@ -62,6 +62,32 @@ export function classifyMigrationState(columns,tables){
     (v3==='complete'&&v2!=='complete')||(v4==='complete'&&v1!=='complete');
   return {v1,v2,v3,v4,unsafe,reasons:unsafe?[missingBase?'Missing base accounts/reservations tables. Initialize only through an approved baseline process; do not apply additive migrations.':'Schema is inconsistent. Do not apply migrations before backup and manual reconciliation.']:[]};
 }
+
+// Structural checks complement table-name/column-name checks. These are read-only
+// PRAGMAs; a restored or manually created table must not be trusted by name alone.
+export function validateCriticalSchema(reservationColumns,ownerColumns,ownerForeignKeys,hasOwnerActions){
+  const failures=[];
+  const byName=rows=>new Map(rows.map(row=>[row.name,row]));
+  const reservations=byName(reservationColumns);
+  for(const name of ['id','account_id','destination','idempotency_key','status','created_at','expires_at']){
+    const column=reservations.get(name);
+    if(!column)failures.push('reservations.'+name+' missing');
+    else if(name==='id' ? Number(column.pk)!==1 :
+      Number(column.notnull)!==1)failures.push('reservations.'+name+' constraint mismatch');
+  }
+  if(hasOwnerActions){
+    const owner=byName(ownerColumns);
+    for(const name of ['id','reservation_id','action','prior_status','carrier_code','reason','created_at']){
+      const column=owner.get(name);
+      if(!column)failures.push('owner_actions.'+name+' missing');
+      else if(name==='id'?Number(column.pk)!==1:Number(column.notnull)!==1)
+        failures.push('owner_actions.'+name+' constraint mismatch');
+    }
+    if(!ownerForeignKeys.some(row=>row.from==='reservation_id'&&row.table==='reservations'&&row.to==='id'&&String(row.on_delete).toUpperCase()==='RESTRICT'))
+      failures.push('owner_actions reservation foreign key missing or weakened');
+  }
+  return failures;
+}
 function parseWranglerJson(raw){
   const trimmed=String(raw).trim();
   let parsed;
@@ -91,6 +117,13 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
     const state=classifyMigrationState(cols,tables);
     const tracked=tables.includes('d1_migrations');
     const applied=tracked?inspect(database,mode,'SELECT name FROM d1_migrations').map(x=>x.name):[];
+    const structuralFailures=validateCriticalSchema(
+      inspect(database,mode,'PRAGMA table_info(reservations)'),
+      tables.includes('owner_actions')?inspect(database,mode,'PRAGMA table_info(owner_actions)'):[],
+      tables.includes('owner_actions')?inspect(database,mode,'PRAGMA foreign_key_list(owner_actions)'):[],
+      tables.includes('owner_actions')
+    );
+    if(structuralFailures.length){state.unsafe=true;state.reasons.push(...structuralFailures);}
     const plan=migrationPlan(state,applied);
     if(!state.unsafe&&!plan.safe){
       state.unsafe=true;
