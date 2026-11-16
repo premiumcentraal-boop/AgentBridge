@@ -99,3 +99,31 @@ test('critical schema constraints fail closed on structurally counterfeit tables
   assert.match(validateCriticalSchema(reservation,owner,fk,true,[{...accountFk[0],on_delete:'CASCADE'}]).join(' '),/account ownership foreign key missing or weakened/);
   assert.match(validateCriticalSchema(reservation,owner,fk,true,[{...accountFk[0],table:'other_accounts'}]).join(' '),/account ownership foreign key missing or weakened/);
 });
+
+test('idempotency uniqueness preflight rejects missing, partial, reversed and expression indexes',async()=>{
+  const {validateIdempotencyIndex}=await import('../scripts/d1-migration-preflight.mjs');
+  const index={name:'sqlite_autoindex_reservations_2',unique:1,partial:0};
+  const keys=[
+    {seqno:0,cid:1,name:'account_id',key:1},
+    {seqno:1,cid:3,name:'idempotency_key',key:1},
+    {seqno:2,cid:-1,name:null,key:0}
+  ];
+  const details=columns=>[{name:index.name,columns}];
+  assert.deepEqual(validateIdempotencyIndex([index],details(keys)),[]);
+  const invalid=[
+    [[],[]],
+    [[{...index,unique:0}],details(keys)],
+    [[{...index,partial:1}],details(keys)],
+    [[index],details([...keys].reverse().map((x,i)=>({...x,seqno:i})))],
+    [[index],details(keys.map(x=>x.name==='idempotency_key'?{...x,cid:-2,name:null}:x))],
+    [[index],details(keys.filter(x=>x.name!=='idempotency_key'))],
+    [[index],details([...keys,{seqno:3,cid:4,name:'status',key:1}])],
+    [[index],[]],
+    [null,null]
+  ];
+  for(const [list,metadata] of invalid){
+    assert.match(validateIdempotencyIndex(list,metadata).join(' '),/idempotency index metadata unavailable|UNIQUE\\(account_id,idempotency_key\\) missing or weakened/);
+  }
+  assert.deepEqual(validateIdempotencyIndex([{name:'wrong',unique:0,partial:0},index],
+    [{name:'wrong',columns:keys},...details(keys)]),[]);
+});
