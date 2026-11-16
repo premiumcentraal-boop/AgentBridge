@@ -26,7 +26,7 @@ else if(sql==="SELECT name FROM sqlite_master WHERE type='table'")rows=[{name:'a
 else if(sql==='PRAGMA table_info(d1_migrations)')rows=[col('id',1,0,'INTEGER'),col('name',0,0),col('applied_at',0,1,'TIMESTAMP')];
 else if(sql==='PRAGMA index_list(d1_migrations)')rows=process.env.FIXTURE==='missing-unique'?[]:[trackerIndex];
 else if(sql.includes("pragma_index_xinfo('sqlite_autoindex_d1_migrations_1')"))rows=[{seqno:0,cid:1,name:'name',key:1},{seqno:1,cid:-1,name:null,key:0}];
-else if(sql==='SELECT name FROM d1_migrations')rows=[];
+else if(sql==='SELECT name FROM d1_migrations')rows=process.env.FIXTURE==='unknown-history'?[{name:'9999_unapproved.sql'}]:process.env.FIXTURE==='duplicate-history'?[{name:'0001_routing_controls.sql'},{name:'0001_routing_controls.sql'}]:[];
 else if(sql==='PRAGMA foreign_key_list(reservations)')rows=[{from:'account_id',table:'accounts',to:'id',on_delete:'RESTRICT'}];
 else if(sql==='PRAGMA index_list(reservations)')rows=[reservationIndex];
 else if(sql.includes("pragma_index_xinfo('sqlite_autoindex_reservations_2')"))rows=[{seqno:0,cid:1,name:'account_id',key:1},{seqno:1,cid:3,name:'idempotency_key',key:1}];
@@ -52,7 +52,9 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
       ['failed-query',1,/Unexpected D1 query response/],
       ['missing-success',1,/Unexpected D1 query response/],
       ['extra-results',1,/Unexpected D1 query response/],
-      ['object-response',1,/Unexpected D1 query response/]
+      ['object-response',1,/Unexpected D1 query response/],
+      ['unknown-history',1,/Migration history claims applied objects/],
+      ['duplicate-history',1,/Migration history claims applied objects/]
     ]){
       const log=join(dir,scenario+'.queries');
       const run=spawnSync(process.execPath,[join(dir,'scripts','d1-migration-preflight.mjs'),'--local','disposable'],{
