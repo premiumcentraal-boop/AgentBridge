@@ -65,7 +65,7 @@ export function classifyMigrationState(columns,tables){
 
 // Structural checks complement table-name/column-name checks. These are read-only
 // PRAGMAs; a restored or manually created table must not be trusted by name alone.
-export function validateCriticalSchema(reservationColumns,ownerColumns,ownerForeignKeys,hasOwnerActions){
+export function validateCriticalSchema(reservationColumns,ownerColumns,ownerForeignKeys,hasOwnerActions,reservationForeignKeys=[]){
   const failures=[];
   const byName=rows=>new Map(rows.map(row=>[row.name,row]));
   const reservations=byName(reservationColumns);
@@ -75,6 +75,8 @@ export function validateCriticalSchema(reservationColumns,ownerColumns,ownerFore
     else if(name==='id' ? Number(column.pk)!==1 :
       Number(column.notnull)!==1)failures.push('reservations.'+name+' constraint mismatch');
   }
+  if(!reservationForeignKeys.some(row=>row.from==='account_id'&&row.table==='accounts'&&row.to==='id'&&String(row.on_delete).toUpperCase()==='RESTRICT'))
+    failures.push('reservations account ownership foreign key missing or weakened');
   if(hasOwnerActions){
     const owner=byName(ownerColumns);
     for(const name of ['id','reservation_id','action','prior_status','carrier_code','reason','created_at']){
@@ -121,7 +123,8 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
       inspect(database,mode,'PRAGMA table_info(reservations)'),
       tables.includes('owner_actions')?inspect(database,mode,'PRAGMA table_info(owner_actions)'):[],
       tables.includes('owner_actions')?inspect(database,mode,'PRAGMA foreign_key_list(owner_actions)'):[],
-      tables.includes('owner_actions')
+      tables.includes('owner_actions'),
+      inspect(database,mode,'PRAGMA foreign_key_list(reservations)')
     );
     if(structuralFailures.length){state.unsafe=true;state.reasons.push(...structuralFailures);}
     const plan=migrationPlan(state,applied);
