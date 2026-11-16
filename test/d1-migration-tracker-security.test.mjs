@@ -46,7 +46,7 @@ test('real SQLite tracker catalogs reject counterfeit migration history tables',
     'indexes=q("PRAGMA index_list(d1_migrations)")',
     'details=[{"name":i["name"],"columns":q("PRAGMA index_xinfo(\'"+i["name"].replace("\'","\'\'")+"\')")} for i in indexes if i["unique"] and not i["partial"]]',
     'print(json.dumps({"columns":q("PRAGMA table_info(d1_migrations)"),"indexes":indexes,"details":details}))'
-  ].join('\\n');
+  ].join('\n');
   for(const [kind,valid] of [['valid',true],['no-unique',false],['partial',false],['composite',false],['nullable-time',false],['wrong-pk',false]]){
     const run=spawnSync('python3',['-c',python,kind],{encoding:'utf8',timeout:10000});
     assert.equal(run.status,0,kind+': '+run.stderr);
