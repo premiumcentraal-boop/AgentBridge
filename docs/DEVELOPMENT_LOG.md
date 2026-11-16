@@ -642,3 +642,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 ## 2026-11-16 — CLI migration-history corruption regressions (draft PR #58)
 - Extended the fake-Wrangler CLI integration suite with unknown and duplicate `d1_migrations.name` history responses. Both must return exit 1 and never emit a migration-apply recommendation; all captured SQL remains read-only.
 - This tests existing fail-closed migrationPlan behavior end-to-end, not a new runtime safeguard. Full exact-head CI and actual pinned-Wrangler disposable D1 execution remain unverified. No carrier calls, purchases, routing activation, merges or deployments.
+
+## 2026-11-16 — CLI history-failure assertion corrected (draft PR #58)
+- Exact-head Quality gate run 43930177813 on 7761a976 failed one of 227 tests: the new unknown-history fixture asserted a diagnostic in stderr, but the preflight correctly reports migration-history reasons in structured stdout JSON and writes the generic BLOCKED notice to stderr. Secret scan passed.
+- Updated the CLI regression to assert exit 1, stderr BLOCKED, stdout `unsafe=true`, `plan.safe=false`, empty apply list and the specific history-corruption reason. Both unknown and duplicate history cases retain the read-only query checks. Production preflight logic is unchanged.
+- The correction requires new exact-head CI; actual Wrangler 4.159.0 D1 compatibility is still unverified. No routing, calls, purchases, secrets, merges or deployments.
