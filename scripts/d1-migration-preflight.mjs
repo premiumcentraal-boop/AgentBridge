@@ -155,7 +155,10 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
     process.exit(2);
   }
   try{
-    // Detect observable schema/history drift across the separate read-only queries.\n    // This is not an atomic D1 snapshot and cannot replace operator approval.\n    const schemaBefore=inspect(database,mode,'SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name');\n    const cols=inspect(database,mode,'PRAGMA table_info(reservations)').map(x=>x.name);
+    // Detect observable schema/history drift across the separate read-only queries.
+    // This is not an atomic D1 snapshot and cannot replace operator approval.
+    const schemaBefore=inspect(database,mode,'SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name');
+    const cols=inspect(database,mode,'PRAGMA table_info(reservations)').map(x=>x.name);
     const tables=inspect(database,mode,"SELECT name FROM sqlite_master WHERE type='table'").map(x=>x.name);
     const state=classifyMigrationState(cols,tables);
     const tracked=tables.includes('d1_migrations');
@@ -183,7 +186,11 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
         "SELECT seqno, cid, name, \"key\" FROM pragma_index_xinfo('"+index.name.replaceAll("'","''")+"')")}));
     structuralFailures.push(...validateIdempotencyIndex(indexes,indexDetails));
     if(structuralFailures.length){state.unsafe=true;state.reasons.push(...structuralFailures);}
-    const schemaAfter=inspect(database,mode,'SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name');\n    const appliedAfter=tracked?inspect(database,mode,'SELECT name FROM d1_migrations').map(x=>x.name):[];\n    if(JSON.stringify(schemaBefore)!==JSON.stringify(schemaAfter)||JSON.stringify(applied)!==JSON.stringify(appliedAfter))\n      throw Error('D1 schema or migration history changed during preflight; refusing a mixed-state recommendation.');\n    const plan=migrationPlan(state,applied);
+    const schemaAfter=inspect(database,mode,'SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name');
+    const appliedAfter=tracked?inspect(database,mode,'SELECT name FROM d1_migrations').map(x=>x.name):[];
+    if(JSON.stringify(schemaBefore)!==JSON.stringify(schemaAfter)||JSON.stringify(applied)!==JSON.stringify(appliedAfter))
+      throw Error('D1 schema or migration history changed during preflight; refusing a mixed-state recommendation.');
+    const plan=migrationPlan(state,applied);
     if(!state.unsafe&&!plan.safe){
       state.unsafe=true;
       state.reasons.push('Migration history claims applied objects that are absent. Stop and reconcile from backup.');
