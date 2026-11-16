@@ -105,6 +105,30 @@ export function validateIdempotencyIndex(indexList,indexDetails){
   });
   return valid?[]:['reservations UNIQUE(account_id,idempotency_key) missing or weakened'];
 }
+// Validate the migration tracker before trusting any rows it reports. This is
+// the schema emitted by baselineSql and Wrangler's standard D1 tracker.
+export function validateMigrationTracker(columns,indexes,indexDetails){
+  const failures=[];
+  if(!Array.isArray(columns)||!Array.isArray(indexes)||!Array.isArray(indexDetails))
+    return ['d1_migrations metadata unavailable'];
+  const byName=new Map(columns.map(column=>[column.name,column]));
+  const id=byName.get('id'),name=byName.get('name'),applied=byName.get('applied_at');
+  if(!id||Number(id.pk)!==1||String(id.type).toUpperCase()!=='INTEGER')
+    failures.push('d1_migrations.id primary key missing or weakened');
+  if(!name||String(name.type).toUpperCase()!=='TEXT')
+    failures.push('d1_migrations.name TEXT column missing');
+  if(!applied||Number(applied.notnull)!==1)
+    failures.push('d1_migrations.applied_at required column missing or nullable');
+  const unique=indexes.some(index=>{
+    if(Number(index.unique)!==1||Number(index.partial)!==0||typeof index.name!=='string')return false;
+    const cols=indexDetails.find(item=>item.name===index.name)?.columns;
+    if(!Array.isArray(cols))return false;
+    const keys=cols.filter(col=>Number(col.key)===1);
+    return keys.length===1&&keys[0].name==='name'&&Number(keys[0].cid)>=0&&Number(keys[0].seqno)===0;
+  });
+  if(!unique)failures.push('d1_migrations UNIQUE(name) missing or weakened');
+  return failures;
+}
 function parseWranglerJson(raw){
   const trimmed=String(raw).trim();
   let parsed;
@@ -133,6 +157,16 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
     const tables=inspect(database,mode,"SELECT name FROM sqlite_master WHERE type='table'").map(x=>x.name);
     const state=classifyMigrationState(cols,tables);
     const tracked=tables.includes('d1_migrations');
+    // Never read or rely on migration history until the tracker is structurally sound.
+    if(tracked){
+      const trackerColumns=inspect(database,mode,'PRAGMA table_info(d1_migrations)');
+      const trackerIndexes=inspect(database,mode,'PRAGMA index_list(d1_migrations)');
+      const trackerDetails=trackerIndexes.filter(index=>Number(index.unique)===1&&Number(index.partial)===0&&typeof index.name==='string')
+        .map(index=>({name:index.name,columns:inspect(database,mode,
+          "SELECT seqno, cid, name, \\"key\\" FROM pragma_index_xinfo('"+index.name.replaceAll("'","''")+"')")}));
+      const trackerFailures=validateMigrationTracker(trackerColumns,trackerIndexes,trackerDetails);
+      if(trackerFailures.length)throw Error('Untrusted D1 migration tracker: '+trackerFailures.join('; '));
+    }
     const applied=tracked?inspect(database,mode,'SELECT name FROM d1_migrations').map(x=>x.name):[];
     const structuralFailures=validateCriticalSchema(
       inspect(database,mode,'PRAGMA table_info(reservations)'),
