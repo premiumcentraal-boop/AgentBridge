@@ -21,7 +21,11 @@ const col=(name,pk=0,notnull=1,type='TEXT')=>({name,pk,notnull,type});
 const trackerIndex={name:'sqlite_autoindex_d1_migrations_1',unique:1,partial:0};
 const reservationIndex={name:'sqlite_autoindex_reservations_2',unique:1,partial:0};
 let rows;
-if(sql==='SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name'){\n  const count=(fs.readFileSync(process.env.QUERY_LOG,'utf8').match(/sqlite_master ORDER BY type, name/g)||[]).length;\n  rows=[{type:'table',name:count===2&&process.env.FIXTURE==='schema-drift'?'changed':'accounts',tbl_name:'accounts',sql:'CREATE TABLE accounts(id INTEGER)'}];\n}\nelse if(sql==='PRAGMA table_info(reservations)')rows=['id','account_id','destination','idempotency_key','status','created_at','expires_at'].map(name=>col(name,name==='id'?1:0,name==='id'?0:1));
+if(sql==='SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name'){
+  const count=(fs.readFileSync(process.env.QUERY_LOG,'utf8').match(/sqlite_master ORDER BY type, name/g)||[]).length;
+  rows=[{type:'table',name:count===2&&process.env.FIXTURE==='schema-drift'?'changed':'accounts',tbl_name:'accounts',sql:'CREATE TABLE accounts(id INTEGER)'}];
+}
+else if(sql==='PRAGMA table_info(reservations)')rows=['id','account_id','destination','idempotency_key','status','created_at','expires_at'].map(name=>col(name,name==='id'?1:0,name==='id'?0:1));
 else if(sql==="SELECT name FROM sqlite_master WHERE type='table'")rows=[{name:'accounts'},{name:'reservations'},{name:'d1_migrations'}];
 else if(sql==='PRAGMA table_info(d1_migrations)')rows=[col('id',1,0,'INTEGER'),col('name',0,0),col('applied_at',0,1,'TIMESTAMP')];
 else if(sql==='PRAGMA index_list(d1_migrations)')rows=process.env.FIXTURE==='missing-unique'?[]:[trackerIndex];
@@ -54,7 +58,9 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
       ['extra-results',1,/Unexpected D1 query response/],
       ['object-response',1,/Unexpected D1 query response/],
       ['unknown-history',1,/BLOCKED: partial schema/],
-      ['duplicate-history',1,/BLOCKED: partial schema/],\n      ['schema-drift',1,/schema or migration history changed during preflight/],\n      ['history-drift',1,/schema or migration history changed during preflight/]
+      ['duplicate-history',1,/BLOCKED: partial schema/],
+      ['schema-drift',1,/schema or migration history changed during preflight/],
+      ['history-drift',1,/schema or migration history changed during preflight/]
     ]){
       const log=join(dir,scenario+'.queries');
       const run=spawnSync(process.execPath,[join(dir,'scripts','d1-migration-preflight.mjs'),'--local','disposable'],{
