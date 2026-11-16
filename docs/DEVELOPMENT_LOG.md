@@ -622,3 +622,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added a Python sqlite3-backed Node regression that creates genuine tracker tables and reads PRAGMA table_info/index_list/index_xinfo. The validator must accept the documented Wrangler-style tracker and fail closed for missing uniqueness, partial/composite uniqueness, nullable timestamp, and incorrect primary key.
 - Previous exact-head `4070fe8b` GitHub Actions Quality gate #43859712790 passed; the new test commits require a fresh exact-head run. This tests SQLite catalogs, not Wrangler D1 itself; actual pinned Wrangler tracker shape and disposable D1 execution remain release blockers.
 - No database writes outside in-memory SQLite fixtures, provider calls, paid routing, secrets, merges or deployment.
+
+
+## 2026-11-16 — D1 migration preflight CLI-level fake Wrangler regression (draft PR #58)
+- Added a disposable Node CLI test harness that copies the read-only preflight into a temporary project with an isolated placeholder Wrangler config and an executable fake Wrangler. It exercises the full process boundary, not just exported schema validators.
+- Cases cover valid tracker metadata, missing tracker uniqueness, invalid JSON and a failed D1 query envelope. Assertions check nonzero failure exits, that invalid tracker history is never queried, and that every executed SQL statement begins with PRAGMA or SELECT. The harness cannot contact D1 or a carrier.
+- Wired the suite into npm test / npm run ci. This is committed test coverage, not yet verified passing at exact head; actual pinned Wrangler schema semantics and disposable D1 remain release gates. No routing activation, provider resources, calls, payments, merges or deployment.
