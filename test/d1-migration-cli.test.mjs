@@ -14,6 +14,9 @@ if(argv[0]!=='d1'||argv[1]!=='execute'||!argv.includes('--local')||!argv.include
 fs.appendFileSync(process.env.QUERY_LOG,JSON.stringify(sql)+'\\n');
 if(process.env.FIXTURE==='invalid-json'){console.log('not JSON');process.exit(0);}
 if(process.env.FIXTURE==='failed-query'){console.log(JSON.stringify([{success:false,results:[]}]));process.exit(0);}
+if(process.env.FIXTURE==='missing-success'){console.log(JSON.stringify([{results:[]}]));process.exit(0);}
+if(process.env.FIXTURE==='extra-results'){console.log(JSON.stringify([{success:true,results:[]},{success:false,results:[]}]));process.exit(0);}
+if(process.env.FIXTURE==='object-response'){console.log(JSON.stringify({success:true,results:[]}));process.exit(0);}
 const col=(name,pk=0,notnull=1,type='TEXT')=>({name,pk,notnull,type});
 const trackerIndex={name:'sqlite_autoindex_d1_migrations_1',unique:1,partial:0};
 const reservationIndex={name:'sqlite_autoindex_reservations_2',unique:1,partial:0};
@@ -46,7 +49,10 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
       ['valid',0,/OK: after a backup/],
       ['missing-unique',1,/Untrusted D1 migration tracker:.*UNIQUE/],
       ['invalid-json',1,/Wrangler did not return JSON/],
-      ['failed-query',1,/Unexpected D1 query response/]
+      ['failed-query',1,/Unexpected D1 query response/],
+      ['missing-success',1,/Unexpected D1 query response/],
+      ['extra-results',1,/Unexpected D1 query response/],
+      ['object-response',1,/Unexpected D1 query response/]
     ]){
       const log=join(dir,scenario+'.queries');
       const run=spawnSync(process.execPath,[join(dir,'scripts','d1-migration-preflight.mjs'),'--local','disposable'],{
