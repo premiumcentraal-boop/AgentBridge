@@ -628,3 +628,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added a disposable Node CLI test harness that copies the read-only preflight into a temporary project with an isolated placeholder Wrangler config and an executable fake Wrangler. It exercises the full process boundary, not just exported schema validators.
 - Cases cover valid tracker metadata, missing tracker uniqueness, invalid JSON and a failed D1 query envelope. Assertions check nonzero failure exits, that invalid tracker history is never queried, and that every executed SQL statement begins with PRAGMA or SELECT. The harness cannot contact D1 or a carrier.
 - Wired the suite into npm test / npm run ci. This is committed test coverage, not yet verified passing at exact head; actual pinned Wrangler schema semantics and disposable D1 remain release gates. No routing activation, provider resources, calls, payments, merges or deployment.
+
+## 2026-11-16 — CLI fake-Wrangler NDJSON fixture correction (draft PR #58)
+- Exact-head Quality gate #43902400499 at `c1d302a` failed: 226/227 Node tests passed, with `test/d1-migration-cli.test.mjs:58` throwing `Unexpected non-whitespace character after JSON`. The fixture writes one JSON-encoded SQL statement per line, but the test split on a literal backslash-n instead of a newline before parsing.
+- Corrected the test log parser to split on actual newlines. No production preflight logic, carrier configuration, routing policy or database schema changed.
+- Exact-head CI for this correction and disposable Wrangler D1 verification remain pending. The branch remains draft, unmerged and undeployed; no calls, purchases, payments or routing activation.
