@@ -133,10 +133,12 @@ function parseWranglerJson(raw){
   const trimmed=String(raw).trim();
   let parsed;
   try{parsed=JSON.parse(trimmed);}catch{throw Error('Wrangler did not return JSON. Refusing to guess database state.');}
-  const item=Array.isArray(parsed)?parsed[0]:parsed;
-  if(!item||!Array.isArray(item.results)||item.success===false)
+  // One SQL statement must yield exactly one explicitly successful result.
+  // Reject ambiguous batches and missing success flags instead of trusting the first entry.
+  if(!Array.isArray(parsed)||parsed.length!==1||!parsed[0]||
+     parsed[0].success!==true||!Array.isArray(parsed[0].results))
     throw Error('Unexpected D1 query response. No schema state can be trusted.');
-  return item.results;
+  return parsed[0].results;
 }
 function inspect(database,mode,sql){
   const executable=process.env.AGENTBRIDGE_WRANGLER||(existsSync(PINNED_WRANGLER)?PINNED_WRANGLER:'wrangler');
