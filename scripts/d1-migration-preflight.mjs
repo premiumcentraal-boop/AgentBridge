@@ -163,7 +163,7 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
       const trackerIndexes=inspect(database,mode,'PRAGMA index_list(d1_migrations)');
       const trackerDetails=trackerIndexes.filter(index=>Number(index.unique)===1&&Number(index.partial)===0&&typeof index.name==='string')
         .map(index=>({name:index.name,columns:inspect(database,mode,
-          "SELECT seqno, cid, name, \\"key\\" FROM pragma_index_xinfo('"+index.name.replaceAll("'","''")+"')")}));
+          'SELECT seqno, cid, name, "key" FROM pragma_index_xinfo(\''+index.name.replaceAll("'","''")+'\')')}));
       const trackerFailures=validateMigrationTracker(trackerColumns,trackerIndexes,trackerDetails);
       if(trackerFailures.length)throw Error('Untrusted D1 migration tracker: '+trackerFailures.join('; '));
     }
