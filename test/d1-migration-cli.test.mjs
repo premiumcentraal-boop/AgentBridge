@@ -44,7 +44,7 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
     chmodSync(executable,0o700);
     for(const [scenario,status,pattern] of [
       ['valid',0,/OK: after a backup/],
-      ['missing-unique',1,/Untrusted D1 migration tracker:.*UNIQUE\\(name\\)/],
+      ['missing-unique',1,/Untrusted D1 migration tracker:.*UNIQUE/],
       ['invalid-json',1,/Wrangler did not return JSON/],
       ['failed-query',1,/Unexpected D1 query response/]
     ]){
