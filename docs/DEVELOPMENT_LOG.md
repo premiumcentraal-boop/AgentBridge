@@ -612,3 +612,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added a repository Node test that launches Python's standard-library SQLite engine to create actual in-memory schemas and read `PRAGMA table_info`, `foreign_key_list`, `index_list`, and `index_xinfo`. This checks the production preflight validators against genuine SQLite metadata rather than hand-authored fixture objects.
 - The test expects a correctly constrained account-scoped idempotency key and ownership foreign key to pass, while a missing UNIQUE constraint or missing ownership foreign key must fail closed. No D1 writes, carrier actions, calls, payment operations, or routing activation.
 - Verification: an independent local Python SQLite PRAGMA smoke check succeeded; repository Node test and exact-head CI are not yet confirmed. This is SQLite integration coverage, **not** Cloudflare Wrangler D1 validation. Branch remains draft, unmerged and undeployed.
+
+## 2026-11-16 — Fail closed on counterfeit D1 migration tracker (draft PR #58)
+- Issue #59 identified that the preflight trusted migration history rows without checking `d1_migrations` table constraints. Added read-only tracker column and unique-index introspection before reading any tracker rows, requiring the Wrangler-style id primary key, name TEXT and unique name index, and nonnullable applied_at.
+- Added negative/positive metadata regression cases for missing/partial/expression/composite uniqueness, missing name, nullable timestamp and missing primary key. No tracker repair, D1 mutation, carrier action or paid routing enabled.
+- Verification remains subject to exact-head CI and disposable Wrangler D1 inspection of the installed Wrangler version; this change is draft, unmerged and undeployed.
