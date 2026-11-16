@@ -55,7 +55,7 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
       });
       assert.equal(run.status,status,scenario+': '+run.stderr);
       assert.match(run.stderr,pattern,scenario);
-      const queries=readFileSync(log,'utf8').trim().split('\\n').map(JSON.parse);
+      const queries=readFileSync(log,'utf8').trim().split('\n').map(JSON.parse);
       assert.ok(queries.every(sql=>/^(PRAGMA |SELECT )/i.test(sql)),scenario+': no writes');
       if(scenario==='missing-unique')assert.ok(!queries.includes('SELECT name FROM d1_migrations'),'must not trust invalid tracker');
       if(status!==0)assert.doesNotMatch(run.stderr,/OK: after a backup/);
