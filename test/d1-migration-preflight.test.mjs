@@ -122,7 +122,7 @@ test('idempotency uniqueness preflight rejects missing, partial, reversed and ex
     [null,null]
   ];
   for(const [list,metadata] of invalid){
-    assert.match(validateIdempotencyIndex(list,metadata).join(' '),/idempotency index metadata unavailable|UNIQUE\\(account_id,idempotency_key\\) missing or weakened/);
+    assert.match(validateIdempotencyIndex(list,metadata).join(' '),/idempotency index metadata unavailable|UNIQUE\(account_id,idempotency_key\) missing or weakened/);
   }
   assert.deepEqual(validateIdempotencyIndex([{name:'wrong',unique:0,partial:0},index],
     [{name:'wrong',columns:keys},...details(keys)]),[]);
