@@ -6,6 +6,7 @@ import { JSDOM, VirtualConsole } from "jsdom";
 import { openAccountDatabase } from "../../server/accounts/node-database.mjs";
 import { createAccountService } from "../../server/accounts/service.mjs";
 import { signalWireFixture } from "../../server/test/helpers/signalwire-fixture.mjs";
+import { digest } from '../../server/accounts/auth-primitives.mjs';
 const origin = "https://provider.agentbridge.test",
   email = "tester@example.com";
 const html = (
@@ -45,6 +46,7 @@ function set(window, input, value) {
   const proto =
     input.tagName === "SELECT"
       ? window.HTMLSelectElement.prototype
+      : input.tagName === "TEXTAREA" ? window.HTMLTextAreaElement.prototype
       : window.HTMLInputElement.prototype;
   Object.getOwnPropertyDescriptor(proto, "value").set.call(input, value);
   input.dispatchEvent(
@@ -103,6 +105,70 @@ function browser(t, fetcher, path) {
   t.after(() => dom.window.close());
   return { dom, window: dom.window, document: dom.window.document, errors };
 }
+test('the account-backed Agents page remains accessible in live mode, saves a canonical contact and revokes app access',async t=>{
+ const database=openAccountDatabase(':memory:');t.after(()=>database.close());const provider=signalWireFixture();
+ const service=createAccountService({database,testerEmail:email,publicOrigin:origin,platformIdentity:true,vaultKey:randomBytes(32).toString('hex'),fetcher:provider.fetcher});
+ const fetcher=async(path,options={})=>service.fetch(new Request(new URL(path,origin),{...options,headers:{...Object.fromEntries(new Headers(options.headers)),Origin:origin,'oai-authenticated-user-id':'verified-tester','oai-authenticated-user-email':email}}));
+ const post=(path,body)=>fetcher('/api/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ assert.equal((await post('auth/register',{email,name:'Tester',agent_name:'Agent'})).status,201);
+ await post('studio/provider/credentials',provider.config());await fetcher('/api/studio/provider/mode',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({live_enabled:true})});
+ const account=await database.first('SELECT id FROM ab_accounts'),clientId=randomUUID(),grantId=randomUUID();
+ await database.batch([
+  {sql:'INSERT INTO ab_agent_clients(client_id,metadata,created_at) VALUES(?,?,?)',params:[clientId,JSON.stringify({client_name:'My Grok',redirect_uris:['https://client.example/callback']}),Date.now()]},
+  {sql:'INSERT INTO ab_agent_grants(id,account_id,client_id,scopes,resource,created_at) VALUES(?,?,?,?,?,?)',params:[grantId,account.id,clientId,'contacts:read',origin+'/mcp',Date.now()]},
+ ]);
+ const view=browser(t,fetcher,'/studio/agents/'),{document,window}=view;
+ await until(()=>document.querySelector('.agent-contact-list'));
+ assert.match(document.querySelector('main').textContent,/My Grok/);
+ named(document,'Add contact').click();await until(()=>document.querySelector('dialog[open]'));
+ const dialog=document.querySelector('dialog[open]');set(window,field(dialog,'Name'),'Alex');set(window,field(dialog,'Phone number'),'+1 (202) 555-0123');set(window,field(dialog,'Notes'),'Prefers afternoon calls.');
+ named(dialog,'Save contact').click();await until(()=>document.querySelector('.agent-contact-list').textContent.includes('Alex'));
+ assert.match(document.querySelector('.agent-contact-list').textContent,/\+12025550123/);
+ named(document,'Disconnect').click();await until(async()=>Boolean((await database.first('SELECT revoked_at FROM ab_agent_grants WHERE id=?',[grantId])).revoked_at));
+ assert.equal(provider.posts().length,0);assert.deepEqual(view.errors,[]);
+});
+
+test('rendered OAuth consent shows the client permissions and completes approval in the signed-in account',async t=>{
+ const database=openAccountDatabase(':memory:');t.after(()=>database.close());
+ const account=randomUUID(),session=randomBytes(32).toString('hex'),client=randomUUID(),requestId=randomUUID(),stamp=new Date().toISOString();
+ await database.batch([
+  {sql:'INSERT INTO ab_accounts(id,email,name,agent_name,auth_provider,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',params:[account,email,'Tester','Agent','password',stamp,stamp]},
+  {sql:'INSERT INTO ab_sessions(token_hash,account_id,expires_at,created_at) VALUES(?,?,?,?)',params:[await digest(session),account,Date.now()+3600000,stamp]},
+  {sql:'INSERT INTO ab_workspaces(account_id,revision,document,updated_at) VALUES(?,0,?,?)',params:[account,JSON.stringify({routing_numbers:[],connections:[],call_plans:[],call_history:[],settings:{experience:'simple'},capture_preferences:{},demo_call:{active:false}}),stamp]},
+  {sql:'INSERT INTO ab_agent_clients(client_id,metadata,created_at) VALUES(?,?,?)',params:[client,JSON.stringify({client_name:'Grok Bot',redirect_uris:['https://client.example/callback']}),Date.now()]},
+  {sql:'INSERT INTO ab_agent_requests(id,client_id,payload,expires_at) VALUES(?,?,?,?)',params:[requestId,client,JSON.stringify({redirectUri:'https://client.example/callback',codeChallenge:'a'.repeat(43),scopes:['contacts:read','history:read','calls:prepare'],state:'test-state'}),Date.now()+600000]},
+ ]);
+ const service=createAccountService({database,testerEmail:email,publicOrigin:origin,agentExternal:true});
+ const fetcher=(path,options={})=>service.fetch(new Request(new URL(path,origin),{...options,headers:{...Object.fromEntries(new Headers(options.headers)),Origin:origin,Cookie:'ab_customer='+session}}));
+ const view=browser(t,fetcher,'/studio/agents/?authorize='+requestId),{document}=view;
+ await until(()=>document.querySelector('[aria-label="Connect agent request"]'));
+ const panel=document.querySelector('[aria-label="Connect agent request"]');assert.match(panel.textContent,/Grok Bot/);assert.match(panel.textContent,/client.example/);assert.equal(panel.querySelectorAll('input[type="checkbox"]:checked').length,3);
+ named(panel,'Connect app').click();await until(async()=>Boolean(await database.first('SELECT id FROM ab_agent_grants')));
+ const grant=await database.first('SELECT account_id,scopes FROM ab_agent_grants');assert.equal(grant.account_id,account);assert.equal(grant.scopes,'contacts:read history:read calls:prepare');assert.deepEqual(view.errors,[]);
+});
+
+test('a completed call can be explicitly transcribed and its saved text removed through the rendered studio',async t=>{
+ const database=openAccountDatabase(':memory:');t.after(()=>database.close());const provider=signalWireFixture();let asr=0;
+ const service=createAccountService({database,testerEmail:email,publicOrigin:origin,platformIdentity:true,vaultKey:randomBytes(32).toString('hex'),fetcher:async(url,options)=>{
+  if(url==='https://api.x.ai/v1/stt'){asr++;assert.equal(options.body.get('file').size,5);return Response.json({text:'The appointment is confirmed for Tuesday.',language:'en',duration:20});}
+  return provider.fetcher(url,options);
+ }});
+ const fetcher=(path,options={})=>service.fetch(new Request(new URL(path,origin),{...options,headers:{...Object.fromEntries(new Headers(options.headers)),Origin:origin,'oai-authenticated-user-id':'verified-tester','oai-authenticated-user-email':email}}));
+ const write=async(path,body,method='POST')=>{const response=await fetcher('/api/'+path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});assert.ok(response.ok,await response.clone().text());return response.json();};
+ await write('auth/register',{email,name:'Tester',agent_name:'Agent'});await write('studio/provider/credentials',provider.config());await write('studio/provider/mode',{live_enabled:true},'PATCH');
+ const {number}=await write('studio/live/numbers/import',{provider_number_id:provider.owned.id,label:'Office'});await write('studio/live/connections',{label:'Alex',country:'US',destination:'+12025550123',routing_number_id:number.id});
+ const call={sid:randomUUID(),account_sid:provider.state.project,phone_number_sid:provider.owned.id,from:provider.owned.number,to:'+12025550123',status:'completed',direction:'outbound-api',duration:20,date_created:new Date().toISOString()};provider.state.calls.push(call);
+ provider.state.recordings.push({sid:randomUUID(),account_sid:provider.state.project,call_sid:call.sid,status:'completed',duration:20});
+ await write('studio/live/sync',{});await write('studio/transcription/settings',{api_key:'test-only-xai-ui-key'},'PUT');
+ const view=browser(t,fetcher,'/studio/calls/'),{document}=view;
+ await until(()=>document.querySelector('.conversation-history-row'));named(document,'Open recent call with Alex').click();
+ await until(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.trim()==='Transcribe recording'));named(document,'Transcribe recording').click();
+ await until(()=>document.querySelector('dialog[open][aria-label="Transcribe recording"]'));const dialog=document.querySelector('dialog[open][aria-label="Transcribe recording"]');
+ assert.equal(asr,0);assert.equal(named(dialog,'Transcribe').disabled,true);dialog.querySelector('input[type="checkbox"]').click();named(dialog,'Transcribe').click();
+ await until(()=>document.querySelector('.live-transcript')?.textContent.includes('Tuesday'));assert.equal(asr,1);
+ named(document,'Remove saved transcript').click();await until(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.trim()==='Delete transcript'));named(document,'Delete transcript').click();await until(async()=>(await database.first('SELECT COUNT(*) AS n FROM ab_transcription_jobs')).n===0);
+ assert.deepEqual(view.errors,[]);
+});
 test("the rendered studio securely connects SignalWire, imports inventory, activates a destination and starts a real API callback request", async (t) => {
   const database = openAccountDatabase(":memory:");
   t.after(() => database.close());

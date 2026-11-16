@@ -46,6 +46,16 @@ await Promise.all(
         "Encrypted provider storage configured",
         body.secure_provider_storage === true,
       ]);
+      checks.push(['MCP account runtime',body.mcp_configured===true&&body.oauth_pkce===true]);
+      checks.push(['Built release matches running service',typeof body.version==='string'&&body.version===body.build?.version]);
+      if(process.argv[3])checks.push(['Deployed commit matches requested release',body.build?.commit===process.argv[3]]);
+    })(),
+    (async()=>{
+      const response=await get('/.well-known/oauth-authorization-server'),body=await response.json();
+      checks.push(['OAuth discovery and S256',response.ok&&body.issuer===origin+'/'&&body.code_challenge_methods_supported?.includes('S256')&&body.token_endpoint===origin+'/token']);
+      const resource=await get('/.well-known/oauth-protected-resource/mcp'),metadata=await resource.json();
+      checks.push(['MCP resource audience',resource.ok&&metadata.resource===origin+'/mcp'&&metadata.authorization_servers?.includes(origin+'/')]);
+      const mcp=await get('/mcp');checks.push(['MCP rejects anonymous callers',mcp.status===401&&(mcp.headers.get('www-authenticate')||'').includes('oauth-protected-resource/mcp')]);await mcp.body?.cancel();
     })(),
     (async () => {
       const response = await get("/api/auth/session"),

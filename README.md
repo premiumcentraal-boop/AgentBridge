@@ -1,6 +1,23 @@
 # AgentBridge
 **Connect agents worldwide**
 
+## Release candidate: account-linked agents
+
+Studio → **Agents** connects a customer's own account over OAuth/PKCE. The remote
+MCP resolves contacts and formatted phone numbers, retrieves previous conversations
+before a call, and saves source-labelled outcomes for next time. A downloadable
+calling skill supplies the workflow. See [Grok connector setup](docs/GROK_CONNECTOR.md).
+
+Completed SignalWire recordings can be transcribed with an optional encrypted xAI
+key after explicit permission and charge confirmation. Account export/deletion,
+app revocation, setup guidance, consistent backups and deployment drift checks are
+implemented. See [saved transcription](docs/SAVED_TRANSCRIPTION.md) and
+[release operations](docs/RELEASE_OPERATIONS.md).
+
+This remains a release candidate until the [release gates](docs/RELEASE_READINESS.md)
+pass on the public host. Real browser human joining and live captions still need
+their media implementation; the demo room below does not establish those features.
+
 ## Join call room
 
 The demo uses one **Join call** entry. Choose microphone off or on before joining,
@@ -21,8 +38,8 @@ transcripts and notes. Completed calls retain contact, routing number, duration 
 status even when capture was off. **Numbers** is a separate inventory page.
 
 Contact memory saves notes against the destination phone number and combines them
-with previous call details and highlights. Copy that context into your agent before
-the next call; AgentBridge does not silently update an external agent's memory.
+with previous call details and highlights. A connected MCP agent retrieves that
+context with `prepare_call`; it can also be copied manually into another agent.
 Account notes and history persist on the server. The public sample stays in its tab.
 
 Recording and transcription remain opt-in. A saved recording can support a later

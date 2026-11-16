@@ -1,5 +1,6 @@
 import { deny } from "./model.mjs";
 import { validEmail } from "./auth-primitives.mjs";
+import {agentReturnPath} from '../../shared/return-path.mjs';
 
 const escape = (value) =>
   value.replace(
@@ -45,7 +46,7 @@ export function createAuthEmail({
   );
   return {
     ready,
-    async send({ purpose, email, token, requestId }) {
+    async send({ purpose, email, token, requestId, returnTo }) {
       if (!ready)
         deny(
           503,
@@ -60,7 +61,8 @@ export function createAuthEmail({
       )
         throw new Error("Invalid auth email.");
       const verifying = purpose === "verify";
-      const url = `${origin}/${verifying ? "verify-email" : "reset-password"}/#token=${token}`;
+      const target=agentReturnPath(returnTo), query=verifying&&target!=='/studio/'?'?return_to='+encodeURIComponent(target):'';
+      const url = `${origin}/${verifying ? "verify-email" : "reset-password"}/${query}#token=${token}`;
       const title = verifying
         ? "Connect your AgentBridge account"
         : "Reset your AgentBridge password";

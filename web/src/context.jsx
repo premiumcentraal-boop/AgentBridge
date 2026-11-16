@@ -10,6 +10,9 @@ export const Router = createContext({
 });
 export const useRoute = () => useContext(Router);
 const isStudio = (path) =>
+  // Query strings carry OAuth return context, never a separate route.
+  isStudioPath(path.split(/[?#]/)[0]);
+const isStudioPath = (path) =>
   path.startsWith("/studio/") ||
   path.startsWith("/app/") ||
   [
@@ -53,10 +56,10 @@ export function RouterProvider({
     }
     if (offline) {
       location.hash = url;
-      setPath(url);
+      setPath(url.split(/[?#]/)[0]);
     } else {
       history.pushState({}, "", base + url);
-      setPath(url);
+      setPath(url.split(/[?#]/)[0]);
     }
     window.scrollTo({ top: 0, behavior: "instant" });
   };

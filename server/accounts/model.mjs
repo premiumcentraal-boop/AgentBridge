@@ -1,6 +1,6 @@
 import { DEFAULT_CAPTURE } from '../../shared/call-plans.mjs';
 import { upgradeDemoHistory } from '../../shared/conversations.mjs';
-export const publicAccount = account => account ? { id: account.id, email: account.email, name: account.name, agent_name: account.agent_name, mode: 'demo', created_at: account.created_at } : null;
+export const publicAccount = account => account ? { id: account.id, email: account.email, name: account.name, agent_name: account.agent_name, auth_method: account.auth_provider, mode: 'demo', created_at: account.created_at } : null;
 export function emptyWorkspace() {
   return {
     routing_numbers: [], connections: [], number_orders: [], call_plans: [], call_history: [], contact_memories: [], routes: [], events: [],

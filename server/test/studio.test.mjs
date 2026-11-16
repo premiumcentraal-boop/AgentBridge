@@ -81,7 +81,8 @@ test('studio exposes no carrier endpoints and keeps private pages unframed and u
   const health=await (await fetch(url+'/health')).json();assert.equal(health.routing_enabled,false);
   const privateResponse=await fetch(url+'/api/studio/session');assert.equal(privateResponse.headers.get('cache-control'),'no-store');assert.equal(privateResponse.headers.get('x-frame-options'),'DENY');assert.match(privateResponse.headers.get('content-security-policy'),/frame-ancestors 'none'/);
   const publicResponse=await fetch(url+'/');assert.match(publicResponse.headers.get('content-security-policy'),/frame-ancestors 'self' https:\/\/victor.ceo/);assert.equal(publicResponse.headers.get('x-frame-options'),null);
-  for(const path of ['/telephony/signalwire/swml','/v1/reservations','/mcp'])assert.equal((await fetch(url+path,{method:'POST'})).status,405);
+  for(const path of ['/telephony/signalwire/swml','/v1/reservations'])assert.equal((await fetch(url+path,{method:'POST'})).status,405);
+  const mcp=await fetch(url+'/mcp',{method:'POST'});assert.equal(mcp.status,503);assert.equal((await mcp.json()).error,'setup_required');
   assert.equal((await fetch(url+'/.env')).status,404);
 });
 test('login retries are bounded without trusting spoofed forwarding headers',async t=>{

@@ -2,6 +2,8 @@ import { NAV } from "./data.js";
 import { CALL_COUNTRIES } from "../../shared/call-plans.mjs";
 
 const keywords = {
+  agents:
+    "grok mcp oauth connector connected apps contact memory history authorization permissions",
   overview: "home dashboard workspace",
   numbers: "phone routing purchased owned inventory signalwire",
   connections: "destination receiver contacts countries",
@@ -16,6 +18,7 @@ const keywords = {
   design: "design boards styles",
 };
 const pageDetails = {
+  agents: "Connect Grok, manage agent access and save contacts",
   overview: "Live calls and recent connections",
   numbers: "Your AgentBridge routing numbers",
   connections: "Saved contacts, phone numbers and conversation memory",

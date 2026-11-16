@@ -1,0 +1,237 @@
+.agent-workspace {
+  max-width: 960px;
+  margin: 0 auto;
+  display: grid;
+  gap: 22px;
+}
+.capture-consent-option {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start;
+  gap: 12px;
+  line-height: 1.6;
+}
+.capture-consent-option input[type="checkbox"] {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: #30a46c;
+}
+.setup-checklist {
+  margin-bottom: 26px;
+}
+.setup-checklist a {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 16px 0;
+  color: var(--text);
+  text-decoration: none;
+  border-top: 1px solid var(--line);
+}
+.setup-checklist a > div {
+  flex: 1;
+}
+.setup-checklist strong,
+.setup-checklist small {
+  display: block;
+}
+.setup-checklist small {
+  margin-top: 4px;
+  color: var(--muted);
+}
+.setup-checklist .setup-done {
+  color: #30a46c;
+}
+.agent-page-heading {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 0 0 8px;
+}
+.agent-page-heading h1 {
+  font-size: clamp(30px, 4vw, 42px);
+  margin: 0 0 6px;
+}
+.agent-page-heading p,
+.agent-panel p {
+  color: var(--muted);
+  line-height: 1.65;
+  font-size: 13px;
+}
+.agent-panel {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 24px;
+  padding: 26px;
+  min-width: 0;
+}
+.agent-panel h2 {
+  font-size: 21px;
+  margin: 0 0 10px;
+}
+.agent-panel small {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.agent-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.agent-section-heading p {
+  margin: 0;
+}
+.agent-panel label {
+  display: grid;
+  gap: 9px;
+  font-size: 12px;
+  margin: 14px 0;
+}
+.agent-panel input:not([type="checkbox"]) {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  color: var(--fg);
+  background: var(--page-soft);
+  font: inherit;
+  min-width: 0;
+}
+.agent-url {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+.agent-url input {
+  flex: 1;
+  font-size: 12px;
+}
+.agent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+  justify-content: flex-end;
+}
+.agent-panel .agent-permission {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  line-height: 1.65;
+}
+.agent-permission input {
+  accent-color: var(--control-selected-fill);
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.agent-consent fieldset {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 10px 18px;
+  margin-top: 22px;
+}
+.agent-consent legend {
+  font-size: 12px;
+  padding: 0 8px;
+}
+.agent-setup-steps {
+  padding-left: 19px;
+  color: var(--muted);
+  font-size: 13px;
+  display: grid;
+  gap: 11px;
+  margin: 22px 0;
+}
+.agent-grant {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+}
+.agent-grant > div {
+  display: grid;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+.agent-app-icon {
+  width: 40px;
+  height: 40px;
+  background: var(--panel-raised);
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  flex-shrink: 0;
+}
+.agent-grant strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.agent-grant .ab-button {
+  font-size: 11px;
+  min-height: 38px;
+}
+.agent-contact-list {
+  display: grid;
+}
+.agent-contact-list article {
+  display: flex;
+  gap: 14px;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+}
+.agent-contact-list article > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.agent-contact-list p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.agent-contact-list strong {
+  font-size: 14px;
+}
+.agent-contact-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--panel-raised);
+  color: var(--fg);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+@media (max-width: 560px) {
+  .agent-panel {
+    padding: 20px 17px;
+    border-radius: 20px;
+  }
+  .agent-section-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .agent-url {
+    flex-wrap: wrap;
+  }
+  .agent-url input {
+    flex-basis: 100%;
+  }
+  .agent-page-heading {
+    gap: 13px;
+  }
+  .agent-grant {
+    flex-wrap: wrap;
+  }
+}

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { JSDOM, VirtualConsole } from "jsdom";
 import { openAccountDatabase } from "../../server/accounts/node-database.mjs";
 import { createAccountService } from "../../server/accounts/service.mjs";
@@ -69,6 +69,7 @@ function backend(t, platform, publicSignup = false) {
     passwords: nodePasswords,
     signupInviteHash: createHash("sha256").update(invite).digest("hex"),
     signupMode: publicSignup ? "public" : undefined,
+    agentExternal: publicSignup,
     mailer: publicSignup
       ? {
           ready: true,
@@ -430,7 +431,7 @@ test("public email signup, verification and recovery use the rendered forms and 
   named(signin.document, "Forgot password?", "a").click();
   await until(() =>
     signin.document.querySelector(
-      'section[aria-label="Forgot your password?"]',
+      'section[aria-label="Forgot your password?"] input[type="email"]',
     ),
   );
   setField(
@@ -479,6 +480,25 @@ test("public email signup, verification and recovery use the rendered forms and 
       [],
     );
 });
+test('a new user follows a connector request through signup and email verification back to OAuth consent',async t=>{
+ const api=backend(t,false,true),client=randomUUID(),requestId=randomUUID(),target='/studio/agents/?authorize='+requestId;
+ await api.database.batch([
+  {sql:'INSERT INTO ab_agent_clients(client_id,metadata,created_at) VALUES(?,?,?)',params:[client,JSON.stringify({client_name:'Grok Bot',redirect_uris:['https://client.example/callback']}),Date.now()]},
+  {sql:'INSERT INTO ab_agent_requests(id,client_id,payload,expires_at) VALUES(?,?,?,?)',params:[requestId,client,JSON.stringify({redirectUri:'https://client.example/callback',codeChallenge:'a'.repeat(43),scopes:['contacts:read'],state:'test-state'}),Date.now()+600000]},
+ ]);
+ const first=browser(t,api,target);let {document,window}=first;
+ await until(()=>document.querySelector('.account-access form'));named(document,'Create your account','a').click();
+ await until(()=>document.querySelector('input[autocomplete="name"]'));
+ assert.equal(new URL(window.location.href).searchParams.get('return_to'),target);
+ setField(window,field(document,'Your name'),'Agent owner');setField(window,field(document,'Agent name'),'Agent');setField(window,field(document,'Email address'),'agent-owner@example.com');named(document,'Create account').click();
+ await until(()=>document.querySelector('.account-email-notice'));assert.equal(api.messages[0].returnTo,target);first.dom.window.close();
+ const verification=browser(t,api,'/verify-email/#token='+api.messages[0].token);({document,window}=verification);
+ await until(()=>document.querySelector('input[autocomplete="new-password"]'));setField(window,field(document,'New password'),'connector-owner-password-123');setField(window,field(document,'Confirm password'),'connector-owner-password-123');named(document,'Verify & open studio').click();
+ await until(()=>document.querySelector('[aria-label="Connect agent request"]'));
+ assert.equal(window.location.pathname,'/studio/agents/');assert.equal(new URL(window.location.href).searchParams.get('authorize'),requestId);assert.match(document.querySelector('[aria-label="Connect agent request"]').textContent,/Grok Bot/);
+ assert.deepEqual([...first.errors,...verification.errors].map(e=>e.message),[]);
+});
+
 test("email/password customer signup and sign-in use server sessions and return to the same workspace", async (t) => {
   const api = backend(t, false),
     first = browser(t, api, "/signup/#invite=" + encodeURIComponent(invite));

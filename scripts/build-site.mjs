@@ -1,6 +1,7 @@
 import {rm,mkdir,cp,readFile,writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
+import {RELEASE_VERSION} from '../shared/release.mjs';
 const root=process.cwd(),out=join(root,'dist');
 const pages=['index.html','how-it-works/index.html','pricing/index.html','connect/index.html','docs/index.html','app/index.html','studio/index.html','design/index.html'];
 // All assets must be served locally. Existing inline style attributes require
@@ -23,4 +24,7 @@ for(const path of pages){
 }
 // Build and render the React/Astryx product and studio over the legacy gallery.
 execFileSync(process.execPath,['web/scripts/build.mjs'],{cwd:root,env:process.env,stdio:'inherit'});
+let commit=process.env.AGENTBRIDGE_SOURCE_COMMIT || process.env.RAILWAY_GIT_COMMIT_SHA || null;
+if(!commit)try{commit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();}catch{}
+await writeFile(join(out,'build.json'),JSON.stringify({version:RELEASE_VERSION,commit:/^[a-f0-9]{40}$/.test(commit||'')?commit:null,built_at:new Date().toISOString()}));
 console.log('Built dist/ for '+(base||'/')+' with restrictive CSP and local assets');

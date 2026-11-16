@@ -2,6 +2,8 @@ import React, { useEffect, useId, useState } from "react";
 import { A, useRoute } from "./context.jsx";
 import { BotFace } from "./grok-ui.jsx";
 import { Btn, Icon } from "./ui.jsx";
+import { AccountData } from './launch-settings.jsx';
+import {agentReturnPath} from '../../shared/return-path.mjs';
 
 export async function accountRequest(endpoint, options = {}) {
   const response = await fetch("/api/auth/" + endpoint, {
@@ -16,6 +18,15 @@ export async function accountRequest(endpoint, options = {}) {
     );
   return data;
 }
+function accountReturnPath() {
+  const target =
+    new URLSearchParams(location.search).get("return_to") ||
+    (location.pathname === "/studio/agents/"
+      ? location.pathname + location.search
+      : "");
+  return agentReturnPath(target);
+}
+const authLink=path=>{const target=accountReturnPath();return path+(target==='/studio/'?'':'?return_to='+encodeURIComponent(target));};
 export function AccountAuth({ signup = false, embedded = false }) {
   const { offline, go } = useRoute(),
     id = useId();
@@ -40,8 +51,8 @@ export function AccountAuth({ signup = false, embedded = false }) {
         if (data.verified_email)
           setValue((current) => ({ ...current, email: data.verified_email }));
         if (data.authenticated && !signup) {
-          if (embedded) location.assign("/studio/");
-          else go("/studio/");
+          if (embedded) location.assign(accountReturnPath());
+          else go(accountReturnPath());
         }
       })
       .catch(() => {
@@ -159,6 +170,7 @@ export function AccountAuth({ signup = false, embedded = false }) {
                     name: value.name,
                     email: value.email,
                     agent_name: value.agent_name,
+                    ...(emailSignup ? {return_to: accountReturnPath()} : {}),
                     ...(platform || emailSignup
                       ? {}
                       : {
@@ -179,8 +191,8 @@ export function AccountAuth({ signup = false, embedded = false }) {
                 setNotice(result.message);
                 return;
               }
-              if (embedded) location.assign("/studio/");
-              else go("/studio/");
+              if (embedded) location.assign(accountReturnPath());
+              else go(accountReturnPath());
             } catch (error) {
               setError(error.message);
             } finally {
@@ -272,7 +284,7 @@ export function AccountAuth({ signup = false, embedded = false }) {
             disabled={busy}
           />
           <A
-            to={signup ? "/signin/" : "/signup/"}
+            to={authLink(signup ? "/signin/" : "/signup/")}
             className="gb-secondary-link"
           >
             {signup
@@ -451,7 +463,7 @@ export function AccountEmail({ mode }) {
                 }));
                 if (verify) {
                   setToken("");
-                  go("/studio/");
+                  go(agentReturnPath(result.redirect));
                 } else {
                   setToken("");
                   setNotice(
@@ -562,10 +574,10 @@ export function AccountProfile({ account, onSave }) {
     [account.name, account.agent_name],
   );
   return (
-    <section className="account-profile-card">
+    <><section className="account-profile-card">
       <h2>Your account</h2>
       <p>
-        {account.email} <span className="account-demo-badge">Demo account</span>
+        {account.email}
       </p>
       <form
         onSubmit={async (event) => {
@@ -622,6 +634,6 @@ export function AccountProfile({ account, onSave }) {
           end={null}
         />
       </form>
-    </section>
+    </section><AccountData account={account}/></>
   );
 }

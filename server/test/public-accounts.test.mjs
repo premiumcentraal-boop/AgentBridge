@@ -103,6 +103,19 @@ async function harness(
   return { database, request, post, outbox, link, register, signup };
 }
 
+test('email verification resumes only an allowed agent connection and password recovery revokes existing app grants',async t=>{
+ const h=await harness(t),target='/studio/agents/?authorize='+randomUUID();
+ const token=await h.register('agent-owner@example.com',{return_to:target});assert.equal(h.link('agent-owner@example.com').searchParams.get('return_to'),target);
+ const verified=await h.post('verify-email',{token,password});assert.equal(verified.status,201);const result=await verified.json();assert.equal(result.redirect,target);
+ const client=randomUUID(),grant=randomUUID();
+ await h.database.run('INSERT INTO ab_agent_clients(client_id,metadata,created_at) VALUES(?,?,?)',[client,JSON.stringify({client_name:'Grok'}),Date.now()]);
+ await h.database.run('INSERT INTO ab_agent_grants(id,account_id,client_id,scopes,resource,created_at) VALUES(?,?,?,?,?,?)',[grant,result.account.id,client,'contacts:read',origin+'/mcp',Date.now()]);
+ await h.post('forgot-password',{email:'agent-owner@example.com'});const resetToken=new URLSearchParams(h.link('agent-owner@example.com','reset-password').hash.slice(1)).get('token');
+ assert.equal((await h.post('reset-password',{token:resetToken,password:password+' changed'})).status,200);assert.ok((await h.database.first('SELECT revoked_at FROM ab_agent_grants WHERE id=?',[grant])).revoked_at);
+ const unsafe=await h.register('safe-return@example.com',{return_to:'https://evil.example/collect'});assert.equal(h.link('safe-return@example.com').search,'');
+ const safe=await h.post('verify-email',{token:unsafe,password});assert.equal((await safe.json()).redirect,'/studio/');
+});
+
 test("public signup requires email ownership, creates independent accounts and never returns email tokens", async (t) => {
   const h = await harness(t, { DEMO_TESTER_EMAIL: "old-tester@example.com" });
   const session = await (await h.request("/api/auth/session")).json();

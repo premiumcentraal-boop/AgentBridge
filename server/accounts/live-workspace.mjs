@@ -28,6 +28,7 @@ import {
 import { UUID, E164, ProviderError } from "./signalwire-client.mjs";
 import { conversationRequest } from "./conversations.mjs";
 import { contactContext } from "../../shared/conversations.mjs";
+import { savedTranscripts } from "./transcription.mjs";
 const uuidPath = (path) => UUID.test(path || "");
 const numberView = (n, label) => ({
   id: crypto.randomUUID(),
@@ -74,6 +75,10 @@ export async function liveSnapshot(database, account, vaultKey) {
     "SELECT json_group_array(json_object('id',id,'kind',kind,'target',target,'status',status,'created_at',created_at)) AS entries FROM ab_provider_operations WHERE account_id=? AND status IN ('pending','unknown')",
     [account.id],
   );
+  const transcripts = await savedTranscripts(database, account.id);
+  for (const call of [...document.calls, ...(document.call_history || [])]) {
+    if (transcripts.some(item => item.call_id === call.id)) call.has_transcript = true;
+  }
   return {
     ...document,
     connections: document.connections.map((c) => ({
@@ -90,6 +95,7 @@ export async function liveSnapshot(database, account, vaultKey) {
       live_transcription: false,
       browser_audio: false,
       phone_join: false,
+      saved_transcription: true,
     },
   };
 }
