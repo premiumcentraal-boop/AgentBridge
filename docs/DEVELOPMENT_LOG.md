@@ -638,3 +638,7 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Tightened read-only migration preflight to require exactly one Wrangler JSON result with explicit success=true and a results array; previously extra results were silently ignored and missing success was treated as success.
 - Extended fake-Wrangler CLI regression with missing-success, multiple-result and object-response fixtures, all expected to fail closed without SQL writes or migration recommendations.
 - Exact-head CI and disposable local Wrangler D1 compatibility remain unverified for this commit. No routing activation, carrier calls, purchases, payments, merges or deployments.
+
+## 2026-11-16 — CLI migration-history corruption regressions (draft PR #58)
+- Extended the fake-Wrangler CLI integration suite with unknown and duplicate `d1_migrations.name` history responses. Both must return exit 1 and never emit a migration-apply recommendation; all captured SQL remains read-only.
+- This tests existing fail-closed migrationPlan behavior end-to-end, not a new runtime safeguard. Full exact-head CI and actual pinned-Wrangler disposable D1 execution remain unverified. No carrier calls, purchases, routing activation, merges or deployments.
