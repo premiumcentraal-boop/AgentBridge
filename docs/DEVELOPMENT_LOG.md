@@ -607,3 +607,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Inspected exact-head Quality gate #43798253610 for `50578f8`: secret-scan passed; checks failed with 219/220 tests passing. The new uniqueness regression used overescaped parentheses in its JavaScript regular expression and rejected the correct fail-closed error message.
 - Corrected the test assertion only, retaining the existing index validation and all negative test scenarios. Source commit `c1aa6a63b8b4504365b08f6902f6decd08ac55a2`.
 - Full exact-head CI on this follow-up commit and isolated Wrangler D1 behavior are pending verification; no local repository test execution, carrier actions, merge, or deployment.
+
+## 2026-11-16 — SQLite catalog integration regression (draft PR #58)
+- Added a repository Node test that launches Python's standard-library SQLite engine to create actual in-memory schemas and read `PRAGMA table_info`, `foreign_key_list`, `index_list`, and `index_xinfo`. This checks the production preflight validators against genuine SQLite metadata rather than hand-authored fixture objects.
+- The test expects a correctly constrained account-scoped idempotency key and ownership foreign key to pass, while a missing UNIQUE constraint or missing ownership foreign key must fail closed. No D1 writes, carrier actions, calls, payment operations, or routing activation.
+- Verification: an independent local Python SQLite PRAGMA smoke check succeeded; repository Node test and exact-head CI are not yet confirmed. This is SQLite integration coverage, **not** Cloudflare Wrangler D1 validation. Branch remains draft, unmerged and undeployed.
