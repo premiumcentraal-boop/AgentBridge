@@ -662,3 +662,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Corrected both preflight reads of `d1_migrations` to use `SELECT name FROM d1_migrations ORDER BY name`; SQLite does not guarantee implicit row ordering, so identical history could previously trigger a false schema/history drift rejection.
 - Updated the fake-Wrangler CLI fixture and asserted that successful and history-corruption scenarios issue only ordered history queries; genuine history drift must still fail closed. Commits `c1ae44f` and `d585f37`.
 - This fixes deterministic comparison, not atomic snapshot isolation. Local Node tests and disposable pinned-Wrangler D1 remain unexecuted at commit time; exact-head CI pending. PR remains draft and unmerged, no paid routing, carrier calls, purchases, payments or deployment.
+
+## 2026-11-16 — D1 tracker timestamp-default integrity (draft PR #58)
+- The preflight previously accepted a counterfeit `d1_migrations` table with `applied_at TIMESTAMP NOT NULL` but no default. Wrangler's migration tracker inserts normally rely on a `CURRENT_TIMESTAMP` default, so this schema could pass preflight and then fail on the first migration insert. A constant or noncanonical default could also undermine migration audit timestamps.
+- Require the tracker `applied_at` column to be NOT NULL with exactly `CURRENT_TIMESTAMP` in PRAGMA metadata. Added fake-Wrangler CLI rejection and real SQLite catalog regressions for missing and incorrect defaults, while retaining a positive canonical tracker fixture.
+- Scope is read-only migration-preflight validation, not a migration or automatic tracker repair. Actual pinned Wrangler D1 compatibility and exact-head CI remain verification gates. No paid routing, carrier activity, merges or deployment.
