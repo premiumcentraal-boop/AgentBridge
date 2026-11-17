@@ -85,6 +85,23 @@ test('real local Wrangler CLI rejects empty baseline and counterfeit tracker', {
     assert.equal(empty.status,1,JSON.stringify(empty));
     assert.match(empty.stdout,/Missing base accounts\/reservations tables/);
     assert.doesNotMatch(empty.stderr,/OK: after a backup/);
+    // A genuine approved baseline must produce an actionable read-only plan.
+    // This proves the full CLI positive path with actual Wrangler/SQLite metadata,
+    // rather than merely accepting a mocked response or tracker fixture.
+    const baselineSetup=spawnSync(wrangler,['d1','execute','agentbridge_cli_probe','--local',
+      '--config','wrangler.jsonc','--file',resolve('backend/schema.sql')],{
+      cwd:backend,encoding:'utf8',timeout:90000,env});
+    assert.equal(baselineSetup.status,0,JSON.stringify(baselineSetup));
+    const validBaseline=cli();
+    assert.equal(validBaseline.status,0,JSON.stringify(validBaseline));
+    const report=JSON.parse(validBaseline.stdout);
+    assert.equal(report.unsafe,false);
+    assert.equal(report.plan.safe,true);
+    assert.deepEqual(report.plan.baseline,[]);
+    assert.deepEqual(report.plan.apply,[
+      '0001_routing_controls.sql','0002_approval_bindings.sql',
+      '0003_owner_actions.sql','0004_inbound_call_log.sql']);
+    assert.match(validBaseline.stderr,/OK: after a backup/);
     // A real Wrangler SQL write only to the disposable local database creates
     // a structurally counterfeit tracker. The preflight itself remains read-only.
     const setup=spawnSync(wrangler,['d1','execute','agentbridge_cli_probe','--local',
