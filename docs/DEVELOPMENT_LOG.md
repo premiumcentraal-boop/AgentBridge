@@ -680,3 +680,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 ## 2026-11-17 — Genuine Wrangler D1 baseline positive CLI regression (draft PR #58)
 - Extended disposable local Wrangler integration coverage: after rejecting an empty database, apply only the repository's `backend/schema.sql` to a temporary local D1 database, then execute the actual read-only preflight CLI. Assert exit 0, `unsafe:false`, `plan.safe:true`, empty baseline reconciliation, and exactly four pending additive migrations. The existing counterfeit tracker negative path remains afterward.
 - This verifies the full CLI's positive recommendation against real D1 schema metadata, complementing negative-path tests and the real Wrangler tracker contract. No migration application, carrier routing, remote database access, or production deployment is performed. Exact-head CI for commit `e6d695a` is pending verification at writing; manual review and production migration approval remain required.
+
+## 2026-11-17 — Applied-history full CLI local-D1 regression (draft PR #58)
+- Added an isolated pinned-Wrangler test that initializes the approved test baseline, applies real migration 0001 via Wrangler, and runs the complete read-only preflight CLI against a genuine nonempty `d1_migrations` tracker.
+- Asserts 0001 is recognized as applied, only 0002–0004 are proposed, and schema plus tracker rows remain byte-for-byte equivalent across the preflight. This is disposable local-D1 evidence only; no production schema or carrier activity.
+- Source commit `e433f81`; exact-head CI and manual review pending at commit time. Keep PR draft; no merge, deployment, routing activation or paid resources.
