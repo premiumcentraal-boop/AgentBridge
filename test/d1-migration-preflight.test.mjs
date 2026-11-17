@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {classifyMigrationState,migrationPlan,baselineSql,MIGRATION_FILES} from '../scripts/d1-migration-preflight.mjs';
+import {classifyMigrationState,migrationPlan,MIGRATION_FILES} from '../scripts/d1-migration-preflight.mjs';
 const v1=['approved_at','pin_sha256','pin_attempts','provider','provider_call_id','claimed_at','max_call_seconds','max_cost_cents'];
 const base=['accounts','reservations'];
 const v2=['provider_events','reservation_approval_bindings','reservation_carrier_legs'];
@@ -25,10 +25,9 @@ test('migration plan never schedules 0001 when its columns already exist (0001 i
   const tracked=migrationPlan(classifyMigrationState(v1,[...base,...v2]),['0001_routing_controls.sql','0002_approval_bindings.sql']);
   assert.deepEqual(tracked,{safe:true,apply:['0003_owner_actions.sql','0004_inbound_call_log.sql'],baseline:[]});
   assert.deepEqual(migrationPlan(classifyMigrationState(v1.slice(0,2),base),[]),{safe:false,apply:[],baseline:[]});
-  const sql=baselineSql(['0001_routing_controls.sql']);
-  assert.match(sql,/INSERT OR IGNORE INTO d1_migrations \(name\) VALUES \('0001_routing_controls.sql'\)/);
-  assert.doesNotMatch(sql,/ALTER TABLE/);
-  assert.equal(baselineSql([]),'');
+  // A baseline discrepancy is informational only; the CLI must not emit
+  // conflict-suppressing INSERT OR IGNORE reconciliation SQL.
+  assert.deepEqual(manual.baseline,['0001_routing_controls.sql']);
 });
 
 test('preflight runs the pinned wrangler from backend/ (no repo-root node_modules needed)',async()=>{
