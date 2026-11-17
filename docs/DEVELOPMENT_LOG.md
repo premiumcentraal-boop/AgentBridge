@@ -657,3 +657,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - GitHub Actions quality gate #43969925475 at `432b492a` failed during `npm test`: 237/238 test entries passed, but `test/d1-migration-cli.test.mjs` failed module parsing at line 57 due to literal escaped newline tokens in the scenario array. The previous production-script syntax correction was insufficient; `npm run check` did not include this test file.
 - Replaced the unintended literal escaped newlines in the fake-Wrangler fixture and scenario array with actual source line breaks, preserving the intended schema-drift and migration-history-drift scenarios. No production routing, database schema, carrier settings or secrets changed.
 - Verification: diagnosis from Actions job logs; test correction committed as `c63475b`. Exact-head CI and disposable local Wrangler D1 remain required before manual review. PR stays draft and unmerged; no deployment or paid calls.
+
+## 2026-11-16 — Deterministic D1 migration-history reads (draft PR #58)
+- Corrected both preflight reads of `d1_migrations` to use `SELECT name FROM d1_migrations ORDER BY name`; SQLite does not guarantee implicit row ordering, so identical history could previously trigger a false schema/history drift rejection.
+- Updated the fake-Wrangler CLI fixture and asserted that successful and history-corruption scenarios issue only ordered history queries; genuine history drift must still fail closed. Commits `c1ae44f` and `d585f37`.
+- This fixes deterministic comparison, not atomic snapshot isolation. Local Node tests and disposable pinned-Wrangler D1 remain unexecuted at commit time; exact-head CI pending. PR remains draft and unmerged, no paid routing, carrier calls, purchases, payments or deployment.
