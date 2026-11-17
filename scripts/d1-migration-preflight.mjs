@@ -157,6 +157,9 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
   try{
     // Detect observable schema/history drift across the separate read-only queries.
     // This is not an atomic D1 snapshot and cannot replace operator approval.
+    const versionBefore=inspect(database,mode,'PRAGMA schema_version');
+    if(versionBefore.length!==1||!Number.isSafeInteger(Number(versionBefore[0]?.schema_version)))
+      throw Error('D1 schema version unavailable; refusing a mixed-state recommendation.');
     const schemaBefore=inspect(database,mode,'SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name');
     const cols=inspect(database,mode,'PRAGMA table_info(reservations)').map(x=>x.name);
     const tables=inspect(database,mode,"SELECT name FROM sqlite_master WHERE type='table'").map(x=>x.name);
@@ -188,6 +191,10 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
     if(structuralFailures.length){state.unsafe=true;state.reasons.push(...structuralFailures);}
     const schemaAfter=inspect(database,mode,'SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name');
     const appliedAfter=tracked?inspect(database,mode,'SELECT name FROM d1_migrations ORDER BY name').map(x=>x.name):[];
+    const versionAfter=inspect(database,mode,'PRAGMA schema_version');
+    if(versionAfter.length!==1||!Number.isSafeInteger(Number(versionAfter[0]?.schema_version))||
+       Number(versionBefore[0].schema_version)!==Number(versionAfter[0].schema_version))
+      throw Error('D1 schema version changed during preflight; refusing a mixed-state recommendation.');
     if(JSON.stringify(schemaBefore)!==JSON.stringify(schemaAfter)||JSON.stringify(applied)!==JSON.stringify(appliedAfter))
       throw Error('D1 schema or migration history changed during preflight; refusing a mixed-state recommendation.');
     const plan=migrationPlan(state,applied);
