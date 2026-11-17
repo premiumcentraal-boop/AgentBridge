@@ -174,7 +174,9 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
       const trackerFailures=validateMigrationTracker(trackerColumns,trackerIndexes,trackerDetails);
       if(trackerFailures.length)throw Error('Untrusted D1 migration tracker: '+trackerFailures.join('; '));
     }
-    const applied=tracked?inspect(database,mode,'SELECT name FROM d1_migrations ORDER BY name').map(x=>x.name):[];
+    const historySql='SELECT id, name, applied_at FROM d1_migrations ORDER BY name, id';
+    const historyBefore=tracked?inspect(database,mode,historySql):[];
+    const applied=historyBefore.map(x=>x.name);
     const structuralFailures=validateCriticalSchema(
       inspect(database,mode,'PRAGMA table_info(reservations)'),
       tables.includes('owner_actions')?inspect(database,mode,'PRAGMA table_info(owner_actions)'):[],
@@ -189,8 +191,9 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
     structuralFailures.push(...validateIdempotencyIndex(indexes,indexDetails));
     if(structuralFailures.length){state.unsafe=true;state.reasons.push(...structuralFailures);}
     const schemaAfter=inspect(database,mode,'SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name');
-    const appliedAfter=tracked?inspect(database,mode,'SELECT name FROM d1_migrations ORDER BY name').map(x=>x.name):[];
-    if(JSON.stringify(schemaBefore)!==JSON.stringify(schemaAfter)||JSON.stringify(applied)!==JSON.stringify(appliedAfter))
+    const historyAfter=tracked?inspect(database,mode,historySql):[];
+    // Compare full tracker rows, not only names: id/timestamp drift is material.
+    if(JSON.stringify(schemaBefore)!==JSON.stringify(schemaAfter)||JSON.stringify(historyBefore)!==JSON.stringify(historyAfter))
       throw Error('D1 schema or migration history changed during preflight; refusing a mixed-state recommendation.');
     const plan=migrationPlan(state,applied);
     if(!state.unsafe&&!plan.safe){
