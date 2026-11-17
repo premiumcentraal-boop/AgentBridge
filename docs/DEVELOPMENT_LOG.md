@@ -685,3 +685,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added an isolated pinned-Wrangler test that initializes the approved test baseline, applies real migration 0001 via Wrangler, and runs the complete read-only preflight CLI against a genuine nonempty `d1_migrations` tracker.
 - Asserts 0001 is recognized as applied, only 0002–0004 are proposed, and schema plus tracker rows remain byte-for-byte equivalent across the preflight. This is disposable local-D1 evidence only; no production schema or carrier activity.
 - Source commit `e433f81`; exact-head CI and manual review pending at commit time. Keep PR draft; no merge, deployment, routing activation or paid resources.
+
+## 2026-11-17 — D1 preflight schema-version drift guard (draft PR #58)
+- Added read-only `PRAGMA schema_version` checks before and after the preflight's multiple Wrangler queries. The CLI now fails closed when SQLite's schema generation changes even if a concurrent DDL change is reversed and the final `sqlite_master` text matches its initial snapshot.
+- Added deterministic fake-Wrangler regression for a schema-version change with identical schema catalog results. This narrows one DDL ABA window but does **not** provide an atomic snapshot, detect all data-only migration-history ABA patterns, or close the gap between preflight and manual apply. Exclusive migration window, verified backup, fresh preflight and explicit approval remain mandatory.
+- Source changes are draft and unmerged; exact-head CI and pinned local-Wrangler compatibility checks must pass before manual review. No remote D1, carrier operations, paid routing, merge or deployment.
