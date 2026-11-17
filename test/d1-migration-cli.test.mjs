@@ -27,7 +27,7 @@ if(sql==='SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, nam
 }
 else if(sql==='PRAGMA table_info(reservations)')rows=['id','account_id','destination','idempotency_key','status','created_at','expires_at'].map(name=>col(name,name==='id'?1:0,name==='id'?0:1));
 else if(sql==="SELECT name FROM sqlite_master WHERE type='table'")rows=[{name:'accounts'},{name:'reservations'},{name:'d1_migrations'}];
-else if(sql==='PRAGMA table_info(d1_migrations)')rows=[col('id',1,0,'INTEGER'),col('name',0,0),col('applied_at',0,1,'TIMESTAMP')];
+else if(sql==='PRAGMA table_info(d1_migrations)')rows=[col('id',1,0,'INTEGER'),col('name',0,0),{...col('applied_at',0,1,'TIMESTAMP'),dflt_value:process.env.FIXTURE==='missing-timestamp-default'?null:'CURRENT_TIMESTAMP'}];
 else if(sql==='PRAGMA index_list(d1_migrations)')rows=process.env.FIXTURE==='missing-unique'?[]:[trackerIndex];
 else if(sql.includes("pragma_index_xinfo('sqlite_autoindex_d1_migrations_1')"))rows=[{seqno:0,cid:1,name:'name',key:1},{seqno:1,cid:-1,name:null,key:0}];
 else if(sql==='SELECT name FROM d1_migrations ORDER BY name')rows=process.env.FIXTURE==='history-drift'&&(fs.readFileSync(process.env.QUERY_LOG,'utf8').match(/SELECT name FROM d1_migrations ORDER BY name/g)||[]).length===2?[{name:'0001_routing_controls.sql'}]:process.env.FIXTURE==='unknown-history'?[{name:'9999_unapproved.sql'}]:process.env.FIXTURE==='duplicate-history'?[{name:'0001_routing_controls.sql'},{name:'0001_routing_controls.sql'}]:[];
@@ -52,6 +52,7 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
     for(const [scenario,status,pattern] of [
       ['valid',0,/OK: after a backup/],
       ['missing-unique',1,/Untrusted D1 migration tracker:.*UNIQUE/],
+      ['missing-timestamp-default',1,/Untrusted D1 migration tracker:.*CURRENT_TIMESTAMP default/],
       ['invalid-json',1,/Wrangler did not return JSON/],
       ['failed-query',1,/Unexpected D1 query response/],
       ['missing-success',1,/Unexpected D1 query response/],
@@ -82,7 +83,7 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
         assert.ok(!queries.includes('SELECT name FROM d1_migrations'),scenario+': unordered migration history is forbidden');
       }
       assert.ok(queries.every(sql=>/^(PRAGMA |SELECT )/i.test(sql)),scenario+': no writes');
-      if(scenario==='missing-unique')assert.ok(!queries.includes('SELECT name FROM d1_migrations ORDER BY name'),'must not trust invalid tracker');
+      if(['missing-unique','missing-timestamp-default'].includes(scenario))assert.ok(!queries.includes('SELECT name FROM d1_migrations ORDER BY name'),'must not trust invalid tracker');
       if(status!==0)assert.doesNotMatch(run.stderr,/OK: after a backup/);
     }
   }finally{rmSync(dir,{recursive:true,force:true});}
