@@ -40,11 +40,6 @@ export function migrationPlan(state,applied=[]){
   const apply=MIGRATION_FILES.filter(f=>!present[f]&&!done.has(f));
   return {safe:true,apply,baseline};
 }
-export function baselineSql(files){
-  if(!files.length)return '';
-  return "CREATE TABLE IF NOT EXISTS d1_migrations(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL); "+
-    files.map(f=>"INSERT OR IGNORE INTO d1_migrations (name) VALUES ('"+f+"');").join(' ');
-}
 export function classifyMigrationState(columns,tables){
   const col=new Set(columns),tab=new Set(tables);
   const old=V1.filter(x=>col.has(x));
@@ -205,10 +200,11 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
       console.error('BLOCKED: partial schema; inspect D1 backup before any write.');
       process.exitCode=1;
     }else if(plan.baseline.length){
-      console.error('NOTICE: these migrations are already present but not recorded by Wrangler: '+plan.baseline.join(', ')+
-        '. After a backup, record them WITHOUT re-running them, e.g.:');
-      console.error('  (cd backend && npx wrangler d1 execute '+database+' '+mode+' --command "'+baselineSql(plan.baseline)+'")');
-      console.error('Then re-run this preflight before `wrangler d1 migrations apply`.');
+      // Never emit a blind reconciliation command: the tracker may change after
+      // these independent reads, and INSERT OR IGNORE can silently hide conflicts.
+      console.error('BLOCKED: migrations are present in schema but missing from D1 history: '+plan.baseline.join(', ')+
+        '. No automatic baseline reconciliation SQL is safe.');
+      console.error('Require an exclusive maintenance window, verified backup, independent schema/history review, and explicit operator-approved conflict-detecting reconciliation. Re-run preflight afterward.');
       process.exitCode=2;
     }else if(plan.apply.length){
       console.error('OK: after a backup, `(cd backend && npx wrangler d1 migrations apply '+database+' '+mode+')` will apply: '+plan.apply.join(', '));
