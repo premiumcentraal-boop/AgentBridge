@@ -21,11 +21,7 @@ const col=(name,pk=0,notnull=1,type='TEXT')=>({name,pk,notnull,type});
 const trackerIndex={name:'sqlite_autoindex_d1_migrations_1',unique:1,partial:0};
 const reservationIndex={name:'sqlite_autoindex_reservations_2',unique:1,partial:0};
 let rows;
-if(sql==='PRAGMA schema_version'){
-  const count=(fs.readFileSync(process.env.QUERY_LOG,'utf8').match(/PRAGMA schema_version/g)||[]).length;
-  rows=[{schema_version:count===2&&process.env.FIXTURE==='schema-version-drift'?12:11}];
-}
-else if(sql==='SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name'){
+if(sql==='SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name'){
   const count=(fs.readFileSync(process.env.QUERY_LOG,'utf8').match(/sqlite_master ORDER BY type, name/g)||[]).length;
   rows=[{type:'table',name:count===2&&process.env.FIXTURE==='schema-drift'?'changed':'accounts',tbl_name:'accounts',sql:'CREATE TABLE accounts(id INTEGER)'}];
 }
@@ -65,7 +61,6 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
       ['unknown-history',1,/BLOCKED: partial schema/],
       ['duplicate-history',1,/BLOCKED: partial schema/],
       ['schema-drift',1,/schema or migration history changed during preflight/],
-      ['schema-version-drift',1,/schema version changed during preflight/],
       ['history-drift',1,/schema or migration history changed during preflight/]
     ]){
       const log=join(dir,scenario+'.queries');
@@ -88,6 +83,7 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
         assert.ok(!queries.includes('SELECT name FROM d1_migrations'),scenario+': unordered migration history is forbidden');
       }
       assert.ok(queries.every(sql=>/^(PRAGMA |SELECT )/i.test(sql)),scenario+': no writes');
+      assert.ok(!queries.includes('PRAGMA schema_version'),scenario+': Wrangler denies schema_version with SQLITE_AUTH');
       if(['missing-unique','missing-timestamp-default'].includes(scenario))assert.ok(!queries.includes('SELECT name FROM d1_migrations ORDER BY name'),'must not trust invalid tracker');
       if(status!==0)assert.doesNotMatch(run.stderr,/OK: after a backup/);
     }
