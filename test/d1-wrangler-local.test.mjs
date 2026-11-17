@@ -115,3 +115,65 @@ test('real local Wrangler CLI rejects empty baseline and counterfeit tracker', {
     assert.doesNotMatch(counterfeit.stderr,/OK: after a backup/);
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+
+// The CLI must trust a genuine nonempty Wrangler tracker, not just a pristine
+// baseline or the separately tested validator. Snapshot reads also prove the
+// preflight does not mutate schema/history in this disposable database.
+test('real Wrangler CLI accepts applied 0001 history without modifying D1', {timeout:120000},()=>{
+  const wrangler=resolve('backend/node_modules/.bin/wrangler');
+  assert.ok(existsSync(wrangler),'Run npm --prefix backend ci first');
+  const dir=mkdtempSync(join(tmpdir(),'agentbridge-wrangler-applied-'));
+  try{
+    const backend=join(dir,'backend');
+    mkdirSync(join(dir,'scripts'));
+    mkdirSync(join(backend,'migrations'),{recursive:true});
+    mkdirSync(join(backend,'node_modules','.bin'),{recursive:true});
+    copyFileSync(resolve('scripts/d1-migration-preflight.mjs'),join(dir,'scripts','d1-migration-preflight.mjs'));
+    copyFileSync(resolve('backend/migrations/0001_routing_controls.sql'),join(backend,'migrations','0001_routing_controls.sql'));
+    writeFileSync(join(dir,'package.json'),'{"type":"module"}');
+    symlinkSync(wrangler,join(backend,'node_modules','.bin','wrangler'));
+    writeFileSync(join(backend,'wrangler.jsonc'),JSON.stringify({
+      name:'agentbridge-disposable-applied-test',compatibility_date:'2026-11-01',
+      d1_databases:[{binding:'DB',database_name:'agentbridge_applied_probe',
+        database_id:'00000000-0000-4000-8000-000000000003',migrations_dir:'migrations'}]
+    }));
+    const env={...process.env,CI:'true',WRANGLER_SEND_METRICS:'false'};
+    function run(args){
+      const result=spawnSync(wrangler,args,{cwd:backend,encoding:'utf8',timeout:90000,env});
+      assert.equal(result.status,0,JSON.stringify({args,stdout:result.stdout,stderr:result.stderr}));
+      return result.stdout;
+    }
+    run(['d1','execute','agentbridge_applied_probe','--local','--config','wrangler.jsonc',
+      '--file',resolve('backend/schema.sql')]);
+    run(['d1','migrations','apply','agentbridge_applied_probe','--local','--config','wrangler.jsonc']);
+    function query(sql){
+      const parsed=JSON.parse(run(['d1','execute','agentbridge_applied_probe','--local',
+        '--config','wrangler.jsonc','--command',sql,'--json']).trim());
+      assert.equal(parsed.length,1);
+      assert.equal(parsed[0].success,true);
+      return parsed[0].results;
+    }
+    function snapshot(){
+      return {
+        schema:query('SELECT type,name,tbl_name,sql FROM sqlite_master ORDER BY type,name'),
+        history:query('SELECT id,name,applied_at FROM d1_migrations ORDER BY id')
+      };
+    }
+    const before=snapshot();
+    assert.deepEqual(before.history.map(row=>row.name),['0001_routing_controls.sql']);
+    const cli=spawnSync(process.execPath,[join(dir,'scripts','d1-migration-preflight.mjs'),
+      '--local','agentbridge_applied_probe'],{cwd:dir,encoding:'utf8',timeout:90000,env});
+    assert.equal(cli.status,0,JSON.stringify(cli));
+    const report=JSON.parse(cli.stdout);
+    assert.equal(report.unsafe,false);
+    assert.equal(report.tracked,true);
+    assert.deepEqual(report.applied,['0001_routing_controls.sql']);
+    assert.deepEqual(report.plan.baseline,[]);
+    assert.deepEqual(report.plan.apply,[
+      '0002_approval_bindings.sql','0003_owner_actions.sql','0004_inbound_call_log.sql'
+    ]);
+    assert.match(cli.stderr,/OK: after a backup/);
+    assert.deepEqual(snapshot(),before,'Preflight must leave schema and tracker history untouched');
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
