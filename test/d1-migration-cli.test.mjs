@@ -30,7 +30,15 @@ else if(sql==="SELECT name FROM sqlite_master WHERE type='table'")rows=[{name:'a
 else if(sql==='PRAGMA table_info(d1_migrations)')rows=[col('id',1,0,'INTEGER'),col('name',0,0),{...col('applied_at',0,1,'TIMESTAMP'),dflt_value:process.env.FIXTURE==='missing-timestamp-default'?null:'CURRENT_TIMESTAMP'}];
 else if(sql==='PRAGMA index_list(d1_migrations)')rows=process.env.FIXTURE==='missing-unique'?[]:[trackerIndex];
 else if(sql.includes("pragma_index_xinfo('sqlite_autoindex_d1_migrations_1')"))rows=[{seqno:0,cid:1,name:'name',key:1},{seqno:1,cid:-1,name:null,key:0}];
-else if(sql==='SELECT name FROM d1_migrations ORDER BY name')rows=process.env.FIXTURE==='history-drift'&&(fs.readFileSync(process.env.QUERY_LOG,'utf8').match(/SELECT name FROM d1_migrations ORDER BY name/g)||[]).length===2?[{name:'0001_routing_controls.sql'}]:process.env.FIXTURE==='unknown-history'?[{name:'9999_unapproved.sql'}]:process.env.FIXTURE==='duplicate-history'?[{name:'0001_routing_controls.sql'},{name:'0001_routing_controls.sql'}]:[];
+else if(sql==='SELECT id, name, applied_at FROM d1_migrations ORDER BY name, id'){
+  const count=(fs.readFileSync(process.env.QUERY_LOG,'utf8').match(/SELECT id, name, applied_at FROM d1_migrations ORDER BY name, id/g)||[]).length;
+  const entry=(name,id=1,applied_at='2026-11-17 00:00:00')=>({id,name,applied_at});
+  rows=process.env.FIXTURE==='history-drift'&&count===2?[entry('0001_routing_controls.sql')]:
+    process.env.FIXTURE==='timestamp-drift'?[entry('0001_routing_controls.sql',1,count===2?'2026-11-17 01:00:00':'2026-11-17 00:00:00')]:
+    process.env.FIXTURE==='id-drift'?[entry('0001_routing_controls.sql',count===2?2:1)]:
+    process.env.FIXTURE==='unknown-history'?[entry('9999_unapproved.sql')]:
+    process.env.FIXTURE==='duplicate-history'?[entry('0001_routing_controls.sql'),entry('0001_routing_controls.sql',2)]:[];
+}
 else if(sql==='PRAGMA foreign_key_list(reservations)')rows=[{from:'account_id',table:'accounts',to:'id',on_delete:'RESTRICT'}];
 else if(sql==='PRAGMA index_list(reservations)')rows=[reservationIndex];
 else if(sql.includes("pragma_index_xinfo('sqlite_autoindex_reservations_2')"))rows=[{seqno:0,cid:1,name:'account_id',key:1},{seqno:1,cid:3,name:'idempotency_key',key:1}];
@@ -61,7 +69,9 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
       ['unknown-history',1,/BLOCKED: partial schema/],
       ['duplicate-history',1,/BLOCKED: partial schema/],
       ['schema-drift',1,/schema or migration history changed during preflight/],
-      ['history-drift',1,/schema or migration history changed during preflight/]
+      ['history-drift',1,/schema or migration history changed during preflight/],
+      ['timestamp-drift',1,/schema or migration history changed during preflight/],
+      ['id-drift',1,/schema or migration history changed during preflight/]
     ]){
       const log=join(dir,scenario+'.queries');
       const run=spawnSync(process.execPath,[join(dir,'scripts','d1-migration-preflight.mjs'),'--local','disposable'],{
@@ -78,8 +88,8 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
         assert.match(report.reasons.join(' '),/Migration history claims applied objects/,scenario);
       }
       const queries=readFileSync(log,'utf8').trim().split('\n').map(JSON.parse);
-      if(['valid','history-drift','unknown-history','duplicate-history'].includes(scenario)){
-        assert.ok(queries.includes('SELECT name FROM d1_migrations ORDER BY name'),scenario+': migration history must be read in deterministic order');
+      if(['valid','history-drift','timestamp-drift','id-drift','unknown-history','duplicate-history'].includes(scenario)){
+        assert.ok(queries.includes('SELECT id, name, applied_at FROM d1_migrations ORDER BY name, id'),scenario+': migration history must be read in deterministic order');
         assert.ok(!queries.includes('SELECT name FROM d1_migrations'),scenario+': unordered migration history is forbidden');
       }
       assert.ok(queries.every(sql=>/^(PRAGMA |SELECT )/i.test(sql)),scenario+': no writes');
