@@ -172,7 +172,7 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
       const trackerFailures=validateMigrationTracker(trackerColumns,trackerIndexes,trackerDetails);
       if(trackerFailures.length)throw Error('Untrusted D1 migration tracker: '+trackerFailures.join('; '));
     }
-    const applied=tracked?inspect(database,mode,'SELECT name FROM d1_migrations').map(x=>x.name):[];
+    const applied=tracked?inspect(database,mode,'SELECT name FROM d1_migrations ORDER BY name').map(x=>x.name):[];
     const structuralFailures=validateCriticalSchema(
       inspect(database,mode,'PRAGMA table_info(reservations)'),
       tables.includes('owner_actions')?inspect(database,mode,'PRAGMA table_info(owner_actions)'):[],
@@ -187,7 +187,7 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
     structuralFailures.push(...validateIdempotencyIndex(indexes,indexDetails));
     if(structuralFailures.length){state.unsafe=true;state.reasons.push(...structuralFailures);}
     const schemaAfter=inspect(database,mode,'SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name');
-    const appliedAfter=tracked?inspect(database,mode,'SELECT name FROM d1_migrations').map(x=>x.name):[];
+    const appliedAfter=tracked?inspect(database,mode,'SELECT name FROM d1_migrations ORDER BY name').map(x=>x.name):[];
     if(JSON.stringify(schemaBefore)!==JSON.stringify(schemaAfter)||JSON.stringify(applied)!==JSON.stringify(appliedAfter))
       throw Error('D1 schema or migration history changed during preflight; refusing a mixed-state recommendation.');
     const plan=migrationPlan(state,applied);
