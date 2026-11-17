@@ -99,3 +99,11 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
     }
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test('preflight never prints blind baseline tracker writes or conflict-suppressing SQL',()=>{
+  const source=readFileSync(cli,'utf8');
+  assert.doesNotMatch(source,/INSERT OR IGNORE INTO d1_migrations/);
+  assert.doesNotMatch(source,/CREATE TABLE IF NOT EXISTS d1_migrations/);
+  assert.match(source,/No automatic baseline reconciliation SQL is safe/);
+  assert.match(source,/exclusive maintenance window/);
+});
