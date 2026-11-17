@@ -117,8 +117,8 @@ export function validateMigrationTracker(columns,indexes,indexDetails){
     failures.push('d1_migrations.id primary key missing or weakened');
   if(!name||String(name.type).toUpperCase()!=='TEXT')
     failures.push('d1_migrations.name TEXT column missing');
-  if(!applied||Number(applied.notnull)!==1)
-    failures.push('d1_migrations.applied_at required column missing or nullable');
+  if(!applied||Number(applied.notnull)!==1||String(applied.dflt_value??'').trim().toUpperCase()!=='CURRENT_TIMESTAMP')
+    failures.push('d1_migrations.applied_at must be NOT NULL with CURRENT_TIMESTAMP default');
   const unique=indexes.some(index=>{
     if(Number(index.unique)!==1||Number(index.partial)!==0||typeof index.name!=='string')return false;
     const cols=indexDetails.find(item=>item.name===index.name)?.columns;
