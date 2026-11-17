@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,writeFileSync,rmSync,existsSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,rmSync,existsSync,copyFileSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -54,5 +54,47 @@ test('pinned Wrangler local D1 migration tracker matches preflight contract', {t
     // without ever altering the real Wrangler-generated tracker.
     assert.ok(validateMigrationTracker(columns.map(x=>x.name==='applied_at'
       ? {...x,dflt_value:null}:x),indexes,details).length>0);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+ 
+// Exercise the actual CLI against an isolated Wrangler database, not a mocked
+// JSON response. Both cases must deny migration recommendations without writes.
+test('real local Wrangler CLI rejects empty baseline and counterfeit tracker', {timeout:120000},()=>{
+  const wrangler=resolve('backend/node_modules/.bin/wrangler');
+  assert.ok(existsSync(wrangler),'Run npm --prefix backend ci first');
+  const dir=mkdtempSync(join(tmpdir(),'agentbridge-wrangler-cli-'));
+  try{
+    const backend=join(dir,'backend');
+    mkdirSync(join(dir,'scripts'));
+    mkdirSync(join(backend,'node_modules','.bin'),{recursive:true});
+    copyFileSync(resolve('scripts/d1-migration-preflight.mjs'),join(dir,'scripts','d1-migration-preflight.mjs'));
+    writeFileSync(join(dir,'package.json'),'{"type":"module"}');
+    symlinkSync(wrangler,join(backend,'node_modules','.bin','wrangler'));
+    writeFileSync(join(backend,'wrangler.jsonc'),JSON.stringify({
+      name:'agentbridge-disposable-cli-test',compatibility_date:'2026-11-01',
+      d1_databases:[{binding:'DB',database_name:'agentbridge_cli_probe',
+        database_id:'00000000-0000-4000-8000-000000000002'}]
+    }));
+    const env={...process.env,CI:'true',WRANGLER_SEND_METRICS:'false'};
+    function cli(){
+      return spawnSync(process.execPath,[join(dir,'scripts','d1-migration-preflight.mjs'),
+        '--local','agentbridge_cli_probe'],{cwd:dir,encoding:'utf8',timeout:90000,env});
+    }
+    const empty=cli();
+    assert.equal(empty.status,1,JSON.stringify(empty));
+    assert.match(empty.stdout,/Missing base accounts\/reservations tables/);
+    assert.doesNotMatch(empty.stderr,/OK: after a backup/);
+    // A real Wrangler SQL write only to the disposable local database creates
+    // a structurally counterfeit tracker. The preflight itself remains read-only.
+    const setup=spawnSync(wrangler,['d1','execute','agentbridge_cli_probe','--local',
+      '--config','wrangler.jsonc','--command',
+      'CREATE TABLE d1_migrations (id INTEGER PRIMARY KEY, name TEXT, applied_at TIMESTAMP NOT NULL);'],{
+      cwd:backend,encoding:'utf8',timeout:90000,env});
+    assert.equal(setup.status,0,JSON.stringify(setup));
+    const counterfeit=cli();
+    assert.equal(counterfeit.status,1,JSON.stringify(counterfeit));
+    assert.match(counterfeit.stderr,/Untrusted D1 migration tracker/);
+    assert.doesNotMatch(counterfeit.stderr,/OK: after a backup/);
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
