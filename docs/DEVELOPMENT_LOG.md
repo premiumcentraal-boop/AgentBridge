@@ -571,3 +571,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Tightened fail-closed pagination validation: only absent or explicit null `links.next` is terminal; false, zero and object cursors no longer bypass the pagination guard.
 - Added offline regression inputs for these malformed cursor shapes. A non-null cursor remains untrusted and never triggers a follow-up fetch or unlock.
 - Previous exact-head `f432ae2` Quality gate #43359731037 passed before this change. New commits require exact-head CI. Real SignalWire response semantics and D1 validation remain manual release gates; no calls, routing activation, deployment or merges.
+
+
+## 2026-11-18 — Hourly quality pulse missing root npm install (draft PR, unmerged)
+- Inspected main at bb9b90e and scheduled Actions run 44406418554: hourly audit failed 9 Node test files with ERR_MODULE_NOT_FOUND for libphonenumber-js imported by shared/phone.mjs. The hourly workflow installed only web dependencies before npm run ci; the normal Quality gate already runs root npm ci.
+- Added root npm ci --ignore-scripts --no-audit --no-fund before web install and validation in hourly-quality.yml, and a regression asserting the dependency-install order. This fixes a CI environment defect, not application routing behavior.
+- GitHub Actions on this feature branch pending; no local npm execution claimed. No calls, migrations, provider resources, paid routing, payments, merges or deployments.
