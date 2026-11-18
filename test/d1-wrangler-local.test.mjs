@@ -103,7 +103,11 @@ test('real local Wrangler CLI rejects empty baseline and counterfeit tracker', {
     assert.deepEqual(report.plan.apply,[
       '0001_routing_controls.sql','0002_approval_bindings.sql',
       '0003_owner_actions.sql','0004_inbound_call_log.sql']);
-    assert.match(validBaseline.stderr,/OK: after a backup/);
+    assert.match(validBaseline.stderr,/OBSERVATION ONLY: pending migrations:/);
+    assert.match(validBaseline.stderr,/does not authorize applying them/);
+    assert.doesNotMatch(validBaseline.stderr,/OK: after a backup|wrangler d1 migrations apply/);
+    assert.equal(report.verdict.authorizesMigration,false);
+    assert.equal(report.verdict.atomicSnapshot,false);
     // A real Wrangler SQL write only to the disposable local database creates
     // a structurally counterfeit tracker. The preflight itself remains read-only.
     const setup=spawnSync(wrangler,['d1','execute','agentbridge_cli_probe','--local',
@@ -175,7 +179,11 @@ test('real Wrangler CLI accepts applied 0001 history without modifying D1', {tim
     assert.deepEqual(report.plan.apply,[
       '0002_approval_bindings.sql','0003_owner_actions.sql','0004_inbound_call_log.sql'
     ]);
-    assert.match(cli.stderr,/OK: after a backup/);
+    assert.match(cli.stderr,/OBSERVATION ONLY: pending migrations:/);
+    assert.match(cli.stderr,/does not authorize applying them/);
+    assert.doesNotMatch(cli.stderr,/OK: after a backup|wrangler d1 migrations apply/);
+    assert.equal(report.verdict.authorizesMigration,false);
+    assert.equal(report.verdict.atomicSnapshot,false);
     assert.deepEqual(snapshot(),before,'Preflight must leave schema and tracker history untouched');
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
