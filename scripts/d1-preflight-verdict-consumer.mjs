@@ -40,14 +40,22 @@ export function interpretPreflightObservation(exitCode, stdout) {
       !validMigrationList(report.plan.apply) || !validMigrationList(report.plan.baseline) ||
       report.plan.apply.some(name => report.plan.baseline.includes(name)))
     return {accepted:false, reason:'INVALID_PLAN'};
-  const blocked = report.unsafe || !report.plan.safe || report.plan.baseline.length > 0;
-  if ((v.status === 'blocked') !== blocked)
+  // The producer has exactly four possible reason/status/plan combinations.
+  // A blocked observation cannot borrow a clean-state reason, and an unsafe
+  // schema always produces an unsafe plan with no proposed migration actions.
+  const {unsafe,plan} = report;
+  const expected = unsafe
+    ? {status:'blocked',reason:'UNSAFE_SCHEMA_OR_HISTORY'}
+    : !plan.safe
+      ? null
+      : plan.baseline.length > 0
+        ? {status:'blocked',reason:'UNRECONCILED_MIGRATION_HISTORY'}
+        : plan.apply.length > 0
+          ? {status:'observational_only',reason:'PENDING_MIGRATIONS'}
+          : {status:'observational_only',reason:'NO_PENDING_MIGRATIONS'};
+  if (!expected || (unsafe && (plan.safe || plan.apply.length || plan.baseline.length)) ||
+      v.status !== expected.status || v.reason !== expected.reason)
     return {accepted:false, reason:'CONTRADICTORY_VERDICT'};
-  if ((v.reason === 'UNSAFE_SCHEMA_OR_HISTORY') !== report.unsafe ||
-      (v.reason === 'UNRECONCILED_MIGRATION_HISTORY') !==
-        (!report.unsafe && report.plan.baseline.length > 0) ||
-      (!blocked && (v.reason === 'PENDING_MIGRATIONS') !== (report.plan.apply.length > 0)))
-    return {accepted:false, reason:'CONTRADICTORY_REASON'};
   return {accepted:true, status:v.status, authorizesMigration:false,
     requiresManualApproval:true};
 }
