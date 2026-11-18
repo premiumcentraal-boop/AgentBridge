@@ -178,6 +178,40 @@ function browser(t, backend, path) {
   t.after(() => dom.window.close());
   return { dom, window: dom.window, document: dom.window.document, errors };
 }
+test("returning owners wait for their studio session without starting a competing sign-in redirect", async (t) => {
+  const api = backend(t, true);
+  const registration = await api.fetcher("/api/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, name: "Tester", agent_name: "Agent" }),
+  });
+  assert.equal(registration.status, 201);
+  const pending = Promise.withResolvers();
+  const view = browser(t, {
+    fetcher: async (path, options) => {
+      if (path === "/api/studio/session") await pending.promise;
+      return api.fetcher(path, options);
+    },
+  }, "/studio/numbers/");
+  await until(() => view.document.querySelector(".studio-session-status"));
+  assert.equal(view.document.querySelector('input[type="password"]'), null);
+  pending.resolve();
+  await until(() => view.document.querySelector(".workspace-shell"));
+  assert.equal(api.requests.some(request => request.path === "/api/auth/session"), false);
+  assert.equal(view.window.location.pathname, "/studio/numbers/");
+});
+test("a studio service failure gives the owner a retry without entering sign-in", async (t) => {
+  const paths = [];
+  const view = browser(t, {
+    fetcher: async path => {
+      paths.push(path);
+      return Response.json({ error: { message: "Unavailable" } }, { status: 503 });
+    },
+  }, "/studio/");
+  await until(() => view.document.querySelector(".studio-session-status button"));
+  assert.ok(named(view.document, "Try again"));
+  assert.deepEqual(paths, ["/api/studio/session"]);
+});
 test("the hosted tester creates a real account, pairs an API-owned number, calls in demo mode and returns to saved data in a fresh session", async (t) => {
   const api = backend(t, true),
     first = browser(t, api, "/signup/");

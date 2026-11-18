@@ -1008,7 +1008,7 @@ export function LiveWorkspace({
       </article>
     );
   });
-  if (page === "settings" || page === "connection")
+  if (page === "settings")
     return (
       <div className="live-workspace">
         <SignalWireSettings onModeChange={onModeChange} />

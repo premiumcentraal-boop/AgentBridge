@@ -196,7 +196,7 @@ test("the rendered studio securely connects SignalWire, imports inventory, activ
     body: JSON.stringify({ email, name: "Tester", agent_name: "Agent" }),
   });
   assert.equal(response.status, 201);
-  const first = browser(t, fetcher, "/studio/settings/");
+  const first = browser(t, fetcher, "/studio/connection/");
   let { window, document } = first;
   await until(
     () =>

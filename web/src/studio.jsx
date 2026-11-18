@@ -993,6 +993,20 @@ export function Studio({ mode, setMode, isDemo }) {
       await refresh();
     }
   };
+  if (session.loading || (accountDemo && session.error))
+    return (
+      <>
+        <a className="skip-link" href="#main">Skip to content</a>
+        <main id="main" className="studio-session-status" tabIndex={-1}>
+          <h1 className="sr-only">AgentBridge Studio</h1>
+          <Mark />
+          <p role="status">{session.error || "Opening your studio…"}</p>
+          {session.error && (
+            <Btn label="Try again" end={null} onClick={() => location.reload()} />
+          )}
+        </main>
+      </>
+    );
   if (!session.authenticated && (accountDemo || session.auth_method))
     return <AccountAuth embedded />;
   if (!session.authenticated)
@@ -1223,6 +1237,12 @@ export function Studio({ mode, setMode, isDemo }) {
           {page==='overview' && session.account && <SetupChecklist/>}
           {page === "agents" ? (
             <AgentsStudio api={api} isDemo={isDemo} />
+          ) : page === "connection" && session.account ? (
+            <div className="live-workspace">
+              <PageHead title="Calling setup" />
+              <SignalWireSettings />
+              <TranscriptionSettings />
+            </div>
           ) : liveMode && page !== "design" ? (
             <LiveWorkspace
               initialHistoryFilter={current === "memory" ? "recording" : "all"}
