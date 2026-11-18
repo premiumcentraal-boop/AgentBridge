@@ -1,6 +1,9 @@
 # AgentBridge
 **Connect agents worldwide**
 
+For the agent finishing implementation and deployment, start with the
+[combined Railway + GitHub launch handoff](docs/RAILWAY_GITHUB_LAUNCH_HANDOFF.md).
+
 ## Release candidate: account-linked agents
 
 Studio → **Agents** connects a customer's own account over OAuth/PKCE. The remote
