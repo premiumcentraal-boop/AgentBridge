@@ -40,6 +40,15 @@ export function interpretPreflightObservation(exitCode, stdout) {
       !validMigrationList(report.plan.apply) || !validMigrationList(report.plan.baseline) ||
       report.plan.apply.some(name => report.plan.baseline.includes(name)))
     return {accepted:false, reason:'INVALID_PLAN'};
+  // A safe producer report partitions the canonical migration inventory into
+  // applied, pending, and schema-present-but-untracked entries.
+  if (!validMigrationList(report.applied))
+    return {accepted:false, reason:'INVALID_APPLIED_HISTORY'};
+  if (!report.unsafe) {
+    const all=[...report.applied,...report.plan.apply,...report.plan.baseline];
+    if (all.length !== MIGRATION_FILES.length || new Set(all).size !== MIGRATION_FILES.length)
+      return {accepted:false, reason:'INCOMPLETE_MIGRATION_INVENTORY'};
+  }
   // The producer has exactly four possible reason/status/plan combinations.
   // A blocked observation cannot borrow a clean-state reason, and an unsafe
   // schema always produces an unsafe plan with no proposed migration actions.
