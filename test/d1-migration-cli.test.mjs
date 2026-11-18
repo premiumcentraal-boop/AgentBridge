@@ -127,6 +127,9 @@ test('preflight never prints blind baseline tracker writes or conflict-suppressi
   assert.doesNotMatch(source,/CREATE TABLE IF NOT EXISTS d1_migrations/);
   assert.match(source,/No automatic baseline reconciliation SQL is safe/);
   assert.match(source,/exclusive maintenance window/);
+  assert.doesNotMatch(source,/console\.error\('OK: all migrations present/);
+  assert.match(source,/OBSERVATION ONLY: all migrations appear present and recorded/);
+  assert.match(source,/independent queries are not an atomic snapshot/);
 });
 
 // Deliberate limitation test: a transient migration-history mutation reverted
