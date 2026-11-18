@@ -54,6 +54,8 @@ design/**
 !server/
 server/**
 !server/*.mjs
+!server/media/
+!server/media/*.mjs
 !server/agents/
 !server/agents/*.mjs
 !server/accounts/

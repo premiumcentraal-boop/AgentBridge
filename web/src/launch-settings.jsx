@@ -55,13 +55,12 @@ export function TranscriptionSettings() {
         </span>
         <div>
           <h2>Transcription</h2>
-          <p>Turn a saved recording into text.</p>
+          <p>{status?.live_transcription ? "Live captions and saved recordings." : "Turn a saved recording into text."}</p>
         </div>
         {status?.configured && <Pill>Key saved</Pill>}
       </div>
       <p className="provider-muted">
-        Use your xAI key. Audio is sent only when you choose Transcribe and
-        confirm. Your key is encrypted on the server.
+        Your xAI project pays for transcription. Audio is sent when you confirm {status?.live_transcription ? "live captions or transcription of a saved recording" : "transcription of a saved recording"}.
       </p>
       <form
         onSubmit={(e) => {

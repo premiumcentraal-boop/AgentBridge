@@ -63,6 +63,7 @@ export async function activateForwarding({
   client,
   vaultKey,
   connectionId,
+  media,
 }) {
   const { connection, number } = await liveConnection(
     database,
@@ -113,9 +114,10 @@ export async function activateForwarding({
       call_request_method: "POST",
     };
   }
+  const room = media?.routeInstructions();
   const script = await client.createScript(
     "AgentBridge route " + connectionId,
-    forwardXml(connection.destination, number.e164),
+    room?.xml || forwardXml(connection.destination, number.e164),
   );
   const encrypted = await sealCredential(
     backup,
@@ -124,7 +126,7 @@ export async function activateForwarding({
     "route:" + connectionId,
   );
   await database.run(
-    "INSERT INTO ab_live_routes(account_id,connection_id,number_id,script_id,script_url,encrypted_previous_config,status,updated_at) VALUES(?,?,?,?,?,?,'configuring',?) ON CONFLICT(account_id,connection_id) DO UPDATE SET number_id=excluded.number_id,script_id=excluded.script_id,script_url=excluded.script_url,encrypted_previous_config=excluded.encrypted_previous_config,status='configuring',updated_at=excluded.updated_at",
+    "INSERT INTO ab_live_routes(account_id,connection_id,number_id,script_id,script_url,encrypted_previous_config,media_token_hash,status,updated_at) VALUES(?,?,?,?,?,?,?,'configuring',?) ON CONFLICT(account_id,connection_id) DO UPDATE SET number_id=excluded.number_id,script_id=excluded.script_id,script_url=excluded.script_url,encrypted_previous_config=excluded.encrypted_previous_config,media_token_hash=excluded.media_token_hash,status='configuring',updated_at=excluded.updated_at",
     [
       account.id,
       connectionId,
@@ -132,6 +134,7 @@ export async function activateForwarding({
       script.id,
       script.url,
       encrypted,
+      room?.hash || null,
       stamp(),
     ],
   );
@@ -246,7 +249,7 @@ export async function disableForwarding({
 }
 export async function routeStates(database, accountId) {
   const result = await database.first(
-    "SELECT json_group_array(json_object('connection_id',connection_id,'status',status)) AS entries FROM ab_live_routes WHERE account_id=?",
+    "SELECT json_group_array(json_object('connection_id',connection_id,'status',status,'studio_room',media_token_hash IS NOT NULL)) AS entries FROM ab_live_routes WHERE account_id=?",
     [accountId],
   );
   return JSON.parse(result?.entries || "[]");

@@ -116,9 +116,9 @@ Signup does not start a paid service, buy a number, activate a route or place a
 call. SignalWire bills each customer's own project. Saved recording transcription
 uses an optional customer xAI key; see [Saved transcription](SAVED_TRANSCRIPTION.md).
 The account-aware [Grok connector](GROK_CONNECTOR.md) uses OAuth at `/mcp`.
-Live transcription, browser
-listen-in and joining an existing call as a third participant still need a public
-media/webhook service; those controls remain unavailable. The separate legacy
+The Node deployment supports opt-in browser call rooms and live captions. Ensure HTTPS WebSocket upgrades reach the same replica on `/api/media/carrier` and `/api/media/studio`. Existing direct calls use the carrier’s original path. [Call room setup](SIGNALWIRE_LIVE_TESTING.md)
+
+The separate legacy
 `backend/` Worker is not deployed by this Docker service.
 
 The account API scopes records, encrypted credentials and provider operations to

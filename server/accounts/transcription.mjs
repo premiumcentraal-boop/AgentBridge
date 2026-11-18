@@ -25,6 +25,7 @@ export async function transcriptionRequest({
   readBody,
   vaultKey,
   fetcher = fetch,
+  media,
 }) {
   if (!path.startsWith("transcription/")) return null;
   const reply = (status, body) => ({ status, body });
@@ -44,7 +45,7 @@ export async function transcriptionRequest({
         provider: "xai",
         model: "grok-voice-transcribe-2.0",
         updated_at: row?.updated_at || null,
-        live_transcription: false,
+        live_transcription: Boolean(media),
         unresolved_jobs: JSON.parse(pending?.items || "[]"),
       });
     }
@@ -77,6 +78,7 @@ export async function transcriptionRequest({
     }
     if (method === "DELETE") {
       onlyFields(await readBody(), []);
+      media?.stopCaptions(account.id);
       await database.run(
         "DELETE FROM ab_transcription_credentials WHERE account_id=?",
         [account.id],

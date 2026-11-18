@@ -16,7 +16,7 @@ Use an actual private mounted backup location. The script uses SQLite's online b
 
 On a staging service, restore the snapshot into a fresh private `/data` volume, reuse the correct wrapping key, start the reviewed build and verify sign-in, contacts and provider-key decryption. Never test restore by overwriting the only production volume. Keep the restored service inaccessible to the public and prevent unattended carrier actions. A restore can resurrect old sessions/tokens; revoke them before any restored service is exposed. Backups contain private phone numbers and conversation text.
 
-Migrations 0000 through 0004 are append-only and run transactionally on Node startup. Sites uses its existing D1 binding and migration journal. Preserve all older migration bytes. Roll back the application image while retaining the database and key; never roll back by deleting customer records.
+Migrations 0000 through 0005 are append-only and run transactionally on Node startup. Sites uses its existing D1 binding and migration journal. Preserve all older migration bytes. Roll back the application image while retaining the database and key; never roll back by deleting customer records.
 
 ## Readiness and drift
 
@@ -45,6 +45,6 @@ Account deletion requires the current password (or the verified private Sites id
 3. Connect an actual Grok custom connector over OAuth, save a contact, prepare by name and by formatted phone, report a factual outcome, prepare again and verify recall. Revoke the app and verify a later tool call fails. Record the Grok version and actual tested transport.
 4. Using consenting phones and the customer's test project, import/search a number, explicitly buy only if needed, save a destination, activate/deactivate forwarding and verify the previous handler is restored. Test an approved callback, end and transfer, then check provider logs and duration caps.
 5. On a consenting call, start/pause/resume/stop recording, play authenticated audio, transcribe with a real xAI key, retrieve the saved text in history/context and delete both local transcript and carrier audio. Check provider-side charges and privacy behavior.
-6. Browser human join, independent participant mute/takeover and live captions require their own real media implementation and audio test before the full advertised product can launch. The current demo participant room is not evidence for these features.
+6. Select Enable Studio call room on a new callback. On mobile and desktop, join listening and speaking, mute each source, turn on captions with participant consent, invite a contact, transfer and rejoin. Confirm leaving preserves both phone legs and a service restart ends active rooms cleanly. Record the actual audio and carrier observations privately.
 
 Keep evidence as redacted timestamps, release SHA, actual provider call IDs and pass/fail observations in private operational records. Do not put audio, transcripts, credentials or customer phone numbers in public GitHub issues.

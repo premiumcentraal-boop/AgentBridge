@@ -21,12 +21,13 @@ export async function agentWorkspaceRequest({
   external = false,
   allowedCountries = ["US"],
   vaultKey,
+  media,
 }) {
   if (!path.startsWith("agents")) return null;
   const reply = (status, body) => ({ status, body });
   if (path === "agents" && method === "GET") {
     const state = await realContactState(database, account.id);
-    const provider = await providerSummary(database, account.id, vaultKey);
+    const provider = await providerSummary(database, account.id, vaultKey, media);
     return reply(200, {
       mcp_url: new URL(
         "/mcp",
@@ -50,8 +51,8 @@ export async function agentWorkspaceRequest({
       features: {
         native_grok_country: "US",
         provider_callback: true,
-        browser_join: false,
-        live_asr: false,
+        browser_join: Boolean(media),
+        live_asr: Boolean(media),
       },
       skill_url: new URL(
         "/agentbridge-skill.md",
@@ -116,6 +117,7 @@ export async function agentWorkspaceRequest({
     if (method === "GET" && !call[2])
       return reply(200, {
         call: {
+          room_available: Boolean(media),
           id: plan.id,
           status: plan.status,
           expires_at: plan.expires_at,
@@ -128,6 +130,7 @@ export async function agentWorkspaceRequest({
         await approvePreparedCall({
           database,
           account,
+          media,
           input: { ...(await readBody()), prepared_call_id: plan.id },
           allowedCountries,
         }),

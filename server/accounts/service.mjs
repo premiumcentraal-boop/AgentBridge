@@ -24,7 +24,7 @@ export async function boundedAccountBody(request) {
   } catch (error) { if (error instanceof AccountError) throw error; deny(400, 'INVALID_BODY', 'Send a valid JSON object.'); }
   finally { reader.releaseLock(); }
 }
-export function createAccountService({ database, testerEmail, publicOrigin, passwords, platformIdentity = false, signupInviteHash, vaultKey, fetcher, signupMode, mailer, agentExternal = false, callingCountries = ['US'] }) {
+export function createAccountService({ database, testerEmail, publicOrigin, passwords, platformIdentity = false, signupInviteHash, vaultKey, fetcher, signupMode, mailer, agentExternal = false, callingCountries = ['US'], media }) {
   // The private Sites identity flow stays private; public email accounts use the
   // Node/Railway adapter and never trust browser-supplied identity headers.
   const publicSignup = signupMode === 'public' && !platformIdentity;
@@ -58,6 +58,7 @@ export function createAccountService({ database, testerEmail, publicOrigin, pass
   }
   const emailAuth = createEmailAuth({ database, passwords, mailer, session, json });
   return {
+    accountFor,
     async fetch(request, { clientAddress } = {}) {
       const path = new URL(request.url).pathname, verb = request.method;
       const authPath = path.startsWith('/api/auth/');
@@ -128,15 +129,15 @@ export function createAccountService({ database, testerEmail, publicOrigin, pass
           return json(200,result,{'Set-Cookie':cookie('',0)});
         }
         if (studioPath && route.startsWith('transcription/')) {
-          const result = await transcriptionRequest({database,account:current,path:route,method:verb,readBody:()=>boundedAccountBody(request),vaultKey,fetcher});
+          const result = await transcriptionRequest({database,account:current,path:route,method:verb,readBody:()=>boundedAccountBody(request),vaultKey,fetcher,media});
           if(result)return json(result.status,result.body);
         }
         if (studioPath && route.startsWith('agents')) {
-          const result = await agentWorkspaceRequest({ database, account: current, path: route, method: verb, readBody: () => boundedAccountBody(request), origin: publicOrigin || new URL(request.url).origin, external: agentExternal && !platformIdentity, allowedCountries: callingCountries, vaultKey });
+          const result = await agentWorkspaceRequest({ database, account: current, path: route, method: verb, readBody: () => boundedAccountBody(request), origin: publicOrigin || new URL(request.url).origin, external: agentExternal && !platformIdentity, allowedCountries: callingCountries, vaultKey, media });
           if (result) return json(result.status, result.body);
         }
         if(studioPath&&(route.startsWith('provider/')||route.startsWith('live/'))) {
-          const args={database,account:current,path:route,method:verb,readBody:()=>boundedAccountBody(request),vaultKey,fetcher};
+          const args={database,account:current,path:route,method:verb,readBody:()=>boundedAccountBody(request),vaultKey,fetcher,media};
           const result=route.startsWith('provider/')?await manageProvider(args):await liveWorkspaceRequest({...args,path:route.slice(5)});
           if(result instanceof Response)return result;
           if(result)return json(result.status,result.body);

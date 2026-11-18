@@ -1,34 +1,27 @@
-# SignalWire development testing
+# Set up SignalWire outbound calling
 
-The single tester can now bring a SignalWire project to the account studio.
-Demo and live data remain separate. Saving a token only verifies it with
-read-only Numbers and Calls requests. Nothing is purchased or dialed by
-credential verification, loading the studio, or refreshing provider status.
+1. In your SignalWire dashboard, open **API credentials** for the project that owns your number. Create a token with **Voice** and **Numbers** permissions. Copy the **Space URL**, **Project ID** and **API token**. [SignalWire first-call guide](https://signalwire.com/docs/platform/voice/make-and-receive-calls)
+2. Sign in at [AgentBridge Studio](https://agentbridge.victor.ceo/signin/). Open **Calling setup → SignalWire**, enter the three values, choose **Save and verify**, then **Use my SignalWire project**. Verification reads your project inventory and calls. Store the token in Studio’s encrypted form.
+3. In **Numbers**, choose **Get a number**. Pick an existing voice-capable number and **Use this number**, or select and confirm a purchase. The studio can search US local inventory. SignalWire bills the number rental and usage.
+4. In **Connections**, save the outside destination in international format, including the leading plus and country code. Pair it with your imported routing number.
+5. Choose **Test callback** on the connection. Enter a separate outside phone you can answer. Confirm the numbers and provider charges. SignalWire rings that phone first. Answer and it dials the destination using your owned number as caller ID. Watch **Calls** and compare the two legs with the call log in your SignalWire project. Both legs count toward usage. The connection is capped at five minutes.
+6. For calls that **arrive** on your routing number, choose **Activate forwarding** and confirm. While active, anyone dialing that number can reach the destination. Deactivate the connection to restore its previous handler.
 
-## Use the studio
+**Trial accounts** can call purchased or verified numbers. Verify both outside phones in **Phone Numbers → Verified** for a domestic callback. International testing needs an upgraded Space, international service approval and the destination country enabled in **Space Settings → Geographic Permissions**. The deployment country list for agent-requested callbacks is a separate setting. [Trial restrictions](https://signalwire.com/docs/platform/trial-mode) · [International dialing](https://signalwire.com/docs/platform/how-to-enable-international-services)
 
-1. Sign in to the private tester account, open **Settings**, and enter the
-   SignalWire Space name/URL, Project ID, and a token with **Numbers** and
-   **Voice** permissions. Never send that token through chat or GitHub.
-2. Choose **Save and verify**, then **Use my SignalWire project**.
-3. In **Numbers**, use an existing voice number or search US inventory by area
-   code. Buying requires selecting the number and confirming SignalWire charges.
-   The search API does not quote rental prices: review the project's rates in
-   SignalWire. Purchased numbers may be subject to the carrier's release hold.
-4. Save a connection with an imported routing number and an outside destination.
-   Saving is inert. Choose **Activate forwarding** and confirm the destination
-   and charges to update the actual number's call handler.
-5. Have the calling agent dial that routing number. SignalWire forwards the
-   audio to the destination, without inserting another voice agent. Forwarding
-   remains active while the studio is closed; each connection is capped at
-   five minutes. Deactivate it to restore the previous call handler.
-6. For a human development test, choose **Test callback**. SignalWire calls your
-   separate phone first, then connects it to the saved destination. Both legs
-   use the project's billing. The interface reports queued/ringing/in-progress
-   and completed states returned by SignalWire; it does not claim connection
-   before the provider does.
+## Join a call in Studio
 
-Public Node/Railway signup is available when email verification is configured; the private Sites preview retains one verified tester. Carrier billing remains with the customer’s provider project.
+On the public Node service, select **Enable Studio call room** when starting the callback, approving an MCP callback, or activating forwarding. This choice routes those phones’ audio through AgentBridge. For an already active forwarding route, deliberately deactivate it before changing its mode. The private Sites preview supports direct callbacks and forwarding.
+
+Open the active card in **Calls**, choose your microphone setting and select **Join call**. You can mute yourself or a specific caller, silence your speaker, invite a saved destination with charge confirmation, or transfer after the new destination answers. **Leave room** leaves the phones connected. Closing a room’s main phone leg ends the room. Rejoin after a browser disconnect while the phones are still connected.
+
+**Live captions** require agreement from everyone and an xAI key in Calling setup. One mixed audio stream is sent to xAI. Lines stay in memory during the browser session. Saved recordings and post-call transcripts have separate controls. [xAI streaming speech-to-text](https://docs.x.ai/developers/model-capabilities/audio/speech-to-text)
+
+## Verify the release
+
+The Railway service must pass WebSocket upgrades at `/api/media/carrier` and `/api/media/studio` on its existing HTTPS hostname. The app authenticates SignalWire’s bearer on upgrade and validates the project and call ID from its start message. The browser needs a logged-in session and a single-use room ticket. Credentials stay out of URLs. The five-minute room timeout, phone limit and one active room per account bound resource usage. With one replica, restarting the service ends its active bridged rooms. Schedule upgrades between calls. [SignalWire bidirectional media protocol](https://signalwire.com/docs/compatibility-api/cxml/reference/voice/stream)
+
+Verify on two consenting phones and an actual mobile browser. Record whether each phone hears the other, captions follow speech, muting stops the correct source, a reconnect succeeds and leaving the browser preserves the call. Inspect the carrier’s final statuses, durations and charges. A fixture or health response cannot establish those results.
 
 ## Implemented provider paths
 
@@ -45,13 +38,6 @@ Public Node/Railway signup is available when email verification is configured; t
   automatic retention/deletion schedule is claimed.
 - Retrieval of existing provider-generated transcripts for managed recordings.
 - Explicit saved-audio transcription using a separately encrypted xAI key; see [Saved transcription](SAVED_TRANSCRIPTION.md).
-
-**Live utterance transcription, browser listen-in, and adding a third human to
-an existing call are not enabled.** SignalWire live transcription uses SWML
-and a webhook receiver; browser audio needs a media/WebSocket relay. The current
-Site is owner-private and dispatch blocks carrier callbacks before app code.
-The cXML call type used here cannot silently acquire those features. The live
-studio shows these limits and never substitutes synthetic demo audio or text.
 
 ## Hosting and credentials
 

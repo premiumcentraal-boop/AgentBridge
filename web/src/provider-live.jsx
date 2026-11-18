@@ -9,6 +9,7 @@ import {
   ContactMemoryDialog,
 } from "./conversations.jsx";
 import "./provider-live.css";
+import { LiveRoom } from "./live-room.jsx";
 import { TranscriptionSettings, TranscribeRecording, AgentReportedCalls, SavedTranscript } from './launch-settings.jsx';
 
 export async function providerRequest(path, options = {}) {
@@ -88,6 +89,16 @@ export function SignalWireSettings({ onModeChange = () => location.reload() }) {
         Your API token is encrypted on the server. It is never shown again or
         saved in browser storage.
       </p>
+      <details className="provider-quickstart"><summary>Set up your first outbound call</summary>
+        <ol>
+          <li>In your SignalWire dashboard, create a project token with Voice and Numbers permissions. Copy the Space, Project ID and token into the fields below.</li>
+          <li>Choose Save and verify, then Use my SignalWire project.</li>
+          <li>In Numbers, import a voice number you own or buy a number. In Connections, save the outside destination with its country code.</li>
+          <li>Choose Test callback, enter a different phone you can answer and confirm the charges. When you answer, SignalWire dials the destination.</li>
+        </ol>
+        <p>On a trial, verify both outside phones. For calls abroad, enable international service and the destination country in your SignalWire Space.</p>
+        <a href="https://signalwire.com/docs/platform/voice/make-and-receive-calls" target="_blank" rel="noreferrer">SignalWire calling guide</a>
+      </details>
       {status && !status.vault_ready && (
         <p role="status">
           Secure provider storage needs to be configured on this server before
@@ -507,11 +518,12 @@ function LiveNumberDialog({ open, onClose, onAdded, runBusy, space }) {
   );
 }
 
-function LiveActionDialog({ action, onClose, onSubmit, connections, space }) {
+function LiveActionDialog({ action, onClose, onSubmit, connections, space, rooms }) {
   const id = useId(),
     key = useRef(requestId());
   const [consent, setConsent] = useState(false),
     [callback, setCallback] = useState(""),
+    [studioRoom, setStudioRoom] = useState(false),
     [destination, setDestination] = useState(action?.connection?.id || ""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -519,6 +531,7 @@ function LiveActionDialog({ action, onClose, onSubmit, connections, space }) {
     if (action) {
       setConsent(false);
       setCallback("");
+      setStudioRoom(false);
       setDestination(action.connection?.id || "");
       setError("");
       key.current = requestId();
@@ -563,6 +576,7 @@ function LiveActionDialog({ action, onClose, onSubmit, connections, space }) {
               confirm_charges: consent,
               capture_consent: consent,
               callback_number: callback,
+              studio_room: studioRoom,
               connection_id: destination,
             });
             onClose();
@@ -581,6 +595,7 @@ function LiveActionDialog({ action, onClose, onSubmit, connections, space }) {
             closed, until you deactivate it.
           </p>
         )}
+        {rooms && ["start", "activate"].includes(action.type) && <label className="provider-consent"><input type="checkbox" checked={studioRoom} onChange={e => setStudioRoom(e.target.checked)} /><span>Enable Studio call room. Route audio through AgentBridge to join, mute participants or turn on live captions.</span></label>}
         {action.type === "deactivate" && (
           <p>
             Restore the number’s previous SignalWire call handling. Existing
@@ -783,7 +798,7 @@ export function LiveWorkspace({
     }
   };
   const connections = data.connections.filter((c) => c.status === "saved"),
-    calls = data.calls.filter(active),
+    calls = data.calls.filter(c => active(c) && (!c.room_call_id || c.room_call_id === c.id)),
     history = [
       ...new Map(
         [...data.calls.filter((c) => !active(c)), ...(data.call_history || [])]
@@ -796,8 +811,8 @@ export function LiveWorkspace({
   const matches = (value) =>
     !query || JSON.stringify(value).toLowerCase().includes(query.toLowerCase());
   const details =
-    (data.call_history || []).find((c) => c.id === selectedCall) ||
-    data.calls.find((c) => c.id === selectedCall);
+    data.calls.find((c) => c.id === selectedCall) ||
+    (data.call_history || []).find((c) => c.id === selectedCall);
   const openCall = (call) => {
     setSelectedCall(call.id);
     navTo("call");
@@ -835,6 +850,7 @@ export function LiveWorkspace({
     const body = {
       request_id: value.request_id,
       confirm_charges: value.confirm_charges,
+      ...(value.studio_room && ["start", "activate"].includes(value.type) ? { studio_room: true } : {}),
     };
     if (value.type === "activate" || value.type === "deactivate")
       await write(
@@ -981,7 +997,7 @@ export function LiveWorkspace({
         {c.routing_state === "active" && (
           <p className="provider-muted">
             Give {number?.e164} to your calling agent. Incoming calls forward to{" "}
-            {c.destination}.
+            {c.destination}.{c.studio_room && " You can join from Calls."}
           </p>
         )}
       </article>
@@ -1273,6 +1289,8 @@ export function LiveWorkspace({
                   </button>
                 </div>
               )}
+              {active(details) && details.room_call_id && <LiveRoom key={details.room_call_id} callId={details.room_call_id} connections={connections} write={write} />}
+              {active(details) && !details.room_call_id && data.features?.browser_audio && <p className="conversation-help">For browser audio, select Enable Studio call room when starting a callback or activating forwarding.</p>}
               <h3>Recordings</h3>
               {recordings.map((r) => (
                 <article className="live-recording" key={r.id}>
@@ -1475,6 +1493,7 @@ export function LiveWorkspace({
         }}
       />
       <LiveActionDialog
+        rooms={data.features?.browser_audio}
         space={data.provider?.space}
         action={action}
         onClose={() => setAction(null)}
