@@ -743,3 +743,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Exact-head GitHub Actions #44244234502 on `9972c95` failed the pinned Wrangler D1 step: two positive-path integration tests still expected the removed `OK: after a backup` message, while the CLI correctly emitted `OBSERVATION ONLY`. `npm run ci` and Gitleaks passed; local MCP tests were skipped after the Wrangler failure.
 - Updated `test/d1-wrangler-local.test.mjs` to require observational-only messaging, explicit non-authorization, absence of the old migration recommendation, and `verdict.authorizesMigration === false` / `atomicSnapshot === false` for both pristine baseline and applied-0001 cases. Counterfeit-tracker denial and read-only snapshots remain tested.
 - This changes tests only, not migration authorization or SQL. New exact-head CI remains required. No database migrations, paid routing, calls, purchases, secrets, merges or deployments.
+
+## 2026-11-18 — Clean D1 preflight message remains observational (draft PR #58)
+- Reviewed draft PR #58 and its exact-head successful quality gate at `912bcd67` (Actions #44251321645); no live migration was authorized.
+- Removed the contradictory `OK: all migrations present` human-readable success message in the no-pending-migrations path. Even clean history/schema observations are non-atomic and must not be presented as authoritative approval; the CLI now says `OBSERVATION ONLY` and explicitly denies database-change authorization.
+- Added a source regression guard to `test/d1-migration-cli.test.mjs`. This change does not alter SQL, exit codes, JSON verdict fields or routing flags.
+- Exact-head CI and disposable Wrangler execution for this change are pending; no local test execution or migration occurred. Manual backup, exclusive maintenance window, independent review and operator approval remain mandatory.
