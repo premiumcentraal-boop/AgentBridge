@@ -42,7 +42,12 @@ else if(sql==='SELECT id, name, applied_at FROM d1_migrations ORDER BY name, id'
     process.env.FIXTURE==='unknown-history'?[entry('9999_unapproved.sql')]:
     process.env.FIXTURE==='duplicate-history'?[entry('0001_routing_controls.sql'),entry('0001_routing_controls.sql',2)]:[];
 }
-else if(sql==='PRAGMA foreign_key_list(reservations)')rows=[{from:'account_id',table:'accounts',to:'id',on_delete:'RESTRICT'}];
+else if(sql==='PRAGMA foreign_key_list(reservations)'){
+  // Simulate an external actor changing and restoring the tracker between
+  // the two history snapshots. The CLI cannot observe this transient state.
+  if(process.env.FIXTURE==='history-aba')fs.writeFileSync(process.env.ABA_TRACE,'A -> B -> A');
+  rows=[{from:'account_id',table:'accounts',to:'id',on_delete:'RESTRICT'}];
+}
 else if(sql==='PRAGMA index_list(reservations)')rows=[reservationIndex];
 else if(sql.includes("pragma_index_xinfo('sqlite_autoindex_reservations_2')"))rows=[{seqno:0,cid:1,name:'account_id',key:1},{seqno:1,cid:3,name:'idempotency_key',key:1}];
 else process.exit(82);
@@ -78,12 +83,14 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
       ['history-aba',0,/OK: after a backup/]
     ]){
       const log=join(dir,scenario+'.queries');
+      const abaTrace=join(dir,scenario+'.aba');
       const run=spawnSync(process.execPath,[join(dir,'scripts','d1-migration-preflight.mjs'),'--local','disposable'],{
         cwd:dir,encoding:'utf8',timeout:15000,
-        env:{...process.env,AGENTBRIDGE_WRANGLER:executable,QUERY_LOG:log,FIXTURE:scenario}
+        env:{...process.env,AGENTBRIDGE_WRANGLER:executable,QUERY_LOG:log,ABA_TRACE:abaTrace,FIXTURE:scenario}
       });
       assert.equal(run.status,status,scenario+': '+run.stderr);
       assert.match(run.stderr,pattern,scenario);
+      if(scenario==='history-aba')assert.equal(readFileSync(abaTrace,'utf8'),'A -> B -> A');
       if(['unknown-history','duplicate-history'].includes(scenario)){
         const report=JSON.parse(run.stdout);
         assert.equal(report.unsafe,true,scenario+': history must be unsafe');
