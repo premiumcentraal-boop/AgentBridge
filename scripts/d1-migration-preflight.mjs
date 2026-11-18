@@ -195,7 +195,20 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
       state.unsafe=true;
       state.reasons.push('Migration history claims applied objects that are absent. Stop and reconcile from backup.');
     }
-    console.log(JSON.stringify({mode,database,...state,tracked,applied,plan},null,2));
+    // Machine-readable observation only. Even a clean read cannot authorize a
+    // migration: independent Wrangler queries are not an atomic snapshot.
+    const verdict={
+      version:1,
+      status:state.unsafe?'blocked':plan.baseline.length?'blocked':'observational_only',
+      reason:state.unsafe?'UNSAFE_SCHEMA_OR_HISTORY':plan.baseline.length?'UNRECONCILED_MIGRATION_HISTORY':
+        plan.apply.length?'PENDING_MIGRATIONS':'NO_PENDING_MIGRATIONS',
+      atomicSnapshot:false,
+      authorizesMigration:false,
+      requiresOperatorApproval:true,
+      requiresExclusiveMaintenanceWindow:true,
+      requiresVerifiedBackup:true
+    };
+    console.log(JSON.stringify({mode,database,...state,tracked,applied,plan,verdict},null,2));
     if(state.unsafe){
       console.error('BLOCKED: partial schema; inspect D1 backup before any write.');
       process.exitCode=1;
