@@ -1,4 +1,13 @@
 /* Studio surfaces are neutral. Colour is reserved for call/bot state. */
+.studio-session-status {
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  text-align: center;
+}
 .foundation-app .workspace-shell {
   --page: #090909;
   --page-soft: #111;

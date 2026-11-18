@@ -21,13 +21,16 @@ Work through the phases below. Continue routine implementation and deployment wi
 | Authoritative repository | https://github.com/premiumcentraal-boop/AgentBridge |
 | Branch to start from | Latest reviewed `main`; fetch before working |
 | Handoff baseline before the media candidate | `a4073659e2dc555802e459e07f0433c535e26dff` |
+| SignalWire call rooms and live captions | [PR #63](https://github.com/premiumcentraal-boop/AgentBridge/pull/63), merged as `f3ed537530a46ade46e8e0da0eae01fcd48fe659` |
 | Main feature implementation | [PR #60](https://github.com/premiumcentraal-boop/AgentBridge/pull/60), merged as `ff22b2033b08c16b0c6cb7661ef0b575b24088a5` |
 | Release/open-issue audit | [PR #61](https://github.com/premiumcentraal-boop/AgentBridge/pull/61), merged as `61df03b7d190b60ed42fc74801f9a59a1b0a2070` |
-| Application release candidate | `1.3.0-rc.2`, declared in `shared/release.mjs` |
+| Application release candidate | `1.3.0-rc.3`, declared in `shared/release.mjs` |
 | Public production target | https://agentbridge.victor.ceo |
 | Separate owner-private preview | https://agentbridge-worldwide.premiumcentraal.chatgpt.site |
 
 **Public check on 2026-11-18 before the media candidate rollout.** The service reported `61df03b`, tester signup, an existing account, encrypted storage and MCP. Email was disabled and `/readyz` returned 503. Use the current public probe after deployment.
+
+Deploy the reviewed `rc.3` revision. It fixes a reload loop that appeared when a real browser opened a signed-in workspace, and makes **Calling setup** open SignalWire credentials before live mode is enabled. The Chromium mobile and desktop acceptance results are recorded in [release readiness](RELEASE_READINESS.md).
 
 The private preview was updated successfully, with its audience, database and existing secret preserved. Its success is not evidence that Railway is deployed. It does not expose the public MCP connector.
 

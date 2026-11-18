@@ -1,6 +1,6 @@
 # AgentBridge release readiness
 
-Release candidate `1.3.0-rc.2` adds opt-in Node call rooms. Public launch still needs the production checks below.
+Release candidate `1.3.0-rc.3` includes opt-in Node call rooms and a fix for the Studio reload loop after authentication. Public launch still needs the production checks below.
 
 | Area | Current state | Remaining launch gate |
 | --- | --- | --- |
@@ -12,7 +12,7 @@ Release candidate `1.3.0-rc.2` adds opt-in Node call rooms. Public launch still 
 | Provider calling | Existing SignalWire BYOK inventory, search/purchase, pairing, activate/deactivate/reconcile, callback/end/transfer; 300-second caps | Real consenting provider test including charges, route restoration, duration caps and lost-response recovery |
 | Agent callback approval | Exact destination/callback and charges approved separately in Studio; durable once-only dispatch; fresh provider status | Production callback test; this calls the approved phone and is not Grok voice transport |
 | Saved capture | Consent-required recording controls/audio; existing provider transcripts; explicit xAI saved-recording transcription; reuse/recovery/deletion | Real recording playback and xAI recognition/charge/privacy acceptance |
-| Onboarding/studio | Setup checklist, agent setup/contacts/grants, consent and callback approval, transcript controls, reported outcomes in Calls | Real mobile browser visual/accessibility review; no browser-control environment was available in this run |
+| Onboarding/studio | Chromium exercised signup, verification, credentials, number import, destination pairing, callback and password recovery at a 390 px viewport | Real handset accessibility and inbox delivery |
 | Account lifecycle | Private export, current-password/verified-identity deletion, carrier-disconnect guard, cascading private data, reset revokes app grants | Confirm production export/deletion and restore retention policy |
 | Operations | Consistent private SQLite backups with restore test; health/readiness/build-drift probe; runbook | Railway access, volume backup policy and actual staging restore/restart evidence |
 | Browser human join / takeover | Node cXML bidirectional stream relay, ephemeral browser tickets, participant controls, invitations and answer-before-transfer | Verify actual mobile and desktop microphones, audio quality, hold/mute, reconnection and independent leave with consenting phones |
@@ -33,6 +33,8 @@ Automated fixtures do not prove a real call, carrier audio, email inbox delivery
 ## Media and acceptance
 
 The Node relay authenticates both phone streams and per-call browser tickets. Media and live captions use bounded memory. Direct cXML calls and the private preview remain available for phone-to-phone callbacks. Test the optional room on the candidate with actual SignalWire and xAI credentials. [First outbound call and room acceptance](SIGNALWIRE_LIVE_TESTING.md)
+
+Chromium 156 exercised the production Node adapter over local HTTPS with an isolated database, a captured verification/reset email and two simulated carrier sockets. Starting from the marketing signup button, the mobile viewport verified an account, connected its provider, imported a voice number, saved a destination and started a callback. The room showed both phones and the owner. Listen-only join made zero microphone requests. After opt-in, a synthetic microphone sent audio through the real AudioWorklet and relay to a phone socket. The desktop browser signed in separately and rejoined after the mobile browser left. Resetting the password revoked the earlier desktop session. Physical phones, real inbox delivery and Grok still require production acceptance.
 
 ## Historical evidence for rc.1
 

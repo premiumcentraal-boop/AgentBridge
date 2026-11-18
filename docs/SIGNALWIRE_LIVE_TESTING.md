@@ -1,7 +1,7 @@
 # Set up SignalWire outbound calling
 
 1. In your SignalWire dashboard, open **API credentials** for the project that owns your number. Create a token with **Voice** and **Numbers** permissions. Copy the **Space URL**, **Project ID** and **API token**. [SignalWire first-call guide](https://signalwire.com/docs/platform/voice/make-and-receive-calls)
-2. Sign in at [AgentBridge Studio](https://agentbridge.victor.ceo/signin/). Open **Calling setup → SignalWire**, enter the three values, choose **Save and verify**, then **Use my SignalWire project**. Verification reads your project inventory and calls. Store the token in Studio’s encrypted form.
+2. Sign in to AgentBridge. Open **Calling setup → SignalWire**, enter the three values, choose **Save and verify**, then **Use my SignalWire project**. If the host still runs `1.3.0-rc.1`, new accounts can reach the same form under **Settings → SignalWire**. Verification reads your project inventory and calls. Store the token in Studio’s encrypted form. [Calling setup](https://agentbridge.victor.ceo/studio/connection/) · [Studio settings](https://agentbridge.victor.ceo/studio/settings/)
 3. In **Numbers**, choose **Get a number**. Pick an existing voice-capable number and **Use this number**, or select and confirm a purchase. The studio can search US local inventory. SignalWire bills the number rental and usage.
 4. In **Connections**, save the outside destination in international format, including the leading plus and country code. Pair it with your imported routing number.
 5. Choose **Test callback** on the connection. Enter a separate outside phone you can answer. Confirm the numbers and provider charges. SignalWire rings that phone first. Answer and it dials the destination using your owned number as caller ID. Watch **Calls** and compare the two legs with the call log in your SignalWire project. Both legs count toward usage. The connection is capped at five minutes.
@@ -89,8 +89,9 @@ number, saves/activates a connection, and requests a callback through that API.
 
 These checks do not establish that a funded customer project or a native Grok
 Bot call has succeeded. The final provider verification requires the tester's
-key, project balance/permissions, and a consenting real destination. Browser
-layout, audio playback and carrier media remain unverified in this environment.
+key, project balance/permissions and two consenting phones. Chromium tested the
+mobile layout, real browser audio pipeline and desktop rejoin with synthetic
+audio. Verify handset playback, latency and two-way speech on the deployed service.
 
 Contract references: SignalWire's official
 [Numbers REST schema](https://github.com/signalwire/docs/blob/main/fern/apis/signalwire-rest/openapi.yaml),
