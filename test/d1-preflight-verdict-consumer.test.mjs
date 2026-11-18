@@ -31,6 +31,8 @@ test('consumer rejects missing, malformed, unsupported and unsafe verdicts',()=>
 });
 test('blocked reports are accepted only as blocked observations, never permission',()=>{
   const v=valid();v.unsafe=true;v.plan.safe=false;
+  // Unsafe producer reports never propose migrations, even as observations.
+  v.plan.apply=[];
   v.verdict.status='blocked';v.verdict.reason='UNSAFE_SCHEMA_OR_HISTORY';
   assert.deepEqual(check(0,JSON.stringify(v)),{
     accepted:true,status:'blocked',authorizesMigration:false,requiresManualApproval:true});
