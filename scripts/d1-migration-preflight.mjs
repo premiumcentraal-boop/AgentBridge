@@ -222,7 +222,7 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
     }else if(plan.apply.length){
       console.error('OBSERVATION ONLY: pending migrations: '+plan.apply.join(', ')+'. This inspection does not authorize applying them. Require verified backup, exclusive maintenance window, independent review and explicit operator approval.');
     }else{
-      console.error('OK: all migrations present and recorded. Nothing to apply.');
+      console.error('OBSERVATION ONLY: all migrations appear present and recorded. Nothing to apply. This inspection does not authorize database changes; independent queries are not an atomic snapshot.');
     }
   }catch(e){
     console.error('Preflight failed closed: '+String(e?.message||e).slice(0,400));
