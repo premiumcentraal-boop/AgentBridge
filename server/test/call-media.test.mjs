@@ -220,6 +220,19 @@ test("a callback dials in answer order, relays real audio, supports scoped join,
   const bearer = await h.ticket(root);
   await assert.rejects(h.browser(bearer, "https://elsewhere.test"), /403/);
   await assert.rejects(h.browser(await h.ticket(root), origin, ""), /403/);
+  const secondSession = await h.request("auth/login", "POST", {
+    email: "caller@example.test",
+    password: "a-test-password-only",
+  });
+  assert.equal(secondSession.status, 200);
+  await assert.rejects(
+    h.browser(
+      bearer,
+      origin,
+      secondSession.headers.get("set-cookie").split(";")[0],
+    ),
+    /403/,
+  );
   const person = await h.browser(bearer);
   const joined = await until(() =>
     person.messages.find((m) => m.type === "joined"),

@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 import { UUID, escapeXml } from "../accounts/signalwire-client.mjs";
 import { deny } from "../accounts/model.mjs";
-import { authLimit } from "../accounts/auth-primitives.mjs";
+import { authLimit, cookieToken } from "../accounts/auth-primitives.mjs";
 import {
   connectedProvider,
   providerOperation,
@@ -238,13 +238,19 @@ export function createCallMedia({
     const key = hash(bearer),
       entry = tickets.get(key);
     if (!entry || entry.kind !== "browser" || entry.room.finished) return null;
-    drop(key);
     const browser = new Request(origin + browserPath, {
       headers: { cookie: String(req.headers.cookie || "") },
     });
     const valid = async () =>
       (await authenticate(browser))?.id === entry.room.accountId;
-    return (await valid()) ? { ...entry, valid } : null;
+    if (
+      entry.sessionHash !== hash(cookieToken(browser) || "") ||
+      !(await valid()) ||
+      tickets.get(key) !== entry
+    )
+      return null;
+    drop(key);
+    return { ...entry, valid };
   }
   function carrier(socket, grant) {
     let member,
@@ -368,7 +374,7 @@ export function createCallMedia({
       );
       return room.transfer(connection);
     },
-    async request({ path, method, account, readBody }) {
+    async request({ path, method, account, readBody, sessionToken }) {
       const match = /^rooms\/([a-f0-9-]{36})\/(ticket|captions|invite)$/.exec(
         path,
       );
@@ -382,6 +388,8 @@ export function createCallMedia({
         );
       const input = await readBody();
       if (match[2] === "ticket") {
+        if (!secretFormat.test(sessionToken || ""))
+          deny(401, "SIGN_IN_REQUIRED", "Sign in to join this call.");
         onlyFields(input, []);
         await authLimit(database, "room-join:" + account.id, {
           maximum: 30,
@@ -390,7 +398,10 @@ export function createCallMedia({
         return {
           status: 200,
           body: {
-            ticket: issue({ kind: "browser", room }, 30000),
+            ticket: issue(
+              { kind: "browser", room, sessionHash: hash(sessionToken) },
+              30000,
+            ),
             path: browserPath,
           },
         };

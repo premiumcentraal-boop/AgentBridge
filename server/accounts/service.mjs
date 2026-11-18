@@ -2,13 +2,12 @@ import { AccountError, deny, emptyWorkspace, publicAccount } from './model.mjs';
 import { workspaceRequest } from './workspace.mjs';
 import { manageProvider, providerSummary, publicProviderError } from './provider-control.mjs';
 import { liveWorkspaceRequest } from './live-workspace.mjs';
-import { authLimit, digest, normalizeEmail as email, onlyFields as only, randomToken, validEmail, validName as named } from './auth-primitives.mjs';
+import { cookieToken, authLimit, digest, normalizeEmail as email, onlyFields as only, randomToken, validEmail, validName as named } from './auth-primitives.mjs';
 import { createEmailAuth } from './email-auth.mjs';
 import { agentWorkspaceRequest } from '../agents/api.mjs';
 import { transcriptionRequest } from './transcription.mjs';
 import { exportAccount, deleteAccount } from './lifecycle.mjs';
 
-const cookieToken = request => request.headers.get('cookie')?.split(';').map(value => value.trim()).find(value => value.startsWith('ab_customer='))?.slice('ab_customer='.length);
 const privateHeaders = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
 export async function boundedAccountBody(request) {
   if (!/^application\/json(?:;|$)/i.test(request.headers.get('content-type') || '')) deny(400, 'JSON_REQUIRED', 'Send a JSON request.');
@@ -138,7 +137,7 @@ export function createAccountService({ database, testerEmail, publicOrigin, pass
         }
         if(studioPath&&(route.startsWith('provider/')||route.startsWith('live/'))) {
           const args={database,account:current,path:route,method:verb,readBody:()=>boundedAccountBody(request),vaultKey,fetcher,media};
-          const result=route.startsWith('provider/')?await manageProvider(args):await liveWorkspaceRequest({...args,path:route.slice(5)});
+          const result=route.startsWith('provider/')?await manageProvider(args):await liveWorkspaceRequest({...args,path:route.slice(5),sessionToken:cookieToken(request)});
           if(result instanceof Response)return result;
           if(result)return json(result.status,result.body);
           deny(404,'NOT_FOUND','Provider endpoint not found.');

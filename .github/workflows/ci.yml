@@ -69,6 +69,7 @@ jobs:
           probe() {
             docker exec -e EXPECTED_SHA="$GITHUB_SHA" -i agentbridge-smoke node --input-type=module <<'JS'
           import assert from 'node:assert/strict';
+          import http from 'node:http';
           import {readFileSync} from 'node:fs';
           import {setTimeout as delay} from 'node:timers/promises';
           const url='http://127.0.0.1:3000';
@@ -81,7 +82,10 @@ jobs:
           assert.equal(ready?.features.browser_join,true);
           assert.equal(ready?.public_signup_enabled,true);
           assert.equal((await fetch(url+'/api/studio/overview')).status,401);
-          assert.equal((await fetch(url+'/mcp')).status,401);
+          const mcpStatus=await new Promise((resolve,reject)=>{
+            http.get(url+'/mcp',{headers:{Host:'agentbridge.example'}},res=>{res.resume();resolve(res.statusCode);}).on('error',reject);
+          });
+          assert.equal(mcpStatus,401);
           assert.match((await fetch(url+'/studio/calls/')).headers.get('permissions-policy'),/microphone=\(self\)/);
           const worklet=await fetch(url+'/assets/media/room-audio.js');
           assert.equal(worklet.status,200); assert.match(await worklet.text(),/registerProcessor/);

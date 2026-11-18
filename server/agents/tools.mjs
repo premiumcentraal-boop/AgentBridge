@@ -572,6 +572,7 @@ export async function runAgentTool(context, name, input = {}) {
         context.actor.account.id,
         context.vaultKey,
       );
+      const captionKey = context.media && provider.live_enabled && await context.database.first("SELECT 1 AS saved FROM ab_transcription_credentials WHERE account_id=?", [context.actor.account.id]);
       return {
         account_connected: true,
         mcp: true,
@@ -585,7 +586,7 @@ export async function runAgentTool(context, name, input = {}) {
           live_enabled: provider.live_enabled,
         },
         human_join: Boolean(context.media && provider.live_enabled),
-        live_asr: Boolean(context.media && provider.live_enabled),
+        live_asr: Boolean(captionKey),
         media_transport: "owner_opt_in_studio_room",
         calling_countries: context.allowedCountries || ["US"],
         studio_url: new URL("/studio/agents/", context.origin).href,

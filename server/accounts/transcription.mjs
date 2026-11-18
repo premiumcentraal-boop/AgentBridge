@@ -69,11 +69,12 @@ export async function transcriptionRequest({
         "INSERT INTO ab_transcription_credentials(account_id,encrypted_secret,updated_at) VALUES(?,?,?) ON CONFLICT(account_id) DO UPDATE SET encrypted_secret=excluded.encrypted_secret,updated_at=excluded.updated_at",
         [account.id, encrypted, stamp()],
       );
+      media?.stopCaptions(account.id);
       return reply(200, {
         configured: true,
         verified: false,
         message:
-          "Key saved securely. Its transcription access is checked when you transcribe a recording.",
+          "Key saved. Its transcription access is checked when you start transcription.",
       });
     }
     if (method === "DELETE") {

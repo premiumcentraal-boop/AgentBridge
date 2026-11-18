@@ -110,6 +110,7 @@ export async function liveWorkspaceRequest({
   vaultKey,
   fetcher,
   media,
+  sessionToken,
 }) {
   const summary = await providerSummary(database, account.id, vaultKey, media);
   if (!summary.live_enabled)
@@ -118,7 +119,7 @@ export async function liveWorkspaceRequest({
       "LIVE_MODE_REQUIRED",
       "Switch to live testing in Settings before using your provider project.",
     );
-  if (path.startsWith("rooms/") && media) return media.request({ path, method, account, readBody });
+  if (path.startsWith("rooms/") && media) return media.request({ path, method, account, readBody, sessionToken });
   const roomOption = input => {
     if (input.studio_room !== undefined && typeof input.studio_room !== "boolean") deny(422, "INVALID_MODE", "Choose a call room setting.");
     if (input.studio_room && !media) deny(409, "ROOM_UNAVAILABLE", "Call rooms require the hosted AgentBridge Studio.");
