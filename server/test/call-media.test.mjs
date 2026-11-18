@@ -205,10 +205,22 @@ test("a callback dials in answer order, relays real audio, supports scoped join,
     .id;
   assert.equal(h.fixture.state.calls.length, 1);
   assert.equal(h.fixture.state.calls[0].to, phone);
+  assert.equal(
+    (await h.api("live/overview", undefined, "GET")).calls.find(
+      (c) => c.id === root,
+    ).room_ready,
+    false,
+  );
   const anchor = await h.carrier(root);
   await until(() => h.fixture.state.calls.length === 2);
   const dst = h.fixture.state.calls[0];
   assert.equal(dst.to, h.contact.destination);
+  assert.equal(
+    (await h.api("live/overview", undefined, "GET")).calls.find(
+      (c) => c.id === root,
+    ).room_ready,
+    true,
+  );
   const destination = await h.carrier(dst.sid);
   await until(() => destination.messages.some((m) => m.event === "media"));
   const before = await h.request(

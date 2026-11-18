@@ -815,7 +815,7 @@ export function LiveWorkspace({
     (data.call_history || []).find((c) => c.id === selectedCall);
   const openCall = (call) => {
     setSelectedCall(call.id);
-    navTo("call");
+    navTo("call", call.id);
   };
   const addCallNote = async (id, value) => {
     await write(`live/calls/${id}/notes`, value);
@@ -826,8 +826,14 @@ export function LiveWorkspace({
     await refresh();
   };
   useEffect(() => {
-    if (page !== "call") setSelectedCall("");
-  }, [page]);
+    if (page !== "call") { setSelectedCall(""); return; }
+    const requested = new URLSearchParams(location.search).get("id");
+    if (requested) setSelectedCall(requested);
+    else if (!selectedCall) {
+      const first = data.calls.find(c => active(c) && !c.parent_call_id && (!c.room_call_id || c.room_call_id === c.id));
+      if (first) setSelectedCall(first.id);
+    }
+  }, [page, data.calls, selectedCall]);
   const loadRecordings = async (id) => {
     const r = await providerRequest("live/calls/" + id + "/recordings");
     setRecordings(r.recordings);
@@ -901,8 +907,7 @@ export function LiveWorkspace({
       key={call.id}
       className="live-call-card"
       onClick={() => {
-        setSelectedCall(call.id);
-        navTo("call");
+        openCall(call);
       }}
     >
       <span className="provider-icon">
@@ -1289,7 +1294,8 @@ export function LiveWorkspace({
                   </button>
                 </div>
               )}
-              {active(details) && details.room_call_id && <LiveRoom key={details.room_call_id} callId={details.room_call_id} connections={connections} write={write} />}
+              {active(details) && details.room_call_id && !details.room_ready && <p role="status">Waiting for the first phone to answer before you can join.</p>}
+              {active(details) && details.room_ready && <LiveRoom key={details.room_call_id} callId={details.room_call_id} connections={connections} write={write} />}
               {active(details) && !details.room_call_id && data.features?.browser_audio && <p className="conversation-help">For browser audio, select Enable Studio call room when starting a callback or activating forwarding.</p>}
               <h3>Recordings</h3>
               {recordings.map((r) => (

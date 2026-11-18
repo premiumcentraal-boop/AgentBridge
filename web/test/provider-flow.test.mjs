@@ -305,3 +305,69 @@ test("the rendered studio securely connects SignalWire, imports inventory, activ
   );
   second.dom.window.close();
 });
+
+test("a live call deep link opens the room, joins listening and leaves without ending the phones", async t => {
+  const db = openAccountDatabase(":memory:");
+  t.after(() => db.close());
+  const provider = signalWireFixture();
+  const callId = randomUUID();
+  const media = {
+    describe: (_, id) => id === callId ? callId : null,
+    joinable: (_, id) => id === callId,
+    hasRoom: () => true,
+    request: async ({path}) => {
+      assert.equal(path, "rooms/" + callId + "/ticket");
+      return {status:200, body:{ticket:randomUUID(), path:"/api/media/studio"}};
+    },
+  };
+  const service = createAccountService({ database: db, testerEmail:email, publicOrigin:origin,
+    platformIdentity:true, vaultKey:randomBytes(32).toString("hex"), fetcher:provider.fetcher, media });
+  const fetcher = (path, options={}) => service.fetch(new Request(new URL(path,origin), {...options,
+    headers:{...Object.fromEntries(new Headers(options.headers)),Origin:origin,
+      "oai-authenticated-user-id":"verified-tester","oai-authenticated-user-email":email}}));
+  const api = async (path, input, method="POST") => {
+    const res=await fetcher("/api/"+path,{method,headers:{"Content-Type":"application/json"},body:JSON.stringify(input)});
+    assert.ok(res.ok, path); return res.json();
+  };
+  await api("auth/register",{name:"Tester",agent_name:"Agent",email});
+  await api("studio/provider/credentials",provider.config());
+  await api("studio/provider/mode",{live_enabled:true},"PATCH");
+  await api("studio/live/numbers/import",{provider_number_id:provider.owned.id,label:"Office"});
+  provider.state.calls.push({sid:callId,account_sid:provider.state.project,phone_number_sid:provider.owned.id,
+    from:provider.owned.number,to:"+12025550879",direction:"outbound-api",status:"in-progress"});
+  await api("studio/live/sync",{});
+  const { document,window,errors } = browser(t,fetcher,"/studio/call/?id="+callId);
+  await until(()=>document.querySelector(".live-room"));
+  const panel=document.querySelector(".live-room");
+  assert.equal(panel.querySelector("input[type=checkbox]").checked,false);
+  let micRequests=0, closed=false;
+  Object.defineProperty(window.navigator,"mediaDevices",{value:{getUserMedia:async()=>{micRequests++;throw Error("permission denied");}}});
+  window.AudioContext=class {
+    audioWorklet={addModule:async url=>assert.equal(url,"/assets/media/room-audio.js")};
+    resume=async()=>{}; close=async()=>{};
+    createGain(){return {gain:{value:1},connect(){}};}
+  };
+  window.AudioWorkletNode=class {port={postMessage(){}}; connect(){} disconnect(){}};
+  window.WebSocket=class {
+    static OPEN=1;
+    readyState=1;
+    constructor(url,protocols){
+      assert.equal(url.pathname,"/api/media/studio"); assert.equal(protocols[0],"agentbridge-room-v1");
+      window.setTimeout(()=>this.onmessage({data:JSON.stringify({type:"joined",self:"owner",lines:[],room:{captions:"off",participants:[
+        {id:"phone",role:"caller",label:"Incoming caller",muted:false,status:"connected"},
+        {id:"owner",role:"studio",label:"You",muted:true,status:"connected"}]}})}),0);
+    }
+    close(){closed=true;}
+  };
+  named(panel,"Join call").click();
+  await until(()=>panel.querySelectorAll(".room-person").length===2);
+  assert.equal(micRequests,0);
+  named(panel,"Turn microphone on").click();
+  await until(()=>panel.textContent.includes("permission denied"));
+  assert.equal(micRequests,1);
+  named(panel,"Mute speaker").click();
+  await until(() => panel.textContent.includes("Turn speaker on"));
+  named(panel,"Leave room").click(); await until(()=>closed && !panel.querySelector(".room-person"));
+  assert.equal(provider.state.calls[0].status,"in-progress");
+  assert.deepEqual(errors,[]);
+});

@@ -9,7 +9,15 @@ export function sendEvent(socket, message) {
   if (open(socket)) socket.send(JSON.stringify(message));
 }
 export class CallRoom {
-  constructor({ accountId, connection, number, client, release, dialLeg }) {
+  constructor({
+    accountId,
+    connection,
+    number,
+    client,
+    release,
+    dialLeg,
+    report,
+  }) {
     Object.assign(this, {
       accountId,
       connection,
@@ -17,12 +25,12 @@ export class CallRoom {
       client,
       release,
       dialLeg,
+      report,
     });
     this.id = randomUUID();
     this.people = new Map();
     this.callId = null;
     this.finished = false;
-    this.created = Date.now();
     this.captionState = "off";
     this.lines = [];
     this.timeout = setTimeout(() => this.end(), 300000);
@@ -82,6 +90,12 @@ export class CallRoom {
       }
       return call;
     } catch (error) {
+      if (person !== this.anchor && !this.finished) {
+        const message =
+          "SignalWire did not confirm the next phone connection. Check the call log, balance and destination permissions before retrying.";
+        this.report(message);
+        this.broadcast({ type: "notice", message });
+      }
       this.leave(person);
       throw error;
     }

@@ -46,11 +46,16 @@ export function RouterProvider({
   }, [base, offline]);
   const normalize = (url) =>
     accountDemo ? url.replace(/^\/studio\/demo\//, "/studio/") : url;
+  // Standalone auth pages deny microphone access. A full studio document
+  // loads the call-room policy after login, including for SPA redirects.
+  const needsDocument = (url) => isStudio(path) !== isStudio(url) ||
+    (document.getElementById("foundation-root")?.dataset.hostedMedia === "true" &&
+      path.startsWith("/studio/") !== url.startsWith("/studio/"));
   const go = (target) => {
     const url = normalize(target);
     // Load a new document across CSP/framing boundaries: the public page's
     // connect-src 'none' must never carry into a signed-in workspace.
-    if (!offline && isStudio(path) !== isStudio(url)) {
+    if (!offline && needsDocument(url)) {
       window.location.assign(base + url);
       return;
     }
@@ -69,7 +74,7 @@ export function RouterProvider({
       return;
     if (
       !offline &&
-      (isStudio(path) !== isStudio(p) ||
+      (needsDocument(p) ||
         (e.currentTarget.target && e.currentTarget.target !== "_self"))
     )
       return;

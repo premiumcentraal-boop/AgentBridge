@@ -190,7 +190,7 @@ export function createApp({ env = process.env, store = openStore(env.STUDIO_DATA
         const info = await stat(file);
         if (!info.isFile()) { res.writeHead(302, { Location: pathname + '/' }); res.end(); return; }
         let content = await readFile(file); const type = MIME[extname(file)] || 'application/octet-stream';
-        if(customerMode && extname(file)==='.html') content=Buffer.from(content.toString('utf8').replace('id="foundation-root"','id="foundation-root" data-account-demo="true"'));
+        if(customerMode && extname(file)==='.html') content=Buffer.from(content.toString('utf8').replace('id="foundation-root"','id="foundation-root" data-account-demo="true"' + (media ? ' data-hosted-media="true"' : '')));
         if (roomPage && extname(file) === '.html') content = Buffer.from(content.toString('utf8').replace("connect-src 'self'", roomConnect));
         res.writeHead(200, { 'Content-Type': type, 'Content-Length': content.length, 'Cache-Control': privatePath ? 'no-store' : extname(file) === '.html' ? 'no-cache' : 'public, max-age=3600' });
         res.end(req.method === 'HEAD' ? undefined : content);

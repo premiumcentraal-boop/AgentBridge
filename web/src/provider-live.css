@@ -448,7 +448,7 @@
   }
 }
 
-.live-room { display:grid; gap:12px; margin:16px 0; padding:18px; border:1px solid #424246; border-radius:17px; background:#171719; }
+.live-room { color:#f5f5f7; display:grid; gap:12px; margin:16px 0; padding:18px; border:1px solid #424246; border-radius:17px; background:#171719; }
 .live-room h3,.live-room h4,.live-room p { margin:0; }
 .room-people { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(135px,100%),1fr)); gap:8px; }
 .room-person { display:grid; align-content:start; gap:6px; min-width:0; padding:14px; border-radius:12px; background:#28282c; overflow-wrap:anywhere; }

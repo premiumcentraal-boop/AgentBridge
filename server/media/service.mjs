@@ -10,7 +10,7 @@ import {
   requireCharges,
 } from "../accounts/provider-control.mjs";
 import { liveConnection } from "../accounts/live-routing.mjs";
-import { readLive } from "../accounts/live-store.mjs";
+import { readLive, changeLive, liveEvent } from "../accounts/live-store.mjs";
 import { CallRoom, sendEvent } from "./room.mjs";
 import { captionKey, openCaptions } from "./captions.mjs";
 
@@ -157,6 +157,10 @@ export function createCallMedia({
       number,
       client,
       dialLeg,
+      report: (message) =>
+        changeLive(database, accountId, (doc) => {
+          liveEvent(doc, "call.room_notice", message);
+        }).catch(() => {}),
       release: (ended) => {
         rooms.delete(ended.accountId);
         for (const [key, entry] of tickets) if (entry.room === ended) drop(key);
@@ -359,6 +363,12 @@ export function createCallMedia({
     async startCallback({ client, account, connection, number, callback }) {
       return newRoom(account.id, connection, number, client).callback(callback);
     },
+    joinable(accountId, callId) {
+      return (
+        roomFor(accountId, callId)?.anchor?.socket?.readyState ===
+        WebSocket.OPEN
+      );
+    },
     describe(accountId, callId) {
       const r = roomFor(accountId, callId);
       return r?.callId || null;
@@ -453,7 +463,7 @@ export function createCallMedia({
       http.on("upgrade", async (req, socket, head) => {
         socket.on("error", () => {});
         try {
-          if (server.clients.size >= 512) return rejected(socket);
+          if (closing || server.clients.size >= 512) return rejected(socket);
           const grant = await socketGrant(req, authenticate);
           if (!grant || socket.destroyed) return rejected(socket);
           server.handleUpgrade(req, socket, head, (ws) => {

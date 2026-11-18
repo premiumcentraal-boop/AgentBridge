@@ -81,7 +81,11 @@ export async function liveSnapshot(database, account, vaultKey, media) {
   }
   return {
     ...document,
-    calls: document.calls.map(c => ({ ...c, room_call_id: media?.describe(account.id, c.id) || null })),
+    calls: document.calls.map(call => ({
+      ...call,
+      room_call_id: media?.describe(account.id, call.id) || null,
+      room_ready: media?.joinable(account.id, call.id) || false,
+    })),
     connections: document.connections.map((c) => ({
       ...c,
       studio_room: routes.some(r => r.connection_id === c.id && r.status === "active" && r.studio_room === 1),
