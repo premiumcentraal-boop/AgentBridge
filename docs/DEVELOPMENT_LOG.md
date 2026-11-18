@@ -774,3 +774,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - GitHub Actions quality gate #44336794097 at `43066b3` failed 1/249 Node tests (`blocked reports are accepted only as blocked observations, never permission`); Gitleaks and Railway image checks passed. The fixture inherited a pending migration action from `valid()` while declaring an unsafe schema and unsafe plan, which the new truth-table consumer correctly rejects as contradictory.
 - Updated only the blocked-state fixture to set `plan.apply=[]`, matching the producer's unsafe-state invariant. The separate truth-table regression continues to assert rejection of unsafe reports with migration actions. No consumer safety checks were weakened.
 - Exact-head CI after this correction remains to be verified; no migrations, calls, carrier resources, routing activation, payments, merges or deployments.
+
+
+## 2026-11-18 — Fail closed on incomplete preflight migration inventory (draft PR #58)
+- Identified that the read-only verdict consumer validated migration names and plan status but did not require a complete canonical inventory. A report could omit a known migration from applied/apply/baseline while still claiming a clean observation.
+- Added strict validation of the producer's applied history and a full disjoint partition of MIGRATION_FILES across applied, apply and baseline for safe observations. Unsafe blocked reports retain their empty-plan semantics; no migration authorization or database writer was added.
+- Added positive and negative regressions for missing, overlapping, malformed and absent applied histories. Exact-head CI and independent local execution remain to be verified. Draft remains unmerged and undeployed; no D1 writes, carrier activity, paid routing, secrets or purchases.
