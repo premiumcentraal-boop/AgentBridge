@@ -36,6 +36,9 @@ else if(sql==='SELECT id, name, applied_at FROM d1_migrations ORDER BY name, id'
   rows=process.env.FIXTURE==='history-drift'&&count===2?[entry('0001_routing_controls.sql')]:
     process.env.FIXTURE==='timestamp-drift'?[entry('0001_routing_controls.sql',1,count===2?'2026-11-17 01:00:00':'2026-11-17 00:00:00')]:
     process.env.FIXTURE==='id-drift'?[entry('0001_routing_controls.sql',count===2?2:1)]:
+    // A transient A -> B -> A mutation between independent observations is
+    // inherently invisible to this read-only CLI without snapshot isolation.
+    process.env.FIXTURE==='history-aba'?[entry('0001_routing_controls.sql')]:
     process.env.FIXTURE==='unknown-history'?[entry('9999_unapproved.sql')]:
     process.env.FIXTURE==='duplicate-history'?[entry('0001_routing_controls.sql'),entry('0001_routing_controls.sql',2)]:[];
 }
@@ -71,7 +74,8 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
       ['schema-drift',1,/schema or migration history changed during preflight/],
       ['history-drift',1,/schema or migration history changed during preflight/],
       ['timestamp-drift',1,/schema or migration history changed during preflight/],
-      ['id-drift',1,/schema or migration history changed during preflight/]
+      ['id-drift',1,/schema or migration history changed during preflight/],
+      ['history-aba',0,/OK: after a backup/]
     ]){
       const log=join(dir,scenario+'.queries');
       const run=spawnSync(process.execPath,[join(dir,'scripts','d1-migration-preflight.mjs'),'--local','disposable'],{
@@ -88,7 +92,7 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
         assert.match(report.reasons.join(' '),/Migration history claims applied objects/,scenario);
       }
       const queries=readFileSync(log,'utf8').trim().split('\n').map(JSON.parse);
-      if(['valid','history-drift','timestamp-drift','id-drift','unknown-history','duplicate-history'].includes(scenario)){
+      if(['valid','history-aba','history-drift','timestamp-drift','id-drift','unknown-history','duplicate-history'].includes(scenario)){
         assert.ok(queries.includes('SELECT id, name, applied_at FROM d1_migrations ORDER BY name, id'),scenario+': migration history must be read in deterministic order');
         assert.ok(!queries.includes('SELECT name FROM d1_migrations'),scenario+': unordered migration history is forbidden');
       }
@@ -106,4 +110,14 @@ test('preflight never prints blind baseline tracker writes or conflict-suppressi
   assert.doesNotMatch(source,/CREATE TABLE IF NOT EXISTS d1_migrations/);
   assert.match(source,/No automatic baseline reconciliation SQL is safe/);
   assert.match(source,/exclusive maintenance window/);
+});
+
+// Deliberate limitation test: a transient migration-history mutation reverted
+// between observations cannot be detected by independent Wrangler queries.
+// This is why successful preflight is never authorization to migrate without
+// an exclusive maintenance window, backup, and operator approval.
+test('ABA history fixture demonstrates non-atomic preflight limitation',()=>{
+  const source=readFileSync(cli,'utf8');
+  assert.match(source,/Separate queries are NOT an atomic snapshot/);
+  assert.match(source,/exclusive migration/);
 });
