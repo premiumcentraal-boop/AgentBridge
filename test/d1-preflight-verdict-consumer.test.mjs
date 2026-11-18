@@ -66,3 +66,33 @@ test('consumer rejects counterfeit, duplicated and overlapping migration plan en
   blocked.plan.apply=['0002_approval_bindings.sql'];
   assert.equal(check(0,JSON.stringify(blocked)).accepted,false);
 });
+
+test('reason/status truth table rejects contradictory blocked plans',()=>{
+  const base=valid();
+  const cases=[
+    // Valid producer states.
+    {unsafe:false,safe:true,apply:[],baseline:[],status:'observational_only',reason:'NO_PENDING_MIGRATIONS',accept:true},
+    {unsafe:false,safe:true,apply:['0001_routing_controls.sql'],baseline:[],status:'observational_only',reason:'PENDING_MIGRATIONS',accept:true},
+    {unsafe:false,safe:true,apply:[],baseline:['0001_routing_controls.sql'],status:'blocked',reason:'UNRECONCILED_MIGRATION_HISTORY',accept:true},
+    {unsafe:true,safe:false,apply:[],baseline:[],status:'blocked',reason:'UNSAFE_SCHEMA_OR_HISTORY',accept:true},
+    // A blocked verdict cannot use the clean pending reason.
+    {unsafe:true,safe:false,apply:[],baseline:[],status:'blocked',reason:'PENDING_MIGRATIONS',accept:false},
+    {unsafe:true,safe:false,apply:[],baseline:[],status:'blocked',reason:'NO_PENDING_MIGRATIONS',accept:false},
+    {unsafe:false,safe:false,apply:[],baseline:[],status:'blocked',reason:'UNSAFE_SCHEMA_OR_HISTORY',accept:false},
+    {unsafe:true,safe:true,apply:[],baseline:[],status:'blocked',reason:'UNSAFE_SCHEMA_OR_HISTORY',accept:false},
+    {unsafe:true,safe:false,apply:['0001_routing_controls.sql'],baseline:[],status:'blocked',reason:'UNSAFE_SCHEMA_OR_HISTORY',accept:false},
+    {unsafe:true,safe:false,apply:[],baseline:['0001_routing_controls.sql'],status:'blocked',reason:'UNSAFE_SCHEMA_OR_HISTORY',accept:false},
+    {unsafe:false,safe:true,apply:[],baseline:['0001_routing_controls.sql'],status:'blocked',reason:'PENDING_MIGRATIONS',accept:false},
+    {unsafe:false,safe:true,apply:['0001_routing_controls.sql'],baseline:[],status:'blocked',reason:'PENDING_MIGRATIONS',accept:false},
+  ];
+  for(const c of cases){
+    const report=structuredClone(base);
+    report.unsafe=c.unsafe;
+    report.plan={safe:c.safe,apply:c.apply,baseline:c.baseline};
+    report.verdict.status=c.status;
+    report.verdict.reason=c.reason;
+    const outcome=check(0,JSON.stringify(report));
+    assert.equal(outcome.accepted,c.accept,JSON.stringify(c));
+    assert.equal(outcome.authorizesMigration,c.accept?false:undefined);
+  }
+});
