@@ -3,6 +3,14 @@
  * This is NOT a migration approval API. No possible report authorizes writes.
  * A caller must also check that the preflight subprocess exited successfully.
  */
+import {MIGRATION_FILES} from './d1-migration-preflight.mjs';
+
+const allowedMigrations = new Set(MIGRATION_FILES);
+function validMigrationList(value) {
+  return Array.isArray(value) && value.every(name => typeof name === 'string' && allowedMigrations.has(name)) &&
+    new Set(value).size === value.length;
+}
+
 export function interpretPreflightObservation(exitCode, stdout) {
   if (exitCode !== 0) return {accepted:false, reason:'PREFLIGHT_PROCESS_FAILED'};
   if (typeof stdout !== 'string' || stdout.length === 0 || stdout.length > 262144)
@@ -29,7 +37,8 @@ export function interpretPreflightObservation(exitCode, stdout) {
   if (typeof report.unsafe !== 'boolean' || !report.plan ||
       typeof report.plan !== 'object' || Array.isArray(report.plan) ||
       typeof report.plan.safe !== 'boolean' ||
-      !Array.isArray(report.plan.apply) || !Array.isArray(report.plan.baseline))
+      !validMigrationList(report.plan.apply) || !validMigrationList(report.plan.baseline) ||
+      report.plan.apply.some(name => report.plan.baseline.includes(name)))
     return {accepted:false, reason:'INVALID_PLAN'};
   const blocked = report.unsafe || !report.plan.safe || report.plan.baseline.length > 0;
   if ((v.status === 'blocked') !== blocked)
