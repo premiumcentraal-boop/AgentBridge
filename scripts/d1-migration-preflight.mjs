@@ -220,7 +220,7 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
       console.error('Require an exclusive maintenance window, verified backup, independent schema/history review, and explicit operator-approved conflict-detecting reconciliation. Re-run preflight afterward.');
       process.exitCode=2;
     }else if(plan.apply.length){
-      console.error('OK: after a backup, `(cd backend && npx wrangler d1 migrations apply '+database+' '+mode+')` will apply: '+plan.apply.join(', '));
+      console.error('OBSERVATION ONLY: pending migrations: '+plan.apply.join(', ')+'. This inspection does not authorize applying them. Require verified backup, exclusive maintenance window, independent review and explicit operator approval.');
     }else{
       console.error('OK: all migrations present and recorded. Nothing to apply.');
     }
