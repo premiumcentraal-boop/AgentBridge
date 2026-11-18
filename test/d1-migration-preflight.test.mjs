@@ -157,3 +157,13 @@ test('real SQLite catalog rejects weakened account-scoped uniqueness and foreign
     if(fixture==='missing-fk')assert.match(failures.join(' '),/account ownership foreign key/);
   }
 });
+
+test('operator output cannot suggest a migration apply command from observational-only preflight',async()=>{
+  const {readFileSync}=await import('node:fs');
+  const source=readFileSync(new URL('../scripts/d1-migration-preflight.mjs',import.meta.url),'utf8');
+  assert.match(source,/OBSERVATION ONLY: pending migrations:/);
+  assert.match(source,/This inspection does not authorize applying them/);
+  assert.doesNotMatch(source,/console\.error\('OK: after a backup/);
+  assert.match(source,/authorizesMigration:false/);
+  assert.match(source,/requiresExclusiveMaintenanceWindow:true/);
+});
