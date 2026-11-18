@@ -1,6 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {interpretPreflightObservation as check} from '../scripts/d1-preflight-verdict-consumer.mjs';
+import {interpretPreflightObservation as interpret} from '../scripts/d1-preflight-verdict-consumer.mjs';
+import {MIGRATION_FILES} from '../scripts/d1-migration-preflight.mjs';
+// Existing truth-table fixtures describe plan states; derive the corresponding
+// complete producer history unless a test explicitly supplies an applied list.
+const check=(exitCode,raw)=>{
+  let report;
+  try {report=JSON.parse(raw);} catch {return interpret(exitCode,raw);}
+  if(report && typeof report==='object' && !Array.isArray(report) && report.plan &&
+     Array.isArray(report.plan.apply) && Array.isArray(report.plan.baseline) &&
+     !Object.hasOwn(report,'applied')){
+    report.applied=MIGRATION_FILES.filter(name=>!report.plan.apply.includes(name)&&!report.plan.baseline.includes(name));
+    raw=JSON.stringify(report);
+  }
+  return interpret(exitCode,raw);
+};
 
 const valid = () => ({unsafe:false,plan:{safe:true,apply:['0001_routing_controls.sql'],baseline:[]},
   verdict:{version:1,status:'observational_only',reason:'PENDING_MIGRATIONS',
@@ -97,4 +111,19 @@ test('reason/status truth table rejects contradictory blocked plans',()=>{
     assert.equal(outcome.accepted,c.accept,JSON.stringify(c));
     assert.equal(outcome.authorizesMigration,c.accept?false:undefined);
   }
+});
+
+
+test('complete migration inventory is mandatory and cannot overlap recorded history',()=>{
+  const report=valid();
+  report.applied=['0002_approval_bindings.sql','0003_owner_actions.sql']; // 0004 omitted
+  assert.equal(interpret(0,JSON.stringify(report)).reason,'INCOMPLETE_MIGRATION_INVENTORY');
+  report.applied.push('0004_inbound_call_log.sql');
+  assert.equal(interpret(0,JSON.stringify(report)).accepted,true);
+  report.applied.push('0001_routing_controls.sql');
+  assert.equal(interpret(0,JSON.stringify(report)).reason,'INCOMPLETE_MIGRATION_INVENTORY');
+  report.applied=[null];
+  assert.equal(interpret(0,JSON.stringify(report)).reason,'INVALID_APPLIED_HISTORY');
+  delete report.applied;
+  assert.equal(interpret(0,JSON.stringify(report)).reason,'INVALID_APPLIED_HISTORY');
 });
