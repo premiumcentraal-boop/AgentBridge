@@ -447,3 +447,19 @@
     flex-direction: column;
   }
 }
+
+.live-room { color:#f5f5f7; display:grid; gap:12px; margin:16px 0; padding:18px; border:1px solid #424246; border-radius:17px; background:#171719; }
+.live-room h3,.live-room h4,.live-room p { margin:0; }
+.room-people { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(135px,100%),1fr)); gap:8px; }
+.room-person { display:grid; align-content:start; gap:6px; min-width:0; padding:14px; border-radius:12px; background:#28282c; overflow-wrap:anywhere; }
+.room-person span,.room-captions time,.room-partial { color:#bbbbc1; }
+.room-toggle { width:fit-content; min-height:42px; background:#36363c; color:white; border:1px solid #66666e; border-radius:10px; padding:7px 12px; font:inherit; cursor:pointer; }
+.room-toggle[aria-pressed=true] { background:#2356c9; border-color:#6191fe; }
+.room-toggle:disabled { opacity:.55; }
+.room-captions { max-height:14rem; overflow:auto; display:grid; gap:8px; }
+.live-room details[open] { display:grid; gap:10px; }
+.live-room summary { cursor:pointer; padding:10px 0; }
+.provider-quickstart { margin:12px 0; }
+.provider-quickstart summary { cursor:pointer; font-weight:600; }
+.provider-quickstart ol { padding-inline-start:1.3em; }
+.provider-quickstart li { margin-block:.45em; }

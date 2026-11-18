@@ -2,13 +2,12 @@ import { AccountError, deny, emptyWorkspace, publicAccount } from './model.mjs';
 import { workspaceRequest } from './workspace.mjs';
 import { manageProvider, providerSummary, publicProviderError } from './provider-control.mjs';
 import { liveWorkspaceRequest } from './live-workspace.mjs';
-import { authLimit, digest, normalizeEmail as email, onlyFields as only, randomToken, validEmail, validName as named } from './auth-primitives.mjs';
+import { cookieToken, authLimit, digest, normalizeEmail as email, onlyFields as only, randomToken, validEmail, validName as named } from './auth-primitives.mjs';
 import { createEmailAuth } from './email-auth.mjs';
 import { agentWorkspaceRequest } from '../agents/api.mjs';
 import { transcriptionRequest } from './transcription.mjs';
 import { exportAccount, deleteAccount } from './lifecycle.mjs';
 
-const cookieToken = request => request.headers.get('cookie')?.split(';').map(value => value.trim()).find(value => value.startsWith('ab_customer='))?.slice('ab_customer='.length);
 const privateHeaders = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
 export async function boundedAccountBody(request) {
   if (!/^application\/json(?:;|$)/i.test(request.headers.get('content-type') || '')) deny(400, 'JSON_REQUIRED', 'Send a JSON request.');
@@ -24,7 +23,7 @@ export async function boundedAccountBody(request) {
   } catch (error) { if (error instanceof AccountError) throw error; deny(400, 'INVALID_BODY', 'Send a valid JSON object.'); }
   finally { reader.releaseLock(); }
 }
-export function createAccountService({ database, testerEmail, publicOrigin, passwords, platformIdentity = false, signupInviteHash, vaultKey, fetcher, signupMode, mailer, agentExternal = false, callingCountries = ['US'] }) {
+export function createAccountService({ database, testerEmail, publicOrigin, passwords, platformIdentity = false, signupInviteHash, vaultKey, fetcher, signupMode, mailer, agentExternal = false, callingCountries = ['US'], media }) {
   // The private Sites identity flow stays private; public email accounts use the
   // Node/Railway adapter and never trust browser-supplied identity headers.
   const publicSignup = signupMode === 'public' && !platformIdentity;
@@ -58,6 +57,7 @@ export function createAccountService({ database, testerEmail, publicOrigin, pass
   }
   const emailAuth = createEmailAuth({ database, passwords, mailer, session, json });
   return {
+    accountFor,
     async fetch(request, { clientAddress } = {}) {
       const path = new URL(request.url).pathname, verb = request.method;
       const authPath = path.startsWith('/api/auth/');
@@ -128,16 +128,16 @@ export function createAccountService({ database, testerEmail, publicOrigin, pass
           return json(200,result,{'Set-Cookie':cookie('',0)});
         }
         if (studioPath && route.startsWith('transcription/')) {
-          const result = await transcriptionRequest({database,account:current,path:route,method:verb,readBody:()=>boundedAccountBody(request),vaultKey,fetcher});
+          const result = await transcriptionRequest({database,account:current,path:route,method:verb,readBody:()=>boundedAccountBody(request),vaultKey,fetcher,media});
           if(result)return json(result.status,result.body);
         }
         if (studioPath && route.startsWith('agents')) {
-          const result = await agentWorkspaceRequest({ database, account: current, path: route, method: verb, readBody: () => boundedAccountBody(request), origin: publicOrigin || new URL(request.url).origin, external: agentExternal && !platformIdentity, allowedCountries: callingCountries, vaultKey });
+          const result = await agentWorkspaceRequest({ database, account: current, path: route, method: verb, readBody: () => boundedAccountBody(request), origin: publicOrigin || new URL(request.url).origin, external: agentExternal && !platformIdentity, allowedCountries: callingCountries, vaultKey, media });
           if (result) return json(result.status, result.body);
         }
         if(studioPath&&(route.startsWith('provider/')||route.startsWith('live/'))) {
-          const args={database,account:current,path:route,method:verb,readBody:()=>boundedAccountBody(request),vaultKey,fetcher};
-          const result=route.startsWith('provider/')?await manageProvider(args):await liveWorkspaceRequest({...args,path:route.slice(5)});
+          const args={database,account:current,path:route,method:verb,readBody:()=>boundedAccountBody(request),vaultKey,fetcher,media};
+          const result=route.startsWith('provider/')?await manageProvider(args):await liveWorkspaceRequest({...args,path:route.slice(5),sessionToken:cookieToken(request)});
           if(result instanceof Response)return result;
           if(result)return json(result.status,result.body);
           deny(404,'NOT_FOUND','Provider endpoint not found.');

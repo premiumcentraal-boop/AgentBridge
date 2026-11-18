@@ -15,6 +15,7 @@ import { inspectIntegration } from './integration.mjs';
 import { validateCallPlan, validateCapture } from '../shared/call-plans.mjs';
 import { validateNumberConnection, validateNumberOrder } from '../shared/numbers.mjs';
 import { createAgentHTTP, isAgentHTTPPath } from './agents/http.mjs';
+import { createCallMedia } from './media/service.mjs';
 import { RELEASE_VERSION } from '../shared/release.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -23,15 +24,17 @@ const PUBLIC_CSP = STUDIO_CSP.replace("connect-src 'self'", "connect-src 'none'"
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml' };
 const digest = text => createHash('sha256').update(text).digest();
 
-export function createApp({ env = process.env, store = openStore(env.STUDIO_DATABASE_PATH || resolve(ROOT, 'data/studio.sqlite')), fetcher, accountDatabase } = {}) {
+export function createApp({ env = process.env, store = openStore(env.STUDIO_DATABASE_PATH || resolve(ROOT, 'data/studio.sqlite')), fetcher, accountDatabase, captionConnect } = {}) {
   const publicSignup = env.STUDIO_SIGNUP_MODE === 'public';
   const customerMode = publicSignup || Boolean(env.DEMO_TESTER_EMAIL);
   const customerDatabase = customerMode ? accountDatabase || openAccountDatabase(env.STUDIO_ACCOUNT_DATABASE_PATH || resolve(dirname(env.STUDIO_DATABASE_PATH || resolve(ROOT,'data/studio.sqlite')), 'accounts.sqlite')) : null;
   const mailer = createAuthEmail({ apiKey: env.RESEND_API_KEY, from: env.AUTH_EMAIL_FROM, publicOrigin: env.STUDIO_PUBLIC_ORIGIN, fetcher });
   const callingCountries = (env.AGENTBRIDGE_CALLING_COUNTRIES || 'US').split(',').map(value => value.trim().toUpperCase()).filter(value => /^[A-Z]{2}$/.test(value));
   const clientAddress = req => { const value=req.headers['x-real-ip']; return env.STUDIO_TRUST_RAILWAY_PROXY === 'true' && env.RAILWAY_ENVIRONMENT_ID && typeof value==='string' && isIP(value) ? value : req.socket.remoteAddress; };
-  const customerAPI = createAccountService({ database: customerDatabase, testerEmail: env.DEMO_TESTER_EMAIL, publicOrigin: env.STUDIO_PUBLIC_ORIGIN || 'https://agentbridge.victor.ceo', passwords: nodePasswords, signupInviteHash: env.DEMO_SIGNUP_INVITE_SHA256, vaultKey:env.PROVIDER_CREDENTIALS_KEY, fetcher, signupMode: env.STUDIO_SIGNUP_MODE, mailer, agentExternal: customerMode, callingCountries });
-  const agentHTTP = createAgentHTTP({ database: customerDatabase, origin: env.STUDIO_PUBLIC_ORIGIN || 'https://agentbridge.victor.ceo', vaultKey: env.PROVIDER_CREDENTIALS_KEY, fetcher, allowedCountries: callingCountries, clientAddress, enabled: customerMode });
+  const origin = env.STUDIO_PUBLIC_ORIGIN || 'https://agentbridge.victor.ceo';
+  const media = createCallMedia({ database: customerDatabase, vaultKey: env.PROVIDER_CREDENTIALS_KEY, origin, fetcher, captionConnect });
+  const customerAPI = createAccountService({ database: customerDatabase, testerEmail: env.DEMO_TESTER_EMAIL, publicOrigin: env.STUDIO_PUBLIC_ORIGIN || 'https://agentbridge.victor.ceo', passwords: nodePasswords, signupInviteHash: env.DEMO_SIGNUP_INVITE_SHA256, vaultKey:env.PROVIDER_CREDENTIALS_KEY, fetcher, signupMode: env.STUDIO_SIGNUP_MODE, mailer, agentExternal: customerMode, callingCountries, media });
+  const agentHTTP = createAgentHTTP({ database: customerDatabase, origin: env.STUDIO_PUBLIC_ORIGIN || 'https://agentbridge.victor.ceo', vaultKey: env.PROVIDER_CREDENTIALS_KEY, fetcher, allowedCountries: callingCountries, clientAddress, media, enabled: customerMode });
   const sessions = new Map(), attempts = new Map();
   const keyHash = /^[a-f0-9]{64}$/.test(env.STUDIO_ACCESS_KEY_SHA256 || '') ? Buffer.from(env.STUDIO_ACCESS_KEY_SHA256, 'hex') : null;
   const isDev = env.STUDIO_DEV_MODE === 'true' && env.NODE_ENV !== 'production';
@@ -47,10 +50,12 @@ export function createApp({ env = process.env, store = openStore(env.STUDIO_DATA
     let pathname;
     try { pathname = decodeURIComponent(new URL(req.url, 'http://local').pathname); } catch { res.writeHead(400).end(); return; }
     const privatePath = pathname.startsWith('/api/') || pathname.startsWith('/studio') || pathname.startsWith('/app') || /^\/(signup|signin|verify-email|forgot-password|reset-password)(?:\/|$)/.test(pathname);
-    res.setHeader('Content-Security-Policy', privatePath ? STUDIO_CSP : PUBLIC_CSP);
+    const roomPage = media && pathname.startsWith('/studio/');
+    const roomConnect = roomPage && "connect-src 'self' " + origin.replace(/^http/, 'ws');
+    res.setHeader('Content-Security-Policy', roomPage ? STUDIO_CSP.replace("connect-src 'self'", roomConnect) : privatePath ? STUDIO_CSP : PUBLIC_CSP);
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+    res.setHeader('Permissions-Policy', roomPage ? 'camera=(), microphone=(self), geolocation=(), payment=()' : 'camera=(), microphone=(), geolocation=(), payment=()');
     if (privatePath) { res.setHeader('X-Frame-Options', 'DENY'); res.setHeader('Cache-Control', 'no-store'); res.setHeader('X-Robots-Tag', 'noindex, nofollow'); }
     const json = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
     const fail = (status, code, message) => json(status, { error: { code, message } });
@@ -88,7 +93,7 @@ export function createApp({ env = process.env, store = openStore(env.STUDIO_DATA
       if (['/health','/healthz','/readyz'].includes(pathname) && ['GET','HEAD'].includes(req.method)) {
         let build=null;try{build=JSON.parse(await readFile(resolve(ROOT,'dist/build.json'),'utf8'));}catch{}
         const ready=customerMode&&publicSignup&&mailer.ready&&vaultAvailable(env.PROVIDER_CREDENTIALS_KEY);
-        return json(pathname==='/readyz'&&!ready?503:200,{service:'agentbridge-studio',version:RELEASE_VERSION,build,mode:customerMode?publicSignup?'public-accounts':'account-demo':'prototype',accounts_configured:customerMode,public_signup_enabled:publicSignup&&mailer.ready,email_configured:mailer.ready,secure_provider_storage:vaultAvailable(env.PROVIDER_CREDENTIALS_KEY),mcp_configured:customerMode,oauth_pkce:customerMode,configuration_ready:ready,carrier_access:'per-account-opt-in',routing_enabled:false,features:{saved_transcription:true,browser_join:false,live_captions:false,native_grok_country:'US'},release_validation:'External carrier, inbox and Grok client checks required.'});
+        return json(pathname==='/readyz'&&!ready?503:200,{service:'agentbridge-studio',version:RELEASE_VERSION,build,mode:customerMode?publicSignup?'public-accounts':'account-demo':'prototype',accounts_configured:customerMode,public_signup_enabled:publicSignup&&mailer.ready,email_configured:mailer.ready,secure_provider_storage:vaultAvailable(env.PROVIDER_CREDENTIALS_KEY),mcp_configured:customerMode,oauth_pkce:customerMode,configuration_ready:ready,carrier_access:'per-account-opt-in',routing_enabled:false,features:{saved_transcription:true,browser_join:Boolean(media),live_captions:Boolean(media),native_grok_country:'US'},release_validation:'External carrier, inbox and Grok client checks required.'});
       }
       if (pathname.startsWith('/api/')) {
         // Prevent cross-origin session changes, including CSRF via a framed product.
@@ -185,7 +190,8 @@ export function createApp({ env = process.env, store = openStore(env.STUDIO_DATA
         const info = await stat(file);
         if (!info.isFile()) { res.writeHead(302, { Location: pathname + '/' }); res.end(); return; }
         let content = await readFile(file); const type = MIME[extname(file)] || 'application/octet-stream';
-        if(customerMode && extname(file)==='.html') content=Buffer.from(content.toString('utf8').replace('id="foundation-root"','id="foundation-root" data-account-demo="true"'));
+        if(customerMode && extname(file)==='.html') content=Buffer.from(content.toString('utf8').replace('id="foundation-root"','id="foundation-root" data-account-demo="true"' + (media ? ' data-hosted-media="true"' : '')));
+        if (roomPage && extname(file) === '.html') content = Buffer.from(content.toString('utf8').replace("connect-src 'self'", roomConnect));
         res.writeHead(200, { 'Content-Type': type, 'Content-Length': content.length, 'Cache-Control': privatePath ? 'no-store' : extname(file) === '.html' ? 'no-cache' : 'public, max-age=3600' });
         res.end(req.method === 'HEAD' ? undefined : content);
       } catch { return fail(404, 'NOT_FOUND', 'Page not found.'); }
@@ -194,9 +200,11 @@ export function createApp({ env = process.env, store = openStore(env.STUDIO_DATA
       return fail(500, 'INTERNAL_ERROR', 'The request could not be completed.');
     }
   });
+  media?.attach(server, customerAPI.accountFor);
+  server.shutdown = () => { media?.close(); server.close(); };
   server.requestTimeout = 15_000;
   server.headersTimeout = 10_000;
-  server.on('close', () => { store.close(); customerDatabase?.close?.(); });
+  server.on('close', () => { media?.close(); store.close(); customerDatabase?.close?.(); });
   return server;
 }
 
@@ -204,5 +212,5 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const server = createApp();
   const host=process.env.STUDIO_DEV_MODE==='true'&&process.env.NODE_ENV!=='production'?'127.0.0.1':'0.0.0.0';
   server.listen(Number(process.env.PORT || 3000), host, () => console.log('AgentBridge product and studio server is ready.'));
-  for (const signal of ['SIGTERM','SIGINT']) process.on(signal, () => server.close());
+  for (const signal of ['SIGTERM','SIGINT']) process.on(signal, () => server.shutdown());
 }

@@ -15,6 +15,7 @@ export function AgentsStudio({ api, isDemo }) {
     [call, setCall] = useState(null),
     [adding, setAdding] = useState(false),
     [callback, setCallback] = useState(""),
+    [callRoom, setCallRoom] = useState(false),
     [confirmed, setConfirmed] = useState(false);
   const id = useId();
   const refresh = async () => setData(await api("agents"));
@@ -176,6 +177,7 @@ export function AgentsStudio({ api, isDemo }) {
                     method: "POST",
                     body: JSON.stringify({
                       callback_number: callback,
+                      studio_room: callRoom,
                       confirm_charges: confirmed,
                     }),
                   });
@@ -188,6 +190,7 @@ export function AgentsStudio({ api, isDemo }) {
                 destination. Each call is limited to five minutes. Your
                 SignalWire project pays both legs at its provider rates.
               </p>
+              {call.room_available && <label className="agent-permission"><input type="checkbox" checked={callRoom} onChange={e => setCallRoom(e.target.checked)} /><span>Enable a Studio room to join this callback.</span></label>}
               <label htmlFor={id + "callback"}>
                 Your callback number
                 <input

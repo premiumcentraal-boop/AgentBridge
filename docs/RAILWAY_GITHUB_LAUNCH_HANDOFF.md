@@ -2,7 +2,7 @@
 
 **For one agent responsible for both implementation and deployment.**
 
-Prepared: 2026-11-16. Owner/test email: `premiumcentraal@gmail.com`.
+Updated 2026-11-18. Owner/test email: `premiumcentraal@gmail.com`.
 
 Public signup is authorized: **open email registration**, not a single-email allowlist.
 
@@ -10,7 +10,7 @@ Public signup is authorized: **open email registration**, not a single-email all
 
 Finish the existing AgentBridge product and release it at **https://agentbridge.victor.ceo**. Own the GitHub work, Railway configuration, email setup, missing calling features and production verification together. Preserve the existing design and customer data.
 
-The repository already contains the marketing site, studio, account API, SignalWire integration and an account-linked MCP connector. Start from those. **Deploying the existing code does not complete browser joining or live captions; those still need implementation.**
+The repository already contains the marketing site, studio, account API, SignalWire integration and an account-linked MCP connector. Start from those. The Node candidate includes opt-in live call rooms and streamed captions. Deploy the reviewed commit and verify actual provider and device behavior in phase D.
 
 Work through the phases below. Continue routine implementation and deployment within this scope. If access is missing, complete independent work, then identify the exact account, credential or human step needed. Never request passwords or API keys in ordinary chat.
 
@@ -20,14 +20,14 @@ Work through the phases below. Continue routine implementation and deployment wi
 | --- | --- |
 | Authoritative repository | https://github.com/premiumcentraal-boop/AgentBridge |
 | Branch to start from | Latest reviewed `main`; fetch before working |
-| Last known main at this handoff | `61df03b7d190b60ed42fc74801f9a59a1b0a2070` |
+| Handoff baseline before the media candidate | `a4073659e2dc555802e459e07f0433c535e26dff` |
 | Main feature implementation | [PR #60](https://github.com/premiumcentraal-boop/AgentBridge/pull/60), merged as `ff22b2033b08c16b0c6cb7661ef0b575b24088a5` |
 | Release/open-issue audit | [PR #61](https://github.com/premiumcentraal-boop/AgentBridge/pull/61), merged as `61df03b7d190b60ed42fc74801f9a59a1b0a2070` |
-| Application release candidate | `1.3.0-rc.1`, declared in `shared/release.mjs` |
+| Application release candidate | `1.3.0-rc.2`, declared in `shared/release.mjs` |
 | Public production target | https://agentbridge.victor.ceo |
 | Separate owner-private preview | https://agentbridge-worldwide.premiumcentraal.chatgpt.site |
 
-**Last observed public state, 2026-11-16:** the custom domain served older code; accounts were unconfigured, registration was unavailable and MCP/OAuth discovery was absent. Railway access was unavailable to the implementation agent. Recheck the actual service before changing anything; this is a dated observation, not a claim about its state when you start.
+**Public check on 2026-11-18 before the media candidate rollout.** The service reported `61df03b`, tester signup, an existing account, encrypted storage and MCP. Email was disabled and `/readyz` returned 503. Use the current public probe after deployment.
 
 The private preview was updated successfully, with its audience, database and existing secret preserved. Its success is not evidence that Railway is deployed. It does not expose the public MCP connector.
 
@@ -40,11 +40,12 @@ The private preview was updated successfully, with its audience, database and ex
 - Explicit xAI transcription of completed owned recordings, saved text/history, duplicate-request protection, uncertain-job review and transcript removal.
 - Account export/deletion, setup guidance, consistent SQLite backups and deployment/version probes.
 
-### What is not finished
+- Opt-in Studio call rooms on Node with real audio transport, extra phones, independent mute and xAI live captions. See phase D for acceptance.
+
+### Outstanding acceptance
 
 - Production Railway/email configuration and actual inbox, carrier, xAI and Grok acceptance tests.
-- Real browser audio joining, adding participants, independent agent/user mute and takeover.
-- Live captions from actual call audio.
+- Real mobile/desktop audio and captions with consenting phones, the customer’s keys, and provider billing evidence.
 - Legacy reservation-service security/provider verification described in section 9.
 
 Historical evidence: **284 checks passed**: 226 backend/security, 7 site audits, 35 rendered UI journeys, 3 Worker-artifact checks and 13 local-MCP checks. Exact-commit GitHub CI and source secret scanning passed; runtime dependency audit reported zero vulnerabilities at that time. Docker compilation passed using the managed environment's network CA only during validation. Container startup was not verified because the workspace ran out of disk. Re-run appropriate checks for your final code; fixtures are not real-call evidence.
@@ -118,7 +119,7 @@ Store runtime secrets in Railway's secret configuration, never GitHub files, bui
 
 ### Migrations and first rollout
 
-Node applies account SQL migrations transactionally at startup. Current account migrations are **0000 through 0004**; 0003 adds agent/contact/call-intent tables and 0004 adds saved transcription. Preserve old SQL bytes and migration history. Do not reset the volume, recreate accounts or manually repair migration tracking to get a green deploy.
+Node applies account SQL migrations transactionally at startup. Current account migrations are **0000 through 0005**. Migration 0005 adds hashed route tokens and a durable inbound-call replay guard. Existing routes stay direct until the owner activates the room option. Preserve old SQL bytes and migration history. Do not reset the volume, recreate accounts or manually repair migration tracking to get a green deploy.
 
 Deploy the reviewed commit, inspect startup/build logs without exposing secrets, and verify existing records remain. If existing tester accounts are unverified after enabling public signup, use the email verification flow; do not bypass verification in the database.
 
@@ -165,40 +166,20 @@ Then complete real workflows:
 
 Use explicitly approved real test numbers and charges. Do not dial the repository's fictional `555` fixtures, buy unspecified numbers or treat entering an API key as approval for arbitrary paid actions.
 
-## 7. Phase D — build the remaining real call room and live captions
+## 7. Phase D — verify the live call room and captions
 
-**This is engineering work, not an environment-variable toggle.** The current real route is a cXML two-leg forward/callback. The Zoom-like room uses fictional audio. SignalWire's modern Browser SDK/Call Fabric and Compatibility/cXML are different call paths. Research current official contracts, choose a supported bridge/conference architecture, then implement it on the public service.
+Deploy one replica of the Node service with its existing volume and wrapping key. Allow WebSocket upgrades to `/api/media/carrier` and `/api/media/studio` on the same public hostname. The carrier uses cXML bidirectional streams authenticated by bearer token, project and call ID. Studio issues a session-bound, one-use ticket. These endpoints share the Node service and need no separate media server or webhook signing variable.
 
-Required behavior:
+1. Under **Calling setup**, verify the owner’s SignalWire Space, Project ID and token with Voice and Numbers permissions. Choose **Use my SignalWire project**. Import an owned number and save an outside destination. For domestic trial tests, verify both outside phones.
+2. On the saved connection, choose **Test callback**, enter a different consenting phone and select **Enable Studio call room**. Confirm charges. Answer the callback, then answer the destination. Verify caller ID, both voice directions and the five-minute cap.
+3. Open the active call and **Join call** on mobile and desktop. Test microphone-off entry, denied microphone access, mic-on entry, speaker mute, independent remote mute and reconnection. Invite another saved contact. Transfer and verify the original destination remains until the replacement answers. Leave the browser and verify the original phone conversation continues.
+4. With everyone’s permission and the customer’s xAI key, enable live captions. Verify actual text, timestamps and charges. Stop, leave and rejoin to check that live captions are transient. Use separate controls for saved recording and post-call transcription.
+5. On a test routing number, explicitly activate forwarding with the room option. Place an inbound call and repeat the join test. Deactivate forwarding and confirm the previous SignalWire handler was restored. Idle code deployment never upgrades an existing forwarding route.
+6. Connect Grok through the hosted MCP. Have the owner approve the callback phones, charges and optional Studio room. Verify one provider callback, then save and retrieve the actual outcome. The MCP supplies contact context and callback actions. Grok retains its own voice and native calling confirmation.
 
-- One **Join call** entry, followed by microphone-off/on choice. Join only after the provider confirms the media session; show failures honestly.
-- Real participant cards for the agent, recipient(s) and user. Support actual additional participants and participant changes.
-- Independent controls for the user's microphone, speaker playback and the agent's real provider participant. Muting a bundled audio file is not remote agent mute.
-- Leaving as a listener/user must not end the original agent conversation. Ending the whole call must be a distinct deliberate action.
-- Live transcript from actual provider audio, with timestamps/participant labels where supported. Keep live viewing separate from optional saved transcript/recording consent.
-- Reconnection, ended-call handling and denied microphone/autoplay permissions, including mobile Safari/Chrome behavior.
+Schedule redeploys between live room calls. A Node restart closes its active room streams. For rollback, finish the calls and deactivate room-enabled forwarding while the candidate service still runs. Restore the older image with the existing volume and server wrapping key. Re-enable direct forwarding with the owner’s confirmation if appropriate.
 
-Implementation requirements:
-
-- Issue short-lived, account/call-scoped browser credentials on the server. Never expose the project API token. Authenticate media/WebSocket/event connections and isolate rooms/accounts.
-- Verify public provider callbacks with the documented signature contract, validate account/call/participant identity and handle duplicate/out-of-order events safely.
-- Request microphone access only for the user's chosen mode. Apply the necessary CSP/Permissions-Policy/network changes deliberately; current microphone policy blocks browser capture.
-- Add real audio streaming/ASR for captions, bounded session/resource usage, clear consent and optional persistence. Preserve once-only paid-operation handling and explicit provider charges.
-- Add meaningful room/permission/isolation/reconnect tests, then test the full audio path with consenting people on actual devices. Do not redirect existing customer calls into an unverified conference path.
-- Preserve the agreed minimal Grokbot-style UI, mobile left drawer, searchable studio, strong active-state colors and safe navigation. This is a functional completion task, not a new visual redesign.
-
-MCP provides contacts/context/actions, **not voice transport**. A SignalWire callback calls the approved phone and destination; it is not Grok's own voice. The sole speaking AI in the intended Grok workflow remains Grok. Do not insert another speaking bot to make a demo appear connected.
-
-Native Grok calling was documented US-only at the last review and retains its own confirmation. Recheck current platform support before broader claims. Do not disguise unsupported destinations with a US access number. If a platform capability is unavailable, state the supported boundary and remaining blocker.
-
-Research starting points:
-
-- https://signalwire.com/docs/platform/voice/make-and-receive-calls
-- https://signalwire.com/docs/browser-sdk/guides/authentication
-- https://signalwire.com/docs/compatibility-api/cxml/reference/voice/conference
-- https://docs.x.ai/developers/model-capabilities/audio/speech-to-text
-- https://docs.x.ai/grok-bot/computer-and-apps
-- https://docs.x.ai/grok-bot/chat-and-collaboration
+[AgentBridge outbound steps](SIGNALWIRE_LIVE_TESTING.md) · [SignalWire stream protocol](https://signalwire.com/docs/compatibility-api/cxml/reference/voice/stream) · [xAI streaming speech-to-text](https://docs.x.ai/developers/model-capabilities/audio/speech-to-text)
 
 ## 8. Code map for the same agent
 
@@ -211,6 +192,7 @@ Research starting points:
 | Saved transcription | `server/accounts/transcription.mjs` |
 | Account schema/backup | `server/accounts/migrations/`, `node-database.mjs`, `scripts/backup-accounts.mjs` |
 | Studio/account/provider/agent UI | `web/src/studio.jsx`, `account-auth.jsx`, `provider-live.jsx`, `agents.jsx`, `launch-settings.jsx` |
+| Live phone and browser media | `server/media/`, `web/src/live-room.jsx`, `assets/media/room-audio.js`, `server/test/call-media.test.mjs` |
 | Existing demo call-room UI | `web/src/call-tools.jsx`, `call-room.css`, `studio-navigation.jsx` |
 | Phone normalization and return path | `shared/phone.mjs`, `shared/return-path.mjs` |
 | Release/build/hosting | `shared/release.mjs`, `scripts/build-site.mjs`, `scripts/check-public-launch.mjs`, `Dockerfile`, `.dockerignore`, `railway.json` |

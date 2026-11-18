@@ -33,7 +33,7 @@ export const requireCharges = (input) => {
       "Confirm that SignalWire may charge your own project for this action.",
     );
 };
-export async function providerSummary(database, accountId, vaultKey) {
+export async function providerSummary(database, accountId, vaultKey, media) {
   const row = await database.first(
     "SELECT provider,space,project_id,token_hint,live_enabled,verified_at FROM ab_provider_connections WHERE account_id=?",
     [accountId],
@@ -54,9 +54,9 @@ export async function providerSummary(database, accountId, vaultKey) {
       call_control: true,
       recording: true,
       test_callback: true,
-      phone_join: false,
-      live_transcription: false,
-      browser_audio: false,
+      phone_join: Boolean(media),
+      live_transcription: Boolean(media),
+      browser_audio: Boolean(media),
     },
   };
 }
@@ -217,11 +217,12 @@ export async function manageProvider({
   readBody,
   vaultKey,
   fetcher,
+  media,
 }) {
   if (path === "provider/status" && method === "GET")
     return {
       status: 200,
-      body: await providerSummary(database, account.id, vaultKey),
+      body: await providerSummary(database, account.id, vaultKey, media),
     };
   if (path === "provider/credentials" && method === "POST") {
     if (!vaultAvailable(vaultKey))
@@ -278,7 +279,7 @@ export async function manageProvider({
       ]);
       return {
         status: 200,
-        body: await providerSummary(database, account.id, vaultKey),
+        body: await providerSummary(database, account.id, vaultKey, media),
       };
     });
   }
@@ -296,6 +297,7 @@ export async function manageProvider({
       );
       if (input.live_enabled) await client.listNumbers();
       else {
+        if (media?.hasRoom(account.id)) deny(409, "ACTIVE_CALL", "End the call room before returning to demo mode.");
         const active = await database.first(
           "SELECT connection_id FROM ab_live_routes WHERE account_id=? AND status!='inactive' LIMIT 1",
           [account.id],
@@ -318,13 +320,14 @@ export async function manageProvider({
       );
       return {
         status: 200,
-        body: await providerSummary(database, account.id, vaultKey),
+        body: await providerSummary(database, account.id, vaultKey, media),
       };
     });
   }
   if (path === "provider/credentials" && method === "DELETE") {
     onlyFields(await readBody(), []);
     return providerLease(database, account.id, async () => {
+      if (media?.hasRoom(account.id)) deny(409, "ACTIVE_CALL", "End the call room before removing the key.");
       const active = await database.first(
         "SELECT connection_id FROM ab_live_routes WHERE account_id=? AND status!='inactive' LIMIT 1",
         [account.id],

@@ -714,7 +714,7 @@ export function Studio({ mode, setMode, isDemo }) {
       notify("Call ended.");
     }
   };
-  const returnCall = () => go(studioBase + "call/");
+  const returnCall = () => go(studioBase + "call/" + (liveMode && call.id ? "?id=" + encodeURIComponent(call.room_call_id || call.id) : ""));
   const reviewRouting = (destinationId = "") => {
     setRoutingDestination(destinationId);
     setRoutingOpen(true);
@@ -1229,12 +1229,12 @@ export function Studio({ mode, setMode, isDemo }) {
               page={page}
               account={session.account}
               onSignout={signout}
-              navTo={(target) => go(navTo(target))}
+              navTo={(target, callId) => go(navTo(target) + (callId ? "?id=" + encodeURIComponent(callId) : ""))}
               onModeChange={() => location.reload()}
               onState={(state) => {
                 setSnapshot({ ...empty(), ...state });
                 const active = (state.calls || []).find(
-                  (c) => c.status === "in-progress" && !c.parent_call_id,
+                  (c) => c.status === "in-progress" && !c.parent_call_id && (!c.room_call_id || c.room_call_id === c.id),
                 );
                 const route =
                   active &&
@@ -1246,9 +1246,9 @@ export function Studio({ mode, setMode, isDemo }) {
                     ? {
                         ...active,
                         active: true,
-                        label: route?.label || active.to,
-                        destination: active.to,
-                        routing_number: active.from,
+                        label: active.label || route?.label || active.to,
+                        destination: active.destination || active.to,
+                        routing_number: active.routing_number || active.from,
                         elapsed: active.duration,
                         muted: false,
                         joined: false,

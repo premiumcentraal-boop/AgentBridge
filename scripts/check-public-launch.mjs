@@ -48,7 +48,13 @@ await Promise.all(
       ]);
       checks.push(['MCP account runtime',body.mcp_configured===true&&body.oauth_pkce===true]);
       checks.push(['Built release matches running service',typeof body.version==='string'&&body.version===body.build?.version]);
-      if(process.argv[3])checks.push(['Deployed commit matches requested release',body.build?.commit===process.argv[3]]);
+      const [readyResponse, buildResponse, roomPage] = await Promise.all([get('/readyz'), get('/build.json'), get('/studio/calls/')]);
+      const ready = await readyResponse.json(), build = await buildResponse.json();
+      checks.push(['Public configuration ready', readyResponse.status === 200 && ready.configuration_ready === true]);
+      checks.push(['Static and running commit match', buildResponse.ok && /^[a-f0-9]{40}$/.test(build.commit || '') && build.commit === body.build?.commit && build.version === body.version]);
+      checks.push(['Studio audio and captions available', body.features?.browser_join === true && body.features?.live_captions === true && roomPage.ok && (roomPage.headers.get('permissions-policy') || '').includes('microphone=(self)')]);
+      await roomPage.body?.cancel();
+      if(process.argv[3])checks.push(['Deployed commit matches requested release',build.commit===process.argv[3] && body.build?.commit===process.argv[3]]);
     })(),
     (async()=>{
       const response=await get('/.well-known/oauth-authorization-server'),body=await response.json();

@@ -724,6 +724,7 @@ test("the public-account migration preserves every legacy child record and requi
       delete expected.singleton;
       expected.email_verified_at = null;
     }
+    if (table === "ab_live_routes") expected.media_token_hash = null;
     assert.deepEqual({ ...row }, expected, table + " preserved");
   }
   assert.equal(await h.database.first("PRAGMA foreign_key_check"), null);

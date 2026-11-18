@@ -293,9 +293,12 @@ export async function approvePreparedCall({
   database,
   account,
   input,
+  media,
   allowedCountries = ["US"],
 }) {
-  onlyFields(input, ["prepared_call_id", "callback_number", "confirm_charges"]);
+  onlyFields(input, ["prepared_call_id", "callback_number", "confirm_charges", "studio_room"]);
+  if (input.studio_room !== undefined && typeof input.studio_room !== "boolean") deny(422, "INVALID_MODE", "Choose a call room setting.");
+  if (input.studio_room && !media) deny(409, "ROOM_UNAVAILABLE", "Call rooms require the hosted Studio.");
   const plan = await ownedIntent(database, account.id, input.prepared_call_id);
   if (
     plan.expires_at <= Date.now() ||
@@ -341,6 +344,7 @@ export async function approvePreparedCall({
   const document = {
     ...plan.data,
     callback_number: callback.e164,
+    studio_room: input.studio_room === true,
     approved_at: new Date().toISOString(),
   };
   await database.run(
@@ -361,6 +365,7 @@ async function startPreparedCall({
   origin,
   vaultKey,
   fetcher,
+  media,
   allowedCountries,
 }) {
   onlyFields(input, ["prepared_call_id"]);
@@ -408,8 +413,8 @@ async function startPreparedCall({
       "The connection changed. Prepare and approve a new call.",
     );
   const claimed = await database.run(
-    "UPDATE ab_call_intents SET status='dispatching',updated_at=? WHERE id=? AND status='approved' AND expires_at>?",
-    [new Date().toISOString(), plan.id, Date.now()],
+    "UPDATE ab_call_intents SET status='dispatching',updated_at=? WHERE id=? AND status='approved' AND document=? AND expires_at>?",
+    [new Date().toISOString(), plan.id, plan.document, Date.now()],
   );
   if (!claimed.changes)
     deny(409, "CALL_IN_PROGRESS", "This callback is already being dispatched.");
@@ -421,10 +426,12 @@ async function startPreparedCall({
       method: "POST",
       vaultKey,
       fetcher,
+      media,
       readBody: async () => ({
         request_id: plan.data.operation_id,
         connection_id: plan.data.connection_id,
         callback_number: plan.data.callback_number,
+        studio_room: plan.data.studio_room === true,
         confirm_charges: true,
       }),
     });
@@ -565,6 +572,7 @@ export async function runAgentTool(context, name, input = {}) {
         context.actor.account.id,
         context.vaultKey,
       );
+      const captionKey = context.media && provider.live_enabled && await context.database.first("SELECT 1 AS saved FROM ab_transcription_credentials WHERE account_id=?", [context.actor.account.id]);
       return {
         account_connected: true,
         mcp: true,
@@ -577,8 +585,9 @@ export async function runAgentTool(context, name, input = {}) {
           configured: provider.configured,
           live_enabled: provider.live_enabled,
         },
-        human_join: false,
-        live_asr: false,
+        human_join: Boolean(context.media && provider.live_enabled),
+        live_asr: Boolean(captionKey),
+        media_transport: "owner_opt_in_studio_room",
         calling_countries: context.allowedCountries || ["US"],
         studio_url: new URL("/studio/agents/", context.origin).href,
       };

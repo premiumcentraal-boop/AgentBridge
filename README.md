@@ -17,22 +17,11 @@ app revocation, setup guidance, consistent backups and deployment drift checks a
 implemented. See [saved transcription](docs/SAVED_TRANSCRIPTION.md) and
 [release operations](docs/RELEASE_OPERATIONS.md).
 
-This remains a release candidate until the [release gates](docs/RELEASE_READINESS.md)
-pass on the public host. Real browser human joining and live captions still need
-their media implementation; the demo room below does not establish those features.
+The public release depends on inbox, carrier, browser and Grok acceptance on the custom domain. [Release readiness](docs/RELEASE_READINESS.md)
 
-## Join call room
+## Join a live call
 
-The demo uses one **Join call** entry. Choose microphone off or on before joining,
-then see an individual tile for the agent, each connection and yourself beside
-live captions. Agent mute, microphone mute and speaker mute are separate controls.
-You can add/remove saved connections to preview a larger room. Captions shown while
-joined are not saved unless transcript capture is explicitly enabled.
-
-The demo plays fictional audio and does not transmit a microphone or dial added
-participants. Real human joining and remote agent mute still require the live
-conferencing/media integration; SignalWire forwarding and recording keep their
-existing behavior.
+When starting a callback or activating forwarding on the Node studio, select **Enable Studio call room**. Once the first phone answers, open the active call in **Calls → Join call**. Join listening or with your microphone on. Each phone has a participant tile. You can mute the caller, speak, add a saved contact, or transfer to another destination. Leaving Studio keeps the phone conversation going. A consenting owner can start temporary live captions with their own xAI key. [SignalWire setup and live test](docs/SIGNALWIRE_LIVE_TESTING.md)
 
 ## Contacts and call history
 
@@ -47,9 +36,7 @@ Account notes and history persist on the server. The public sample stays in its 
 
 Recording and transcription remain opt-in. A saved recording can support a later
 transcript; audio that was never recorded cannot be recovered. The sample supports
-restoring its fictional transcript from its fictional recording. Real recording
-controls use SignalWire; new live transcription and human audio joining still need
-the media integration described below. See [capture and memory behavior](docs/CONVERSATIONS.md).
+restoring its fictional transcript from its fictional recording. SignalWire supplies recording controls. Studio call rooms can also stream live captions with separate consent. See [capture and memory behavior](docs/CONVERSATIONS.md).
 
 ## Public accounts on Railway
 
@@ -75,10 +62,6 @@ encrypted with its server-only `PROVIDER_CREDENTIALS_KEY`; keys never appear in
 browser storage, exports or public bundles.
 
 See [setup, provider contracts and exact verification boundaries](docs/SIGNALWIRE_LIVE_TESTING.md).
-Live transcription, browser listening and adding a third human to an existing
-call still require a separate public webhook/media service. The live interface
-keeps them unavailable and does not substitute sample audio or transcripts.
-
 ## Victor product page & control studio
 
 The new product experience is prepared for **agentbridge.victor.ceo**, with a dedicated
@@ -106,9 +89,9 @@ The known development key is ignored in production. A missing production access-
 hash keeps the private workspace locked.
 
 
-A premium website and developer-first international telecom bridge for AI agents with their own US outbound calling capability. The intended experience is a natural extension of Grok Bot: prepare a route, call a US access number, and let the carrier connect it to an approved international recipient while **Grok Bot stays the only speaking AI**.
+AgentBridge connects saved destinations to customer-owned phone numbers. Grok retains its own calling capabilities and confirmation. The hosted MCP supplies contact history and can request a separately approved SignalWire callback.
 
-> **Current status: development testing.** Public email accounts require host email configuration. Real provider actions require customer-supplied SignalWire credentials and explicit live testing. Platform billing, live ASR/listen-in/join and verified Grok Bot end-to-end dialing are not provided. AgentBridge is independent of Grok/xAI, Cursor and Apple.
+Public launch still requires production email, carrier and Grok acceptance. Customers pay their own providers. AgentBridge is independent of Grok/xAI.
 
 ## Website
 

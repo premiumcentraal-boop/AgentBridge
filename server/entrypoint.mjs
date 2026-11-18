@@ -9,4 +9,4 @@ if (process.getuid?.() === 0) {
 const {createApp}=await import('./app.mjs');
 const server=createApp();
 server.listen(Number(process.env.PORT||3000),'0.0.0.0',()=>console.log('AgentBridge product and studio server is ready.'));
-for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>server.close());
+for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>server.shutdown());

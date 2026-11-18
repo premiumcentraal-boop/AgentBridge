@@ -135,6 +135,7 @@ export async function startTestCall({
   client,
   connectionId,
   callback,
+  media,
 }) {
   if (!E164.test(callback || ""))
     deny(
@@ -167,19 +168,30 @@ export async function startTestCall({
       "ACTIVE_CALL",
       "End your current call before starting another test call.",
     );
-  const script = await client.createScript(
-    "AgentBridge test " + crypto.randomUUID(),
-    forwardXml(connection.destination, number.e164),
-  );
-  const call = await client.compat("/Calls", "POST", {
-    To: callback,
-    From: number.e164,
-    Url: script.url,
-    Method: "POST",
-    Timeout: 30,
-    TimeLimit: 300,
-    Record: false,
-  });
+  let call;
+  if (media)
+    call = await media.startCallback({
+      client,
+      account,
+      connection,
+      number,
+      callback,
+    });
+  else {
+    const script = await client.createScript(
+      "AgentBridge test " + crypto.randomUUID(),
+      forwardXml(connection.destination, number.e164),
+    );
+    call = await client.compat("/Calls", "POST", {
+      To: callback,
+      From: number.e164,
+      Url: script.url,
+      Method: "POST",
+      Timeout: 30,
+      TimeLimit: 300,
+      Record: false,
+    });
+  }
   if (!UUID.test(call.sid || "")) throw new ProviderError(502, true);
   const result = {
     ...callView(call),

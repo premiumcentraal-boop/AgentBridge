@@ -47,3 +47,53 @@ jobs:
           tar xzf gitleaks.tgz gitleaks && rm gitleaks.tgz
           ./gitleaks git . --redact --no-banner
           ./gitleaks dir . --redact --no-banner
+  railway-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Boot the release image with a persistent test volume
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --build-arg RAILWAY_GIT_COMMIT_SHA="$GITHUB_SHA" -t agentbridge-smoke .
+          docker volume create test-accounts
+          trap 'docker rm -f agentbridge-smoke >/dev/null; docker volume rm test-accounts >/dev/null' EXIT
+          # These values are generated for this disposable container. The probe sends no email.
+          export PROVIDER_CREDENTIALS_KEY="$(openssl rand -hex 32)"
+          export RESEND_API_KEY="re_$(openssl rand -hex 16)"
+          docker run -d --name agentbridge-smoke -v test-accounts:/data \
+            -e PROVIDER_CREDENTIALS_KEY -e RESEND_API_KEY -e STUDIO_SIGNUP_MODE=public \
+            -e STUDIO_PUBLIC_ORIGIN=https://agentbridge.example \
+            -e AUTH_EMAIL_FROM=studio@example.test agentbridge-smoke
+          probe() {
+            docker exec -e EXPECTED_SHA="$GITHUB_SHA" -i agentbridge-smoke node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import http from 'node:http';
+          import {readFileSync} from 'node:fs';
+          import {setTimeout as delay} from 'node:timers/promises';
+          const url='http://127.0.0.1:3000';
+          let ready;
+          for(let i=0;i<40;i++){
+            try { const res=await fetch(url+'/readyz'); if(res.ok){ready=await res.json(); break;} } catch {}
+            await delay(250);
+          }
+          assert.equal(ready?.build?.commit,process.env.EXPECTED_SHA);
+          assert.equal(ready?.features.browser_join,true);
+          assert.equal(ready?.public_signup_enabled,true);
+          assert.equal((await fetch(url+'/api/studio/overview')).status,401);
+          const mcpStatus=await new Promise((resolve,reject)=>{
+            http.get(url+'/mcp',{headers:{Host:'agentbridge.example'}},res=>{res.resume();resolve(res.statusCode);}).on('error',reject);
+          });
+          assert.equal(mcpStatus,401);
+          assert.match((await fetch(url+'/studio/calls/')).headers.get('permissions-policy'),/microphone=\(self\)/);
+          const worklet=await fetch(url+'/assets/media/room-audio.js');
+          assert.equal(worklet.status,200); assert.match(await worklet.text(),/registerProcessor/);
+          assert.match(readFileSync('/proc/1/status','utf8'),/^Uid:\s+1000\s+1000/m);
+          JS
+          }
+          probe
+          docker exec -u 1000 agentbridge-smoke sh -c 'echo retained > /data/restart-check'
+          docker restart agentbridge-smoke
+          probe
+          docker exec agentbridge-smoke grep -qx retained /data/restart-check

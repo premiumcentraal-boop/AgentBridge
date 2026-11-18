@@ -1,5 +1,7 @@
 import { deny } from "./model.mjs";
 
+export const cookieToken = request => request.headers.get('cookie')?.split(';').map(value => value.trim()).find(value => value.startsWith('ab_customer='))?.slice('ab_customer='.length);
+
 export const normalizeEmail = (value) =>
   typeof value === "string" ? value.trim().toLowerCase() : "";
 export const validEmail = (value) =>

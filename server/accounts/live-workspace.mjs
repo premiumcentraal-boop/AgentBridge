@@ -68,7 +68,7 @@ async function putNumber(database, account, n, label) {
     return number;
   });
 }
-export async function liveSnapshot(database, account, vaultKey) {
+export async function liveSnapshot(database, account, vaultKey, media) {
   const document = await readLive(database, account.id),
     routes = await routeStates(database, account.id);
   const pending = await database.first(
@@ -81,20 +81,26 @@ export async function liveSnapshot(database, account, vaultKey) {
   }
   return {
     ...document,
+    calls: document.calls.map(call => ({
+      ...call,
+      room_call_id: media?.describe(account.id, call.id) || null,
+      room_ready: media?.joinable(account.id, call.id) || false,
+    })),
     connections: document.connections.map((c) => ({
       ...c,
+      studio_room: routes.some(r => r.connection_id === c.id && r.status === "active" && r.studio_room === 1),
       routing_state:
         routes.find((r) => r.connection_id === c.id)?.status || "inactive",
     })),
-    provider: await providerSummary(database, account.id, vaultKey),
+    provider: await providerSummary(database, account.id, vaultKey, media),
     mode: "live-testing",
     sandbox: false,
     pending_actions: JSON.parse(pending?.entries || "[]"),
     limits: { max_call_seconds: 300, max_imported_numbers: 20 },
     features: {
-      live_transcription: false,
-      browser_audio: false,
-      phone_join: false,
+      live_transcription: Boolean(media),
+      browser_audio: Boolean(media),
+      phone_join: Boolean(media),
       saved_transcription: true,
     },
   };
@@ -107,18 +113,26 @@ export async function liveWorkspaceRequest({
   readBody,
   vaultKey,
   fetcher,
+  media,
+  sessionToken,
 }) {
-  const summary = await providerSummary(database, account.id, vaultKey);
+  const summary = await providerSummary(database, account.id, vaultKey, media);
   if (!summary.live_enabled)
     deny(
       409,
       "LIVE_MODE_REQUIRED",
       "Switch to live testing in Settings before using your provider project.",
     );
+  if (path.startsWith("rooms/") && media) return media.request({ path, method, account, readBody, sessionToken });
+  const roomOption = input => {
+    if (input.studio_room !== undefined && typeof input.studio_room !== "boolean") deny(422, "INVALID_MODE", "Choose a call room setting.");
+    if (input.studio_room && !media) deny(409, "ROOM_UNAVAILABLE", "Call rooms require the hosted AgentBridge Studio.");
+    return input.studio_room ? media : null;
+  };
   if (path === "overview" && method === "GET")
     return {
       status: 200,
-      body: await liveSnapshot(database, account, vaultKey),
+      body: await liveSnapshot(database, account, vaultKey, media),
     };
   const conversation = await conversationRequest({
     path,
@@ -158,12 +172,12 @@ export async function liveWorkspaceRequest({
       run,
     );
   if (path === "overview" && method === "GET")
-    return reply(200, await liveSnapshot(database, account, vaultKey));
+    return reply(200, await liveSnapshot(database, account, vaultKey, media));
   if (path === "sync" && method === "POST") {
     onlyFields(await readBody(), []);
     const doc = await readLive(database, account.id);
     if (doc.last_sync && Date.now() - Date.parse(doc.last_sync) < 4000)
-      return reply(200, await liveSnapshot(database, account, vaultKey));
+      return reply(200, await liveSnapshot(database, account, vaultKey, media));
     await providerLease(database, account.id, async () => {
       const inventory = await client.listNumbers();
       await changeLive(database, account.id, (d) => {
@@ -213,7 +227,7 @@ export async function liveWorkspaceRequest({
         );
       }
     });
-    return reply(200, await liveSnapshot(database, account, vaultKey));
+    return reply(200, await liveSnapshot(database, account, vaultKey, media));
   }
   if (path === "inventory" && method === "GET") {
     const data = await client.listNumbers(),
@@ -473,18 +487,19 @@ export async function liveWorkspaceRequest({
   );
   if (route && method === "POST") {
     const input = await readBody();
-    onlyFields(input, ["request_id", "confirm_charges"]);
+    onlyFields(input, route[2] === "activate" ? ["request_id", "confirm_charges", "studio_room"] : ["request_id", "confirm_charges"]);
+    const roomMedia = roomOption(input);
     if (route[2] === "activate") requireCharges(input);
     const result = await operate(
       {
         request_id: input.request_id,
         kind: route[2],
         target: route[1],
-        input: {},
+        input: roomMedia ? { studio_room: true } : {},
       },
       () =>
         route[2] === "activate"
-          ? activateForwarding({ ...context, connectionId: route[1] })
+          ? activateForwarding({ ...context, connectionId: route[1], media: roomMedia })
           : disableForwarding({ ...context, connectionId: route[1] }),
     );
     return reply(200, result);
@@ -501,9 +516,10 @@ export async function liveWorkspaceRequest({
       "request_id",
       "connection_id",
       "callback_number",
-      "confirm_charges",
+      "confirm_charges", "studio_room",
     ]);
     requireCharges(input);
+    const roomMedia = roomOption(input);
     if (!uuidPath(input.connection_id))
       deny(
         422,
@@ -515,13 +531,14 @@ export async function liveWorkspaceRequest({
         request_id: input.request_id,
         kind: "start_test",
         target: input.connection_id,
-        input: { callback: input.callback_number },
+        input: { callback: input.callback_number, ...(roomMedia ? { studio_room: true } : {}) },
       },
       () =>
         startTestCall({
           ...context,
           connectionId: input.connection_id,
           callback: input.callback_number,
+          media: roomMedia,
         }),
     );
     const doc = await readLive(database, account.id);
@@ -546,6 +563,7 @@ export async function liveWorkspaceRequest({
       "confirm_charges",
       "capture_consent",
     ]);
+    const roomTransfer = callAction[2] === "transfer" && media?.describe(account.id, callAction[1]);
     if (callAction[2] !== "end") requireCharges(input);
     const result = await operate(
       {
@@ -557,7 +575,7 @@ export async function liveWorkspaceRequest({
           capture_consent: input.capture_consent === true,
         },
       },
-      () =>
+      () => roomTransfer ? media.transfer(account.id, callAction[1], input.connection_id) :
         controlCall({
           ...context,
           id: callAction[1],
@@ -693,7 +711,7 @@ export async function liveWorkspaceRequest({
     return reply(200, {
       transcripts,
       has_more: Boolean(p.next_page_uri),
-      live_transcription: false,
+      live_transcription: Boolean(media),
     });
   }
   const review = path.match(/^operations\/([a-f0-9-]{36})\/review$/);

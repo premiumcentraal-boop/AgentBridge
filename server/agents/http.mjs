@@ -67,6 +67,7 @@ export function createAgentHTTP({
   origin,
   vaultKey,
   fetcher,
+  media,
   allowedCountries = ["US"],
   clientAddress,
   enabled = true,
@@ -152,7 +153,7 @@ export function createAgentHTTP({
       name: "AgentBridge",
       description:
         "Your contacts, call context and approved calling workflows.",
-      version: "1.3.0-rc.1",
+      version: RELEASE_VERSION,
       url: resource.href,
       transport: "streamable-http",
       authentication: { type: "oauth2", issuer: issuer.href },
@@ -239,7 +240,7 @@ export function createAgentHTTP({
             "The tool arguments do not match its schema.",
           );
         const result = await runAgentTool(
-          { database, actor, origin, vaultKey, fetcher, allowedCountries },
+          { database, actor, origin, vaultKey, fetcher, media, allowedCountries },
           tool.name,
           input,
         );
