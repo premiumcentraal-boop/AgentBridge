@@ -35,3 +35,34 @@ test('blocked reports are accepted only as blocked observations, never permissio
   assert.deepEqual(check(0,JSON.stringify(v)),{
     accepted:true,status:'blocked',authorizesMigration:false,requiresManualApproval:true});
 });
+
+
+test('consumer rejects counterfeit, duplicated and overlapping migration plan entries',()=>{
+  const mutations=[
+    x=>{x.plan.apply=[null];},
+    x=>{x.plan.apply=[42];},
+    x=>{x.plan.apply=['../0001_routing_controls.sql'];},
+    x=>{x.plan.apply=['0001_routing_controls.sql '];},
+    x=>{x.plan.apply=['9999_unknown.sql'];},
+    x=>{x.plan.apply=['0001_routing_controls.sql','0001_routing_controls.sql'];},
+    x=>{x.plan.baseline=[null];},
+    x=>{x.plan.baseline=['../../evil.sql'];},
+    x=>{x.plan.baseline=['0002_approval_bindings.sql','0002_approval_bindings.sql'];},
+    x=>{x.plan.baseline=['0001_routing_controls.sql'];},
+  ];
+  for (const mutate of mutations) {
+    const report=valid(); mutate(report);
+    assert.equal(check(0,JSON.stringify(report)).accepted,false,mutate.toString());
+  }
+  const clean=valid();
+  clean.plan.apply=['0001_routing_controls.sql','0002_approval_bindings.sql'];
+  assert.equal(check(0,JSON.stringify(clean)).accepted,true);
+  const blocked=valid();
+  blocked.plan.apply=[];
+  blocked.plan.baseline=['0002_approval_bindings.sql'];
+  blocked.verdict.status='blocked';
+  blocked.verdict.reason='UNRECONCILED_MIGRATION_HISTORY';
+  assert.equal(check(0,JSON.stringify(blocked)).accepted,true);
+  blocked.plan.apply=['0002_approval_bindings.sql'];
+  assert.equal(check(0,JSON.stringify(blocked)).accepted,false);
+});
