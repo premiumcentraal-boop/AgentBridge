@@ -38,7 +38,7 @@ else if(sql==='SELECT id, name, applied_at FROM d1_migrations ORDER BY name, id'
     process.env.FIXTURE==='id-drift'?[entry('0001_routing_controls.sql',count===2?2:1)]:
     // A transient A -> B -> A mutation between independent observations is
     // inherently invisible to this read-only CLI without snapshot isolation.
-    process.env.FIXTURE==='history-aba'?[entry('0001_routing_controls.sql')]:
+    process.env.FIXTURE==='history-aba'?[]:
     process.env.FIXTURE==='unknown-history'?[entry('9999_unapproved.sql')]:
     process.env.FIXTURE==='duplicate-history'?[entry('0001_routing_controls.sql'),entry('0001_routing_controls.sql',2)]:[];
 }
