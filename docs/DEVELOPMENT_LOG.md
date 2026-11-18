@@ -749,3 +749,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Removed the contradictory `OK: all migrations present` human-readable success message in the no-pending-migrations path. Even clean history/schema observations are non-atomic and must not be presented as authoritative approval; the CLI now says `OBSERVATION ONLY` and explicitly denies database-change authorization.
 - Added a source regression guard to `test/d1-migration-cli.test.mjs`. This change does not alter SQL, exit codes, JSON verdict fields or routing flags.
 - Exact-head CI and disposable Wrangler execution for this change are pending; no local test execution or migration occurred. Manual backup, exclusive maintenance window, independent review and operator approval remain mandatory.
+
+## 2026-11-18 — Fail-closed D1 verdict consumer contract (draft PR #58)
+- Added `scripts/d1-preflight-verdict-consumer.mjs` as a pure, read-only parser for preflight subprocess results. It rejects nonzero exit status, missing/oversized/non-JSON output, unsupported version, malformed fields, contradictory schema/plan/verdict state and any purported authorization; even accepted observations always return `authorizesMigration:false` and require manual approval.
+- Added offline Node regression tests covering clean observations, blocked observations, and malicious/malformed/contradictory reports. This helper does not invoke Wrangler or any database writer and is not an automatic migration executor.
+- Previous PR HEAD `2bc6d2f` passed GitHub Actions quality gate #44276832397; the new exact-head CI and local test execution were not yet verified when this entry was written. Draft remains unmerged, with no database migration, carrier activity, paid routing or deployment.
