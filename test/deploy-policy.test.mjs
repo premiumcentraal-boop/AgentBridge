@@ -16,3 +16,13 @@ test('preview deploy retains static build and audit before publishing', () => {
   assert.match(workflow, /npm run test:site/);
   assert.match(workflow, /actions\/deploy-pages@/);
 });
+
+test('hourly quality installs root and web dependencies before running CI', () => {
+  const hourly = readFileSync(new URL('../.github/workflows/hourly-quality.yml', import.meta.url), 'utf8');
+  const rootInstall = hourly.indexOf('run: npm ci --ignore-scripts --no-audit --no-fund');
+  const webInstall = hourly.indexOf('run: npm --prefix web ci --ignore-scripts --no-audit --no-fund');
+  const validation = hourly.indexOf('run: npm run ci');
+  assert.ok(rootInstall >= 0, 'root dependencies must be installed for shared phone imports');
+  assert.ok(webInstall > rootInstall, 'web dependencies must follow root installation');
+  assert.ok(validation > webInstall, 'CI must run after both dependency installs');
+});
