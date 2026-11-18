@@ -727,3 +727,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added `verdict` to successful JSON inspection output with versioned `observational_only` / `blocked` status, reason, and explicit `atomicSnapshot:false`, `authorizesMigration:false`, operator-approval, maintenance-window and verified-backup requirements. This is an advisory read-only observation, not migration authorization; existing stderr and exit codes remain unchanged.
 - Added full-CLI mock-Wrangler assertions for clean and ABA observations and contradictory migration history. Existing failure exceptions still fail closed without a trusted verdict; callers must treat absent or malformed JSON as denial.
 - Pending exact-head CI, disposable Wrangler review and manual approval. No migration, carrier call, routing enablement, payment, merge or deployment.
+
+## 2026-11-18 — Observational D1 preflight must not recommend immediate application (draft PR #58)
+- Exact-head Quality gate #44230675003 passed at `20fba1a` before this change; that is not CI evidence for the new commits.
+- Found a contradictory operator-facing success message: the JSON verdict correctly says `authorizesMigration:false`, but stderr suggested a concrete `wrangler d1 migrations apply` command and said it "will apply" pending migrations. Automation or operators could mistake a non-atomic inspection for approval.
+- Replaced that recommendation with an explicitly non-authorizing observation listing pending migration filenames and requiring verified backup, exclusive maintenance window, independent review and explicit operator approval. Added source-level regression to prevent the misleading wording returning. Exit codes, D1 queries, JSON verdict and routing configuration remain unchanged.
+- New exact-head CI and local Wrangler verification pending; no migrations, carrier calls, payments, merges or deployment.
