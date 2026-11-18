@@ -66,7 +66,7 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
     writeFileSync(executable,mock);
     chmodSync(executable,0o700);
     for(const [scenario,status,pattern] of [
-      ['valid',0,/OK: after a backup/],
+      ['valid',0,/OBSERVATION ONLY: pending migrations:/],
       ['missing-unique',1,/Untrusted D1 migration tracker:.*UNIQUE/],
       ['missing-timestamp-default',1,/Untrusted D1 migration tracker:.*CURRENT_TIMESTAMP default/],
       ['invalid-json',1,/Wrangler did not return JSON/],
@@ -80,7 +80,7 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
       ['history-drift',1,/schema or migration history changed during preflight/],
       ['timestamp-drift',1,/schema or migration history changed during preflight/],
       ['id-drift',1,/schema or migration history changed during preflight/],
-      ['history-aba',0,/OK: after a backup/]
+      ['history-aba',0,/OBSERVATION ONLY: pending migrations:/]
     ]){
       const log=join(dir,scenario+'.queries');
       const abaTrace=join(dir,scenario+'.aba');
@@ -116,7 +116,7 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
       assert.ok(queries.every(sql=>/^(PRAGMA |SELECT )/i.test(sql)),scenario+': no writes');
       assert.ok(!queries.includes('PRAGMA schema_version'),scenario+': Wrangler denies schema_version with SQLITE_AUTH');
       if(['missing-unique','missing-timestamp-default'].includes(scenario))assert.ok(!queries.includes('SELECT name FROM d1_migrations ORDER BY name'),'must not trust invalid tracker');
-      if(status!==0)assert.doesNotMatch(run.stderr,/OK: after a backup/);
+      if(status!==0)assert.doesNotMatch(run.stderr,/OBSERVATION ONLY: pending migrations:/);
     }
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
