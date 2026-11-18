@@ -89,6 +89,16 @@ test('preflight CLI checks tracker before history, fails closed on malformed res
         env:{...process.env,AGENTBRIDGE_WRANGLER:executable,QUERY_LOG:log,ABA_TRACE:abaTrace,FIXTURE:scenario}
       });
       assert.equal(run.status,status,scenario+': '+run.stderr);
+      if(['valid','history-aba','unknown-history','duplicate-history'].includes(scenario)){
+        const report=JSON.parse(run.stdout);
+        assert.equal(report.verdict.version,1,scenario);
+        assert.equal(report.verdict.atomicSnapshot,false,scenario);
+        assert.equal(report.verdict.authorizesMigration,false,scenario);
+        assert.equal(report.verdict.requiresOperatorApproval,true,scenario);
+        assert.equal(report.verdict.requiresExclusiveMaintenanceWindow,true,scenario);
+        assert.equal(report.verdict.requiresVerifiedBackup,true,scenario);
+        assert.equal(report.verdict.status,['unknown-history','duplicate-history'].includes(scenario)?'blocked':'observational_only',scenario);
+      }
       assert.match(run.stderr,pattern,scenario);
       if(scenario==='history-aba')assert.equal(readFileSync(abaTrace,'utf8'),'A -> B -> A');
       if(['unknown-history','duplicate-history'].includes(scenario)){
