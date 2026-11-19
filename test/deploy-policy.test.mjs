@@ -26,3 +26,16 @@ test('hourly quality installs root and web dependencies before running CI', () =
   assert.ok(webInstall > rootInstall, 'web dependencies must follow root installation');
   assert.ok(validation > webInstall, 'CI must run after both dependency installs');
 });
+
+test('hourly quality PR checks stay read-only and isolated from scheduled runs', () => {
+  const hourly = readFileSync(new URL('../.github/workflows/hourly-quality.yml', import.meta.url), 'utf8');
+  const triggers = hourly.match(/^on:\s*\n((?:[ \t]+[^\n]*\n)*)/m);
+  assert.ok(triggers, 'hourly workflow must declare triggers');
+  assert.match(triggers[1], /^  schedule:\s*$/m);
+  assert.match(triggers[1], /^  workflow_dispatch:\s*$/m);
+  assert.match(triggers[1], /^  pull_request:\s*$/m);
+  assert.doesNotMatch(triggers[1], /^  (?:push|pull_request_target|workflow_run):/m);
+  assert.match(hourly, /^permissions:\s*\n  contents: read\s*$/m);
+  assert.match(hourly, /^  group: .*\$\{\{ github\.event_name \}\}.*\$\{\{ github\.ref \}\}/m);
+  assert.match(hourly, /^  cancel-in-progress: true\s*$/m);
+});
