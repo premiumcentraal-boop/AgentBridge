@@ -582,3 +582,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Identified that the hourly quality workflow only ran on `schedule` and `workflow_dispatch`, so a PR-only correction could not be exercised by that workflow until merged; its concurrency group also shared a single name across all refs.
 - Added `pull_request` to the hourly quality workflow and scoped concurrency to event name and ref so PR checks do not cancel the scheduled main pulse. Root `npm ci --ignore-scripts` remains before web install and `npm run ci`.
 - This change is CI-only and remains on draft PR #65, not merged. Exact-head GitHub Actions, local Node checks, and an actual scheduled main run are not yet verified. No carrier actions, deployment or paid routing changes.
+
+## 2026-11-19 — Hourly workflow independent security regression (draft PR #65)
+- Independently reviewed PR-triggered hourly workflow against main: explicit read-only `contents: read`, no `pull_request_target`, isolated event/ref concurrency, root dependency installation before validation, and unchanged manual/scheduled triggers.
+- Extended `test/deploy-policy.test.mjs` with fail-closed assertions for the safe trigger set, read-only permissions and event/ref concurrency; these catch accidental privileged-trigger or cross-event cancellation regressions.
+- GitHub connector committed the test; local tests and exact-head Actions for the new commit remain unverified at time of writing. Earlier green CI at `2528372` does not cover this test. PR stays draft, unmerged; no deployment, carrier calls or paid routing.
