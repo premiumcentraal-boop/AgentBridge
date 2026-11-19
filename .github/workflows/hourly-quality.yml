@@ -3,10 +3,11 @@ on:
   schedule:
     - cron: '17 * * * *'
   workflow_dispatch:
+  pull_request:
 permissions:
   contents: read
 concurrency:
-  group: agentbridge-hourly-quality
+  group: agentbridge-hourly-quality-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   audit:
