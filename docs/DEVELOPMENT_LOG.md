@@ -577,3 +577,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Combined scope: reject contradictory SignalWire inbound detail/listing records, deny automatic completion on terminal-looking but billing-incomplete snapshots, and require audited manual owner recovery with conditional transition and transaction-bound audit checks. Imported the corresponding carrier-reconciliation, snapshot, and force-unlock regression suites.
 - This branch is a review candidate, NOT an approved merge of #49 or #56. Branch provenance is preserved in the PR description; the source branches' older development-log entries were not blindly copied over newer main history.
 - GitHub connector writes succeeded. Local checkout and `npm run ci` could not run because this execution environment cannot resolve github.com; exact-head GitHub Actions and real local Wrangler D1 rollback verification remain pending. No calls, paid routing, provider resources, migrations, secrets, merges or deployments.
+
+
+## 2026-11-19 — Disposable Wrangler D1 owner-recovery atomicity regression (draft PR #66, unmerged)
+- Added `test/d1-force-unlock-local.test.mjs`, using the pinned backend Wrangler local D1 binding to execute the actual three-statement owner force-unlock batch, including `RAISE(IGNORE)` audit suppression, successful recovery, and duplicate recovery denial. Temporary local persistence only; no remote database, carrier resources or calls.
+- Wired the test into the GitHub Actions quality gate after installing backend's pinned Wrangler. Acceptance requires rollback to `connecting` with zero audits when the audit insert is ignored, and exactly one durable audit on a successful unlock.
+- At commit time CI and real Wrangler execution are **pending**, not asserted successful. Independent security review, real provider contract verification, manual merge approval and default-deny paid routing remain required.
