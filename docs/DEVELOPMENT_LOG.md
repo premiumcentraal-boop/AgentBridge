@@ -603,3 +603,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added a disposable local Wrangler D1 scenario in which the owner recovery batch commits, then the simulated HTTP layer throws a 503 before delivering a success response. A retry through the separately initialized shared-persistence D1 proxy must reject, preserve the failed reservation, and retain exactly one original audit ID without replacement.
 - This is a deliberate transport-failure simulation at the database boundary, **not** an end-to-end HTTP handler test or proof of remote production D1 semantics. Exact-head GitHub Actions verification is pending at commit time. The caller must inspect durable reservation/audit state after an ambiguous response rather than blindly retrying.
 - Paid routing remains default-deny. No live carrier actions, purchases, payments, production migrations, merges or deployments.
+
+## 2026-11-19 — Owner HTTP post-commit response-loss regression (draft PR #66)
+- Added `backend/test/owner-force-unlock.test.mjs` coverage exercising the actual authenticated Worker `fetch` handler after the D1 batch commits but its adapter throws before returning success. A retry with a valid owner token must reject without changing the durable audit; an agent bearer token remains unauthorized.
+- This is a deliberately injected post-commit adapter failure in the real HTTP handler, **not** an actual network-level HTTP 503, independent Cloudflare Worker isolates, or production D1 proof. The mock carrier stays read-only and unavailable; no paid routing is enabled.
+- Source commit `984acc47b66f8bc04a91a8495fe2fc6e9ff9c886`; exact-head GitHub Actions and independent human review required before approval. No merges or deployments.
