@@ -608,3 +608,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added `backend/test/owner-force-unlock.test.mjs` coverage exercising the actual authenticated Worker `fetch` handler after the D1 batch commits but its adapter throws before returning success. A retry with a valid owner token must reject without changing the durable audit; an agent bearer token remains unauthorized.
 - This is a deliberately injected post-commit adapter failure in the real HTTP handler, **not** an actual network-level HTTP 503, independent Cloudflare Worker isolates, or production D1 proof. The mock carrier stays read-only and unavailable; no paid routing is enabled.
 - Source commit `984acc47b66f8bc04a91a8495fe2fc6e9ff9c886`; exact-head GitHub Actions and independent human review required before approval. No merges or deployments.
+
+
+## 2026-11-19 — Correct post-commit HTTP recovery regression expectation (PR #66)
+- Exact-head Actions #44609342772 failed one of 258 Node tests: the new synthetic post-commit failure test expected HTTP 503 but received 409. The owner handler re-reads the durable connecting state in its catch path; a committed unlock is no longer connecting and is conservatively reported as `CANNOT_UNLOCK` (409), not success.
+- Updated the regression to assert 409 and `CANNOT_UNLOCK` while preserving durable one-audit, retry rejection, and unauthorized-token checks. This is a test expectation correction, not a production behavior change. It does not prove a real network 503, and a 409 after a lost response must not be interpreted as proof that the caller's attempt never committed.
+- Await exact-head CI for the corrected branch; production multi-isolate D1 and real transport-loss behavior remain unverified. No merge, deployment, paid routing, calls, payments or carrier changes.
