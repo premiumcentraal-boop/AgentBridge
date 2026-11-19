@@ -577,3 +577,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Inspected main at bb9b90e and scheduled Actions run 44406418554: hourly audit failed 9 Node test files with ERR_MODULE_NOT_FOUND for libphonenumber-js imported by shared/phone.mjs. The hourly workflow installed only web dependencies before npm run ci; the normal Quality gate already runs root npm ci.
 - Added root npm ci --ignore-scripts --no-audit --no-fund before web install and validation in hourly-quality.yml, and a regression asserting the dependency-install order. This fixes a CI environment defect, not application routing behavior.
 - GitHub Actions on this feature branch pending; no local npm execution claimed. No calls, migrations, provider resources, paid routing, payments, merges or deployments.
+
+## 2026-11-19 — Make hourly CI repair reviewable on PR #65
+- Identified that the hourly quality workflow only ran on `schedule` and `workflow_dispatch`, so a PR-only correction could not be exercised by that workflow until merged; its concurrency group also shared a single name across all refs.
+- Added `pull_request` to the hourly quality workflow and scoped concurrency to event name and ref so PR checks do not cancel the scheduled main pulse. Root `npm ci --ignore-scripts` remains before web install and `npm run ci`.
+- This change is CI-only and remains on draft PR #65, not merged. Exact-head GitHub Actions, local Node checks, and an actual scheduled main run are not yet verified. No carrier actions, deployment or paid routing changes.
