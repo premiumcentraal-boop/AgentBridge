@@ -341,3 +341,38 @@ test('mutated recovery audit contents roll back unlock and retain reservation lo
   }),env);
   assert.equal(busy.status,409,'failed recovery must retain the durable lock');
 });
+
+test('authenticated owner HTTP retry after committed batch and synthetic response loss is idempotent',async t=>{
+  const {env,DB,id}=await stuck(t);
+  t.mock.method(globalThis,'fetch',async()=>new Response('carrier unavailable',{status:503}));
+  const originalBatch=env.DB.batch.bind(env.DB);
+  let injected=false;
+  env.DB.batch=async statements=>{
+    const committed=await originalBatch(statements);
+    if(!injected){
+      injected=true;
+      throw new Error('synthetic response transport failure after durable D1 commit');
+    }
+    return committed;
+  };
+  const first=await worker.fetch(unlock(id,{
+    force:true,reason:'Operator verified termination and billing in carrier dashboard'
+  }),env);
+  assert.equal(injected,true,'failure must occur after the real recovery batch');
+  assert.equal(first.status,503,'ambiguous post-commit failure must not claim success');
+  assert.equal(status(DB,id),'failed','commit survives lost response');
+  const original=DB.raw.prepare('SELECT id,reason FROM owner_actions WHERE reservation_id=?').all(id);
+  assert.equal(original.length,1,'exactly one durable audit after response loss');
+  const retry=await worker.fetch(unlock(id,{
+    force:true,reason:'Operator retried after ambiguous server response'
+  }),env);
+  assert.equal(retry.status,409,'authenticated retry cannot unlock again');
+  assert.equal(status(DB,id),'failed');
+  assert.deepEqual(DB.raw.prepare('SELECT id,reason FROM owner_actions WHERE reservation_id=?').all(id),original,
+    'retry cannot replace or duplicate the original audit');
+  const unauthorized=await worker.fetch(unlock(id,{
+    force:true,reason:'Unauthorized agent retry after ambiguous response'
+  },TOKEN),env);
+  assert.equal(unauthorized.status,401,'agent token never authorizes owner recovery');
+  assert.deepEqual(DB.raw.prepare('SELECT id,reason FROM owner_actions WHERE reservation_id=?').all(id),original);
+});
