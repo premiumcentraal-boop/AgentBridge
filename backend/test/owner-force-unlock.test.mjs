@@ -359,7 +359,8 @@ test('authenticated owner HTTP retry after committed batch and synthetic respons
     force:true,reason:'Operator verified termination and billing in carrier dashboard'
   }),env);
   assert.equal(injected,true,'failure must occur after the real recovery batch');
-  assert.equal(first.status,503,'ambiguous post-commit failure must not claim success');
+  assert.equal(first.status,409,'post-commit state recheck reports conflict rather than false success');
+  assert.equal((await first.json()).error.code,'CANNOT_UNLOCK');
   assert.equal(status(DB,id),'failed','commit survives lost response');
   const original=DB.raw.prepare('SELECT id,reason FROM owner_actions WHERE reservation_id=?').all(id);
   assert.equal(original.length,1,'exactly one durable audit after response loss');
