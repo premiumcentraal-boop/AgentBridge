@@ -593,3 +593,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Extended the disposable Wrangler D1 regression to submit two independent concurrent recovery batches with distinct audit IDs using `Promise.allSettled`. Acceptance: exactly one succeeds, one rejects, and the durable reservation has one audit. This checks local D1 request scheduling rather than only sequential replay.
 - Added an explicit `RAISE(ABORT)` audit-trigger failure and asserted the reservation remains `connecting` with zero audits. Existing ignored-audit, valid-commit and duplicate-replay cases remain.
 - These assertions are committed but NOT considered verified until exact-head CI passes. Local Wrangler D1 is not remote/production D1; human review, provider verification, and default-deny paid routing remain mandatory. No merge, deployment, carrier call or charge was performed.
+
+## 2026-11-19 — Separate local D1 proxy recovery race (draft PR #66)
+- Added a second independently initialized Wrangler `getPlatformProxy` binding using the same disposable persisted D1 database. Before racing, the regression asserts cross-proxy visibility; it then races independent recovery batches with distinct audit IDs and requires one success, one failure and exactly one durable audit visible from both proxies.
+- This extends the earlier same-binding concurrency test without changing production routing or approval gates. It is an approximation of separate Worker instances, **not** proof of production Cloudflare D1 multi-isolate behavior. Exact-head CI is pending; failures must be investigated rather than treated as proof of a production vulnerability.
+- No live carrier calls, paid routing, provider provisioning, secrets, merges or deployments.
