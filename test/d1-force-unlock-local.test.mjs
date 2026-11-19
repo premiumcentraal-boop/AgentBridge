@@ -63,6 +63,30 @@ CREATE TABLE owner_actions (id TEXT PRIMARY KEY,reservation_id TEXT NOT NULL,act
     'losing recovery must reject, not silently succeed');
   assert.deepEqual(await state(),{status:'failed',audits:1},
     'racing recovery must produce one durable transition and audit');
+  // Cross-proxy isolation: a second Worker runtime with its own D1 binding
+  // points at the same disposable persisted database. Verify shared visibility
+  // before claiming this exercises independent bindings.
+  const secondProxy=await getPlatformProxy({configPath,persist:{path:join(dir,'state')}});
+  t.after(async()=>secondProxy.dispose());
+  const secondDb=secondProxy.env.DB;
+  await seed();
+  const visible=await secondDb.prepare('SELECT status FROM reservations WHERE id=?').bind(id).first();
+  assert.equal(visible?.status,'connecting',
+    'second proxy must see the same persisted database before racing');
+  const secondBatch=(currentAuditId)=>secondDb.batch([
+    secondDb.prepare("UPDATE reservations SET status='failed' WHERE id=? AND status='connecting'").bind(id),
+    secondDb.prepare("INSERT INTO owner_actions (id,reservation_id,action,prior_status,carrier_code,reason,created_at) SELECT ?,?,'force_unlock','connecting',?,?,? WHERE changes()=1").bind(currentAuditId,id,code,reason,now),
+    secondDb.prepare("SELECT CASE WHEN (SELECT COUNT(*) FROM owner_actions WHERE id=? AND reservation_id=? AND action='force_unlock' AND prior_status='connecting' AND carrier_code=? AND reason=? AND created_at=?)=1 AND changes()=1 AND (SELECT COUNT(*) FROM reservations WHERE id=? AND status='failed')=1 THEN 1 ELSE abs(-9223372036854775807 - 1) END AS recovery_assertion").bind(currentAuditId,id,code,reason,now,id)
+  ]);
+  const crossProxyRace=await Promise.allSettled([batch('proxy-a'),secondBatch('proxy-b')]);
+  assert.equal(crossProxyRace.filter(x=>x.status==='fulfilled').length,1,
+    'separate proxy bindings must not both commit owner recovery');
+  assert.equal(crossProxyRace.filter(x=>x.status==='rejected').length,1,
+    'losing separate proxy recovery must fail closed');
+  assert.deepEqual(await state(),{status:'failed',audits:1},
+    'cross-proxy recovery must leave exactly one durable audit');
+  assert.equal((await secondDb.prepare('SELECT COUNT(*) AS n FROM owner_actions').first()).n,1,
+    'second proxy must observe the same single audit');
   // An explicit audit failure must also roll back the preceding UPDATE.
   await seed();
   await db.exec("CREATE TRIGGER abort_audit BEFORE INSERT ON owner_actions BEGIN SELECT RAISE(ABORT, 'audit rejected'); END;");
