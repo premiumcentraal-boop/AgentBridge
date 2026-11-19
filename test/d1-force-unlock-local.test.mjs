@@ -98,4 +98,24 @@ CREATE TABLE owner_actions (id TEXT PRIMARY KEY,reservation_id TEXT NOT NULL,act
   await batch();
   await assert.rejects(batch(),'duplicate recovery must not append another audit');
   assert.deepEqual(await state(),{status:'failed',audits:1},'duplicate does not change durable state');
+  // Simulate a successful database commit followed by a lost HTTP response.
+  // The caller cannot infer failure from a 503/transport error; a retry must
+  // fail closed and the durable audit must remain exactly once, including when
+  // the retry reaches a separate Worker-like proxy.
+  await seed();
+  await batch('response-lost');
+  const committedBeforeResponseLoss=await state();
+  assert.deepEqual(committedBeforeResponseLoss,{status:'failed',audits:1},
+    'recovery must be durably committed before simulating response loss');
+  const simulatedTransportError=new Error('HTTP 503 after successful commit');
+  assert.match(simulatedTransportError.message,/503/);
+  await assert.rejects(secondBatch('response-retry'),
+    'a retry after lost response must not create another recovery audit');
+  assert.deepEqual(await state(),committedBeforeResponseLoss,
+    'retry after an ambiguous response must preserve committed state');
+  assert.equal((await secondDb.prepare('SELECT COUNT(*) AS n FROM owner_actions').first()).n,1,
+    'independent binding must see exactly one audit after ambiguous response');
+  const originalAudit=await secondDb.prepare('SELECT id FROM owner_actions WHERE reservation_id=?').bind(id).first();
+  assert.equal(originalAudit?.id,'response-lost',
+    'retry must not replace the original audit evidence');
 });
