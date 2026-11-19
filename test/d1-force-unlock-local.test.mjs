@@ -103,12 +103,14 @@ CREATE TABLE owner_actions (id TEXT PRIMARY KEY,reservation_id TEXT NOT NULL,act
   // fail closed and the durable audit must remain exactly once, including when
   // the retry reaches a separate Worker-like proxy.
   await seed();
-  await batch('response-lost');
+  const commitThenLoseResponse=async()=>{
+    await batch('response-lost');
+    throw new Error('HTTP 503 after successful commit');
+  };
+  await assert.rejects(commitThenLoseResponse(),/HTTP 503 after successful commit/);
   const committedBeforeResponseLoss=await state();
   assert.deepEqual(committedBeforeResponseLoss,{status:'failed',audits:1},
-    'recovery must be durably committed before simulating response loss');
-  const simulatedTransportError=new Error('HTTP 503 after successful commit');
-  assert.match(simulatedTransportError.message,/503/);
+    'recovery must be durably committed despite simulated response loss');
   await assert.rejects(secondBatch('response-retry'),
     'a retry after lost response must not create another recovery audit');
   assert.deepEqual(await state(),committedBeforeResponseLoss,
