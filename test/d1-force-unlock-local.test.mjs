@@ -5,7 +5,9 @@ import assert from 'node:assert/strict';
 import {mkdtemp,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {getPlatformProxy} from '../backend/node_modules/wrangler/wrangler-dist/cli.js';
+import {createRequire} from 'node:module';
+const backendRequire=createRequire(new URL('../backend/package.json',import.meta.url));
+const {getPlatformProxy}=backendRequire('wrangler');
 
 // This test intentionally uses a real local D1 binding rather than the Node
 // mock's batch implementation. No remote account, carrier or paid route exists.
