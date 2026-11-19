@@ -264,9 +264,9 @@ async function ownerRoute(request,url,env){
         // not a reliable rollback signal: a BEFORE INSERT RAISE(IGNORE) trigger
         // can suppress it. SQLite abs(INT64_MIN) instead raises integer overflow
         // on failed invariants without touching a triggerable table.
-        // This checks the exact audit fields AND final reservation state;
+        // Require the immediately preceding INSERT to change one row as well: an\n        // existing matching audit must never validate a no-op/replayed recovery.\n        // This checks the exact audit fields AND final reservation state;
         // no post-commit metadata check can substitute for this assertion.
-        env.DB.prepare("SELECT CASE WHEN (SELECT COUNT(*) FROM owner_actions WHERE id=? AND reservation_id=? AND action='force_unlock' AND prior_status='connecting' AND carrier_code=? AND reason=? AND created_at=?)=1 AND (SELECT COUNT(*) FROM reservations WHERE id=? AND status='failed')=1 THEN 1 ELSE abs(-9223372036854775807 - 1) END AS recovery_assertion").bind(auditId,row.id,carrierCode,reason,now,row.id)
+        env.DB.prepare("SELECT CASE WHEN (SELECT COUNT(*) FROM owner_actions WHERE id=? AND reservation_id=? AND action='force_unlock' AND prior_status='connecting' AND carrier_code=? AND reason=? AND created_at=?)=1 AND changes()=1 AND (SELECT COUNT(*) FROM reservations WHERE id=? AND status='failed')=1 THEN 1 ELSE abs(-9223372036854775807 - 1) END AS recovery_assertion").bind(auditId,row.id,carrierCode,reason,now,row.id)
       ]);
       if(results?.[0]?.meta?.changes!==1)
         return error('AUDIT_STORAGE_UNAVAILABLE','Recovery result is ambiguous; inspect durable reservation and audit state before retrying',503);
