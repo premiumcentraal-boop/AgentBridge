@@ -36,7 +36,7 @@ export async function inspectIntegration(env, fetcher = fetch) {
     if (!preview(setup) || setup.card_type !== 'bridge_setup' ||
         typeof setup.next_step !== 'string' ||
         !preview(numbers) || !['owned_number', 'number_error'].includes(numbers.card_type) ||
-        !Array.isArray(numbers.numbers)) throw new Error('INVALID_READ_ONLY_CARD');
+        !(numbers.card_type === 'number_error' || Array.isArray(numbers.numbers))) throw new Error('INVALID_READ_ONLY_CARD');
     return { status: 'connected', message: 'Private backend returned preview-only setup. Live calling and carrier ownership are not verified.', setup, numbers, mcp_url: new URL('/mcp', base).href };
   } catch {
     // Never echo provider errors: they may contain a token, host, or carrier data.
