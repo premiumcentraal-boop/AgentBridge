@@ -592,6 +592,16 @@
   background: var(--page);
   color: var(--fg);
 }
+.workspace-shell .live-workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+.number-workspace {
+  min-width: 0;
+}
+.workspace-breadcrumb .drawer-toggle {
+  min-width: 44px;
+  min-height: 44px;
+}
 .workspace-shell .active-call-card,
 .workspace-shell .number-connection-card,
 .workspace-shell .live-connection-card,
