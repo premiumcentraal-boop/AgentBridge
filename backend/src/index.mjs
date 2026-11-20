@@ -181,19 +181,6 @@ async function connectingRow(env,id){
   return env.DB.prepare("SELECT r.id,r.account_id,r.destination,r.status,r.provider,r.created_at,r.max_cost_cents,r.provider_call_id,l.provider_segment_id FROM reservations r LEFT JOIN reservation_carrier_legs l ON l.reservation_id=r.id WHERE r.id=? AND r.status='connecting'")
     .bind(id).first();
 }
-async function completeReconciled(env,row,checked,now){
-  // Verified first; record carrier charge and release the lock in one batch.
-  const results=await runAtomic(env,[
-    env.DB.prepare('UPDATE reservation_carrier_legs SET reconciled_at=?,actual_cost_cents=? WHERE reservation_id=?')
-      .bind(now,checked.actual_cost_cents,row.id),
-    env.DB.prepare("UPDATE reservations SET status='completed',completed_at=? WHERE id=? AND provider='signalwire' AND status='connecting'")
-      .bind(now,row.id)
-  ]);
-  if(results?.[1]?.meta?.changes!==1)return error('CANNOT_MARK_ENDED','Reservation state changed during reconciliation',409);
-  return json({id:row.id,status:'completed',carrier_confirmed:true,
-    actual_cost_cents:checked.actual_cost_cents,
-    warning:'Charges are from the retrieved carrier records; independently confirm the statement before further calls.'});
-}
 async function ownerRoute(request,url,env){
   // Owner token never goes to the chat/MCP connector. GET review is separate
   // from POST approval; both demand the exact independently held owner token.
@@ -229,7 +216,11 @@ async function ownerRoute(request,url,env){
     if(!checked.ok)return error('CARRIER_RECONCILIATION_REQUIRED',
       'Carrier has not yet confirmed both call legs and charges: '+checked.code+
       '. If the call has definitely ended in the SignalWire dashboard, use owner force-unlock.',409);
-    return completeReconciled(env,row,checked,now);
+    // A terminal two-leg snapshot is not authoritative billing finality.
+    // Keep the durable reservation locked until a reviewed carrier-finality
+    // contract exists; owner recovery remains separately authenticated/audited.
+    return error('CARRIER_FINALITY_UNVERIFIED',
+      'Carrier logs look terminal, but later billable legs cannot yet be excluded. Use audited owner force-unlock only after independent dashboard review.',409);
   }
   if(action==='force-unlock'){
     // Owner-only escape hatch for a reservation stuck in 'connecting' (for
@@ -241,29 +232,57 @@ async function ownerRoute(request,url,env){
        (input.force!==undefined&&typeof input.force!=='boolean')||
        (input.reason!==undefined&&typeof input.reason!=='string'))
       return error('INVALID_FORCE_UNLOCK','Body must be JSON {"force":true,"reason":"..."}',422);
+    // Validate intent before any provider lookup. Malformed/no-force requests
+    // must not amplify read-only carrier API traffic or consume rate limits.
+    const reason=typeof input.reason==='string'?input.reason.trim():'';
+    if(input.force!==true||reason.length<8||reason.length>500||/[\u0000-\u001f\u007f]/.test(reason))
+      return error('FORCE_REQUIRED','Confirm in the SignalWire dashboard that the call ended, then retry with force=true and a reason (8-500 characters).',409);
     const row=await connectingRow(env,m[1]);
     if(!row)return error('CANNOT_UNLOCK','Reservation is not stuck in connecting',409);
     let carrierCode='NO_CARRIER_SEGMENT';
     if(row.provider==='signalwire'&&row.provider_segment_id){
       const checked=await fetchCarrierReconciliation(row,env);
-      if(checked.ok)return completeReconciled(env,row,checked,now);
-      carrierCode=checked.code;
+      // A complete-looking snapshot is not proof that no later billable leg
+      // will be indexed. Never silently release the lock on this path.
+      if(checked.ok){carrierCode='CARRIER_FINALITY_UNVERIFIED';}
+      else carrierCode=checked.code;
     }
-    const reason=typeof input.reason==='string'?input.reason.trim():'';
-    if(input.force!==true||reason.length<8||reason.length>500||/[\u0000-\u001f\u007f]/.test(reason))
-      return error('FORCE_REQUIRED','Carrier reconciliation failed ('+carrierCode+
-        '). Confirm in the SignalWire dashboard that the call ended, then retry with force=true and a reason (8-500 characters).',409);
     try{
-      const results=await runAtomic(env,[
-        env.DB.prepare("INSERT INTO owner_actions (id,reservation_id,action,prior_status,carrier_code,reason,created_at) VALUES (?,?,'force_unlock','connecting',?,?,?)")
-          .bind(crypto.randomUUID(),row.id,carrierCode,reason,now),
+      // D1 batch executes in one transaction. Update first: a stale competing
+      // recovery must not create a success-looking audit record. SQLite changes()
+      // in the next statement refers to the immediately preceding UPDATE.
+      // Never use the sequential runAtomic stand-in for this security boundary.
+      if(typeof env.DB.batch!=='function')
+        return error('AUDIT_STORAGE_UNAVAILABLE','Transactional recovery is unavailable',503);
+      const auditId=crypto.randomUUID();
+      const results=await env.DB.batch([
         env.DB.prepare("UPDATE reservations SET status='failed',completed_at=? WHERE id=? AND status='connecting'")
-          .bind(now,row.id)
+          .bind(now,row.id),
+        env.DB.prepare("INSERT INTO owner_actions (id,reservation_id,action,prior_status,carrier_code,reason,created_at) SELECT ?,?,'force_unlock','connecting',?,?,? WHERE changes()=1")
+          .bind(auditId,row.id,carrierCode,reason,now),
+        // Read-only assertion inside D1's atomic batch. An invalid INSERT is
+        // not a reliable rollback signal: a BEFORE INSERT RAISE(IGNORE) trigger
+        // can suppress it. SQLite abs(INT64_MIN) instead raises integer overflow
+        // on failed invariants without touching a triggerable table.
+        // Require the immediately preceding INSERT to change one row as well: an\n        // existing matching audit must never validate a no-op/replayed recovery.\n        // This checks the exact audit fields AND final reservation state;
+        // no post-commit metadata check can substitute for this assertion.
+        env.DB.prepare("SELECT CASE WHEN (SELECT COUNT(*) FROM owner_actions WHERE id=? AND reservation_id=? AND action='force_unlock' AND prior_status='connecting' AND carrier_code=? AND reason=? AND created_at=?)=1 AND changes()=1 AND (SELECT COUNT(*) FROM reservations WHERE id=? AND status='failed')=1 THEN 1 ELSE abs(-9223372036854775807 - 1) END AS recovery_assertion").bind(auditId,row.id,carrierCode,reason,now,row.id)
       ]);
+      if(results?.[0]?.meta?.changes!==1)
+        return error('AUDIT_STORAGE_UNAVAILABLE','Recovery result is ambiguous; inspect durable reservation and audit state before retrying',503);
       if(results?.[1]?.meta?.changes!==1)
-        return error('CANNOT_UNLOCK','Reservation state changed during unlock',409);
+        return error('AUDIT_STORAGE_UNAVAILABLE','Recovery audit was not confirmed; verify database state before retrying',503);
     }catch{
-      return error('AUDIT_STORAGE_UNAVAILABLE','Force unlock not applied: apply migration 0003 (owner_actions) first.',503);
+      // A competing recovery may have changed the row before our atomic batch.
+      // Distinguish that stale-state conflict from a storage failure only after
+      // the transaction has rolled back; never report successful recovery here.
+      try{
+        const current=await connectingRow(env,row.id);
+        if(!current)return error('CANNOT_UNLOCK','Reservation state changed during unlock',409);
+      }catch{
+        // Database unavailable: retain the conservative storage-error result.
+      }
+      return error('AUDIT_STORAGE_UNAVAILABLE','Transactional recovery or audit failed; verify database state before retrying',503);
     }
     return json({id:row.id,status:'failed',force_unlocked:true,carrier_code:carrierCode,
       warning:'Unlocked without carrier proof. Check the SignalWire dashboard for any still-active call and its charges. This call still counts toward the daily cap.'});

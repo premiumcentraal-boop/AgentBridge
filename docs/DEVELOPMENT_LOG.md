@@ -571,3 +571,100 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Tightened fail-closed pagination validation: only absent or explicit null `links.next` is terminal; false, zero and object cursors no longer bypass the pagination guard.
 - Added offline regression inputs for these malformed cursor shapes. A non-null cursor remains untrusted and never triggers a follow-up fetch or unlock.
 - Previous exact-head `f432ae2` Quality gate #43359731037 passed before this change. New commits require exact-head CI. Real SignalWire response semantics and D1 validation remain manual release gates; no calls, routing activation, deployment or merges.
+
+## 2026-11-19 — Isolated carrier-security integration against current main (review pending)
+- Created an independent, non-merged integration branch from current main and reconciled the five source/test files changed by stacked draft PRs #49 and #56, taking the exact final versions from `agentbridge/finality-two-snapshot-regression-20261114` (which descends from `security/reconcile-inbound-cross-source-20261113`). Main's other files and previous development-log entries are retained.
+- Combined scope: reject contradictory SignalWire inbound detail/listing records, deny automatic completion on terminal-looking but billing-incomplete snapshots, and require audited manual owner recovery with conditional transition and transaction-bound audit checks. Imported the corresponding carrier-reconciliation, snapshot, and force-unlock regression suites.
+- This branch is a review candidate, NOT an approved merge of #49 or #56. Branch provenance is preserved in the PR description; the source branches' older development-log entries were not blindly copied over newer main history.
+- GitHub connector writes succeeded. Local checkout and `npm run ci` could not run because this execution environment cannot resolve github.com; exact-head GitHub Actions and real local Wrangler D1 rollback verification remain pending. No calls, paid routing, provider resources, migrations, secrets, merges or deployments.
+
+
+## 2026-11-19 — Disposable Wrangler D1 owner-recovery atomicity regression (draft PR #66, unmerged)
+- Added `test/d1-force-unlock-local.test.mjs`, using the pinned backend Wrangler local D1 binding to execute the actual three-statement owner force-unlock batch, including `RAISE(IGNORE)` audit suppression, successful recovery, and duplicate recovery denial. Temporary local persistence only; no remote database, carrier resources or calls.
+- Wired the test into the GitHub Actions quality gate after installing backend's pinned Wrangler. Acceptance requires rollback to `connecting` with zero audits when the audit insert is ignored, and exactly one durable audit on a successful unlock.
+- At commit time CI and real Wrangler execution are **pending**, not asserted successful. Independent security review, real provider contract verification, manual merge approval and default-deny paid routing remain required.
+
+## 2026-11-19 — Actual Wrangler D1 replay regression uncovered assertion gap (draft PR #66)
+- Exact-head quality gate run 44514944046 failed in the new disposable Wrangler D1 test: the duplicate recovery batch did not reject. The old SQL assertion checked an existing audit row and final failed reservation state but did not require the current audit INSERT to have written anything. A repeated batch with a reused audit ID could therefore satisfy the assertion despite a no-op UPDATE/INSERT. The HTTP handler's post-batch metadata checks deny success but cannot replace an in-transaction guard.
+- Hardened the production owner recovery assertion and the matching Wrangler test to require `changes()=1` from the immediately preceding audit INSERT. This ensures a pre-existing matching audit cannot validate a replayed or racing recovery. The test continues to cover ignored audit insertion, successful commit and duplicate denial.
+- These commits are review-only and not merged/deployed. New exact-head CI and D1 verification are pending; no real carrier actions, payments or migrations were performed.
+
+## 2026-11-19 — Independent local D1 recovery race and audit-abort regression (draft PR #66)
+- Extended the disposable Wrangler D1 regression to submit two independent concurrent recovery batches with distinct audit IDs using `Promise.allSettled`. Acceptance: exactly one succeeds, one rejects, and the durable reservation has one audit. This checks local D1 request scheduling rather than only sequential replay.
+- Added an explicit `RAISE(ABORT)` audit-trigger failure and asserted the reservation remains `connecting` with zero audits. Existing ignored-audit, valid-commit and duplicate-replay cases remain.
+- These assertions are committed but NOT considered verified until exact-head CI passes. Local Wrangler D1 is not remote/production D1; human review, provider verification, and default-deny paid routing remain mandatory. No merge, deployment, carrier call or charge was performed.
+
+## 2026-11-19 — Separate local D1 proxy recovery race (draft PR #66)
+- Added a second independently initialized Wrangler `getPlatformProxy` binding using the same disposable persisted D1 database. Before racing, the regression asserts cross-proxy visibility; it then races independent recovery batches with distinct audit IDs and requires one success, one failure and exactly one durable audit visible from both proxies.
+- This extends the earlier same-binding concurrency test without changing production routing or approval gates. It is an approximation of separate Worker instances, **not** proof of production Cloudflare D1 multi-isolate behavior. Exact-head CI is pending; failures must be investigated rather than treated as proof of a production vulnerability.
+- No live carrier calls, paid routing, provider provisioning, secrets, merges or deployments.
+
+## 2026-11-19 — Post-commit response-loss D1 replay regression (draft PR #66)
+- Added a disposable local Wrangler D1 scenario in which the owner recovery batch commits, then the simulated HTTP layer throws a 503 before delivering a success response. A retry through the separately initialized shared-persistence D1 proxy must reject, preserve the failed reservation, and retain exactly one original audit ID without replacement.
+- This is a deliberate transport-failure simulation at the database boundary, **not** an end-to-end HTTP handler test or proof of remote production D1 semantics. Exact-head GitHub Actions verification is pending at commit time. The caller must inspect durable reservation/audit state after an ambiguous response rather than blindly retrying.
+- Paid routing remains default-deny. No live carrier actions, purchases, payments, production migrations, merges or deployments.
+
+## 2026-11-19 — Owner HTTP post-commit response-loss regression (draft PR #66)
+- Added `backend/test/owner-force-unlock.test.mjs` coverage exercising the actual authenticated Worker `fetch` handler after the D1 batch commits but its adapter throws before returning success. A retry with a valid owner token must reject without changing the durable audit; an agent bearer token remains unauthorized.
+- This is a deliberately injected post-commit adapter failure in the real HTTP handler, **not** an actual network-level HTTP 503, independent Cloudflare Worker isolates, or production D1 proof. The mock carrier stays read-only and unavailable; no paid routing is enabled.
+- Source commit `984acc47b66f8bc04a91a8495fe2fc6e9ff9c886`; exact-head GitHub Actions and independent human review required before approval. No merges or deployments.
+
+
+## 2026-11-19 — Correct post-commit HTTP recovery regression expectation (PR #66)
+- Exact-head Actions #44609342772 failed one of 258 Node tests: the new synthetic post-commit failure test expected HTTP 503 but received 409. The owner handler re-reads the durable connecting state in its catch path; a committed unlock is no longer connecting and is conservatively reported as `CANNOT_UNLOCK` (409), not success.
+- Updated the regression to assert 409 and `CANNOT_UNLOCK` while preserving durable one-audit, retry rejection, and unauthorized-token checks. This is a test expectation correction, not a production behavior change. It does not prove a real network 503, and a 409 after a lost response must not be interpreted as proof that the caller's attempt never committed.
+- Await exact-head CI for the corrected branch; production multi-isolate D1 and real transport-loss behavior remain unverified. No merge, deployment, paid routing, calls, payments or carrier changes.
+
+
+## 2026-11-19 — Owner unlock localhost transport-loss regression (draft PR #66)
+- Added an offline Node HTTP server regression that sends an authenticated owner force-unlock through a real localhost socket, waits for the Worker handler to commit its D1-like transaction and audit, then destroys the socket before returning the response. The client must observe `ECONNRESET`; an authenticated HTTP retry must return 409 `CANNOT_UNLOCK`, with one durable audit and a failed reservation.
+- This exercises real Node socket loss at the owner HTTP boundary, but uses the existing in-memory SQLite-backed test environment, not remote Cloudflare D1 or an actual carrier. Exact-head CI was pending at commit time; no deployment, routing activation, provider calls, payments, or merges.
+
+
+## 2026-11-20 — Cross-binding localhost HTTP response-loss regression (draft PR #66)
+- Extended `test/d1-force-unlock-local.test.mjs` with two independently initialized disposable local Wrangler D1 bindings, each exposed through a minimal localhost HTTP test adapter. The first commits an audited owner recovery and destroys its socket; a second adapter must reject the replay with 409 while observing the original single audit. An agent-token request is rejected by the test adapter, and an aborting audit trigger provides a pre-commit rollback control followed by one valid recovery.
+- This is an actual Node HTTP socket failure over local D1 persistence, but the adapters are **not** the production Worker owner-authentication handler; production multi-isolate D1 semantics and provider billing finality remain unverified. Exact-head CI is required before considering this test passing. No carrier calls, paid routing, purchases, production migrations, merges or deployments.
+
+## 2026-11-20 — Cross-instance HTTP transport regression CI correction (draft PR #66)
+- Quality gate run 44668473502 at `506f3f2` failed the disposable Wrangler D1 test at line 183: expected `response-lost`, actual `http-retry`. The test resets persistence with `seed()` between the response-loss scenario and the pre-commit rollback scenario; the latter's successful retry correctly creates the `http-retry` audit. The old assertion accidentally referenced the previous scenario.
+- Corrected only that final audit-ID expectation and clarified the assertion message. The earlier post-commit response-loss assertions still require the original `http-committed` audit, one transition and rejection of cross-instance replay. No production code or safety settings changed.
+- Exact-head CI for the correction remains pending until independently verified; local Wrangler and production Cloudflare D1 are not equivalent. No carrier calls, paid routing, purchases, payments, migrations, merges or deployments.
+
+## 2026-11-20 — Concurrent cross-instance HTTP owner-recovery regression (draft PR #66)
+- Extended the disposable local Wrangler D1 regression to submit two simultaneous authenticated HTTP force-unlock requests against independently initialized D1 bindings sharing persistence. One HTTP adapter intentionally drops its socket after a successful commit; the other returns a normal response.
+- Assert exactly one winner (HTTP 200 or post-commit ECONNRESET), one rejected contender (HTTP 409), and exactly one durable reservation transition and owner audit visible through both bindings. This supplements, rather than replaces, the existing direct D1 batch race and sequential HTTP retry tests.
+- Source commit `3bcaa72152cd2c0152404592661c4f0749987edd`. Exact-head CI pending; no claim of successful execution until checks finish. This remains a reduced-schema test adapter, not a production Worker owner-handler or real Cloudflare multi-isolate test. No routing enabled, carrier calls, deployment or merge.
+
+## 2026-11-20 — Cross-instance HTTP race winner attribution (draft PR #66)
+- Extended disposable local Wrangler D1 HTTP race coverage to assert that the durable force-unlock audit ID matches the actual winning request, not merely that one audit exists.
+- Added an unauthorized-agent-versus-authorized-owner concurrent HTTP control: agent token must receive 401 while the owner commits exactly one audited transition.
+- These tests use intentionally minimal local HTTP adapters and do **not** verify the production Worker owner-authentication handler, real Cloudflare D1 multi-isolate semantics, or carrier billing finality.
+- Exact-head CI for this new change is pending; no carrier activity, paid routing, merge, or deployment.
+
+
+## 2026-11-20 — Production owner HTTP response-loss test with distinct binding facades (draft PR #66)
+- Added an offline full-schema production Worker handler regression with two separate localhost HTTP servers and separate D1 binding facade objects sharing the same SQLite test database. The first authenticated owner request commits the real recovery handler then loses its socket; the second handler must reject an authenticated replay with 409 CANNOT_UNLOCK and an agent-token replay with 401. The original audit row and failed reservation state must remain unchanged.
+- This closes the prior gap between production-handler authorization and *two separate HTTP server environments*, but **does not** establish two independently initialized Wrangler D1 proxies, Cloudflare multi-isolate behavior, or real carrier finality. The separate facades deliberately share one in-memory SQLite database. Existing disposable Wrangler cross-proxy tests remain separate.
+- Source commit b0c920a2d0255a3148922142aff44e9a47763dd2. Exact-head CI and independent review are required. No routing activation, calls, purchases, payments, migrations, merge or deployment.
+
+## 2026-11-20 — Production owner handler cross-binding audit-failure recovery (draft PR #66)
+- Added a production Worker handler regression with distinct D1 binding facades over one full-schema offline SQLite fixture: an audit INSERT ABORT must roll back force-unlock, preserve the connecting lock, and deny an agent-token request from the second binding.
+- After removing the synthetic storage failure, the other binding must complete one owner-authorized recovery with one correct durable audit; a subsequent request from the original binding must reject duplicate recovery.
+- This is an offline test using shared in-memory SQLite, not independent Wrangler D1 proxies or Cloudflare production multi-isolate verification. Exact-head CI pending; no carrier calls, paid routing, merges or deployments.
+
+## 2026-11-20 — Cross-binding owner recovery failure assertions (draft PR #66)
+- Strengthened the production owner-handler two-binding offline SQLite regression: a rejected audit transaction must return `AUDIT_STORAGE_UNAVAILABLE`, retain the reservation lock against a fresh creation attempt from the other handler environment, and preserve the exact committed audit contents after a duplicate recovery attempt.
+- Source commit `48ed2d61bc6405fd3e0776511ce84b153e4a49d2`. New exact-head CI pending at commit time. This is shared in-memory SQLite with separate binding facades, **not** independently initialized Wrangler D1 or production Cloudflare D1. No carrier calls, paid routing, migrations, merge or deployment.
+
+## 2026-11-20 — Repair owner-recovery regression CI (draft PR #66)
+- Exact-head GitHub Actions run [44763209151](https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/44763209151) failed 1/261 tests: `missing D1 change metadata never produces a successful owner recovery response` referenced an undefined `audits` fixture at `backend/test/owner-force-unlock.test.mjs:257`.
+- Removed the invalid duplicate-audit comparison from that metadata-uncertainty test. Its HTTP 503, `AUDIT_STORAGE_UNAVAILABLE`, committed `failed` state, and exactly-one-audit assertions remain intact. Separate duplicate-recovery tests continue to check audit immutability.
+- This is a test-only CI repair on draft PR #66; no paid routing, carrier changes, merge or deployment. Exact-head CI for the repair must pass before review.
+
+## 2026-11-20 — Fresh D1 proxy replay rejection (draft PR #66, unmerged)
+- Extended the disposable local Wrangler D1 recovery test with a third independently initialized proxy sharing the temporary persistence directory. After an authorized HTTP recovery, the fresh binding must observe the exact winning audit and terminal reservation state, reject a replay batch, and retain exactly one audit.
+- This covers fresh-binding persistence visibility and replay rejection, not the actual production Worker handler combined with full-schema Wrangler D1, remote Cloudflare multi-isolate guarantees, or carrier billing finality. Exact-head CI pending; no local Node test execution available in this runtime. No calls, carrier purchases, routing enablement, payments, merges, or deployments.
+
+## 2026-11-20 — Fresh D1 replay audit integrity assertions (draft PR #66, unmerged)
+- Strengthened the independent third-proxy Wrangler D1 regression: after a rejected replay, verify the full original owner audit contents (ID, action, prior status, carrier code, reason and timestamp) and confirm the previously active second binding still sees the terminal reservation and exactly one audit.
+- This guards against replay tests passing solely on audit counts while silently mutating historical evidence. It remains an offline reduced-schema adapter test, not a full-schema production Worker handler or production Cloudflare D1 verification. Exact-head CI pending; no paid routing, calls, merge or deployment.
