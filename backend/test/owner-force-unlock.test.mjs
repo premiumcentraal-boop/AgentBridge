@@ -436,3 +436,69 @@ test('lost localhost HTTP response after committed force-unlock cannot replay th
   assert.equal(status(DB,id),'failed');
   assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,1);
 });
+
+test('production owner handler enforces authorization and one audit across distinct binding facades after socket loss',async t=>{
+  const {env,DB,id}=await stuck(t);
+  t.mock.method(globalThis,'fetch',async()=>new Response('carrier unavailable',{status:503}));
+  // Separate request environments with distinct binding objects sharing one
+  // full-schema durable SQLite test store. This is NOT two Wrangler D1 proxies.
+  const binding=()=>({
+    prepare:sql=>env.DB.prepare(sql),
+    batch:statements=>env.DB.batch(statements)
+  });
+  const firstEnv={...env,DB:binding()};
+  const secondEnv={...env,DB:binding()};
+  assert.notEqual(firstEnv.DB,secondEnv.DB);
+  const {createServer}=await import('node:http');
+  const {request:send}=await import('node:http');
+  const serve=async (handlerEnv,drop)=>{
+    const server=createServer(async(req,res)=>{
+      try{
+        const chunks=[];
+        for await(const chunk of req)chunks.push(chunk);
+        const incoming=new Request(BASE+req.url,{
+          method:req.method,
+          headers:{authorization:req.headers.authorization||'','content-type':'application/json'},
+          body:Buffer.concat(chunks)
+        });
+        const response=await worker.fetch(incoming,handlerEnv);
+        if(drop&&response.status===200){
+          assert.equal(status(DB,id),'failed');
+          assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,1);
+          req.socket.destroy();
+          return;
+        }
+        res.writeHead(response.status,Object.fromEntries(response.headers));
+        res.end(await response.text());
+      }catch(err){if(!res.destroyed){res.writeHead(500);res.end('offline test adapter error');}}
+    });
+    await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
+    t.after(()=>new Promise(resolve=>server.close(resolve)));
+    return server.address().port;
+  };
+  const firstPort=await serve(firstEnv,true);
+  const secondPort=await serve(secondEnv,false);
+  const sendUnlock=(port,token,reason)=>new Promise((resolve,reject)=>{
+    const body=JSON.stringify({force:true,reason});
+    const req=send({hostname:'127.0.0.1',port,
+      path:'/v1/owner/reservations/'+id+'/force-unlock',method:'POST',
+      headers:{authorization:'Bearer '+token,'content-type':'application/json',
+        'content-length':Buffer.byteLength(body)}},res=>{
+      const chunks=[];
+      res.on('data',chunk=>chunks.push(chunk));
+      res.on('end',()=>resolve({status:res.statusCode,body:Buffer.concat(chunks).toString()}));
+      res.on('error',reject);
+    });
+    req.on('error',reject);req.end(body);
+  });
+  await assert.rejects(sendUnlock(firstPort,OWNER,'Owner verified carrier termination'),{code:'ECONNRESET'});
+  const before=DB.raw.prepare('SELECT id,reason FROM owner_actions WHERE reservation_id=?').all(id);
+  assert.equal(before.length,1);
+  const retry=await sendUnlock(secondPort,OWNER,'Owner retried after lost response');
+  assert.equal(retry.status,409);
+  assert.equal(JSON.parse(retry.body).error.code,'CANNOT_UNLOCK');
+  const agent=await sendUnlock(secondPort,TOKEN,'Agent attempted owner recovery');
+  assert.equal(agent.status,401);
+  assert.equal(status(DB,id),'failed');
+  assert.deepEqual(DB.raw.prepare('SELECT id,reason FROM owner_actions WHERE reservation_id=?').all(id),before);
+});
