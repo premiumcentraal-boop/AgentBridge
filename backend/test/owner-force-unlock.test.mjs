@@ -377,3 +377,62 @@ test('authenticated owner HTTP retry after committed batch and synthetic respons
   assert.equal(unauthorized.status,401,'agent token never authorizes owner recovery');
   assert.deepEqual(DB.raw.prepare('SELECT id,reason FROM owner_actions WHERE reservation_id=?').all(id),original);
 });
+
+test('lost localhost HTTP response after committed force-unlock cannot replay the owner action',async t=>{
+  const {env,DB,id}=await stuck(t);
+  t.mock.method(globalThis,'fetch',async()=>new Response('carrier unavailable',{status:503}));
+  const {createServer}=await import('node:http');
+  const {request:send}=await import('node:http');
+  let dropResponse=true;
+  let committedBeforeDrop=false;
+  const server=createServer(async(req,res)=>{
+    try{
+      const chunks=[];
+      for await(const chunk of req)chunks.push(chunk);
+      const incoming=new Request(BASE+req.url,{
+        method:req.method,
+        headers:{authorization:req.headers.authorization,'content-type':'application/json'},
+        body:Buffer.concat(chunks)
+      });
+      const result=await worker.fetch(incoming,env);
+      if(dropResponse){
+        dropResponse=false;
+        committedBeforeDrop=status(DB,id)==='failed' &&
+          DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n===1;
+        req.socket.destroy();
+        return;
+      }
+      res.writeHead(result.status,Object.fromEntries(result.headers));
+      res.end(await result.text());
+    }catch(err){
+      if(!res.headersSent){res.writeHead(500);res.end('test transport error');}
+      else res.destroy(err);
+    }
+  });
+  await new Promise((resolve,reject)=>{
+    server.once('error',reject);
+    server.listen(0,'127.0.0.1',resolve);
+  });
+  t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const port=server.address().port;
+  const sendUnlock=()=>new Promise((resolve,reject)=>{
+    const body=JSON.stringify({force:true,reason:'Carrier ended, owner reviewed'});
+    const req=send({hostname:'127.0.0.1',port,path:'/v1/owner/reservations/'+id+'/force-unlock',
+      method:'POST',headers:{authorization:'Bearer '+OWNER,'content-type':'application/json',
+        'content-length':Buffer.byteLength(body)}},res=>{
+      const chunks=[];
+      res.on('data',chunk=>chunks.push(chunk));
+      res.on('end',()=>resolve({status:res.statusCode,body:Buffer.concat(chunks).toString()}));
+      res.on('error',reject);
+    });
+    req.on('error',reject);
+    req.end(body);
+  });
+  await assert.rejects(sendUnlock(),{code:'ECONNRESET'});
+  assert.equal(committedBeforeDrop,true,'database commit and audit preceded socket loss');
+  const retry=await sendUnlock();
+  assert.equal(retry.status,409,'ambiguous client response must not cause a second unlock');
+  assert.equal(JSON.parse(retry.body).error.code,'CANNOT_UNLOCK');
+  assert.equal(status(DB,id),'failed');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,1);
+});
