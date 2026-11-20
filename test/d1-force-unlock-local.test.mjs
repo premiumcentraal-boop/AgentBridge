@@ -206,4 +206,24 @@ CREATE TABLE owner_actions (id TEXT PRIMARY KEY,reservation_id TEXT NOT NULL,act
     'HTTP race across two D1 bindings must persist exactly one transition and audit');
   assert.equal((await secondDb.prepare('SELECT COUNT(*) AS n FROM owner_actions').first()).n,1,
     'both bindings must agree on the single durable audit after the HTTP race');
+  // The durable audit must identify the actual winner, not merely have count 1.
+  // A stale or duplicate audit with a different request ID would make a
+  // superficially passing count assertion insufficient for incident review.
+  const winner=outcomes[0].startsWith('committed')?'http-committed':'http-retry';
+  const persistedAudit=await secondDb.prepare('SELECT id,action,prior_status FROM owner_actions WHERE reservation_id=?').bind(id).first();
+  assert.deepEqual({...persistedAudit},{id:winner,action:'force_unlock',prior_status:'connecting'},
+    'durable audit must correspond to the winning HTTP request');
+  // Unauthorized requests interleaved with a valid recovery must never win
+  // or create an extra audit. This is adapter-level authorization coverage,
+  // not a substitute for the production owner-token verification handler.
+  await seed();
+  const mixed=await Promise.allSettled([send(firstPort,'agent-token'),send(retryPort)]);
+  assert.deepEqual(mixed.map(x=>x.status==='fulfilled'?x.value:{error:x.reason?.code}),[
+    {status:401,body:'UNAUTHORIZED'},
+    {status:200,body:'UNLOCKED'}
+  ],'unauthorized concurrent request must be rejected while owner recovery succeeds');
+  assert.deepEqual(await state(),{status:'failed',audits:1},
+    'unauthorized concurrent request must not create a second recovery audit');
+  assert.equal((await secondDb.prepare('SELECT id FROM owner_actions').first()).id,'http-retry',
+    'only the authorized owner recovery may be audited');
 });
