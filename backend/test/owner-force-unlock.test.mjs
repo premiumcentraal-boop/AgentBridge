@@ -254,6 +254,8 @@ test('missing D1 change metadata never produces a successful owner recovery resp
   // This intentionally documents a post-commit ambiguity: the DB may already
   // have committed, so operators must inspect durable state before retrying.
   assert.equal(status(DB,id),'failed');
+  assert.deepEqual(DB.raw.prepare('SELECT action,reason FROM owner_actions WHERE reservation_id=?').all(id),audits,
+    'duplicate recovery must preserve the original audit contents');
   assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,1);
 });
 
@@ -519,7 +521,13 @@ test('distinct production-handler bindings retain lock after failed audit and pe
     force:true,reason:'Owner verified carrier termination before retry'
   }),first);
   assert.equal(failed.status,503,'audit failure must not report successful recovery');
+  assert.equal((await failed.json()).error.code,'AUDIT_STORAGE_UNAVAILABLE',
+    'production handler must surface a storage failure, not an ambiguous unlock success');
   assert.equal(status(DB,id),'connecting','failed batch must not release reservation lock');
+  const busy=await worker.fetch(api('/v1/reservations','POST',{
+    destination:DEST,idempotency_key:'cross-binding-audit-failure-busy'
+  }),second);
+  assert.equal(busy.status,409,'another handler cannot create a reservation while the failed recovery retains the lock');
   assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,0);
   const agent=await worker.fetch(unlock(id,{
     force:true,reason:'Agent cannot override owner-only recovery'
