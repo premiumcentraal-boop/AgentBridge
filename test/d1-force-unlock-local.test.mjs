@@ -248,8 +248,19 @@ CREATE TABLE owner_actions (id TEXT PRIMARY KEY,reservation_id TEXT NOT NULL,act
     restartedDb.prepare("INSERT INTO owner_actions (id,reservation_id,action,prior_status,carrier_code,reason,created_at) SELECT ?,?,'force_unlock','connecting',?,?,? WHERE changes()=1").bind('restart-replay',id,code,reason,now),
     restartedDb.prepare("SELECT CASE WHEN (SELECT COUNT(*) FROM owner_actions WHERE id=? AND reservation_id=? AND action='force_unlock' AND prior_status='connecting' AND carrier_code=? AND reason=? AND created_at=?)=1 AND changes()=1 AND (SELECT COUNT(*) FROM reservations WHERE id=? AND status='failed')=1 THEN 1 ELSE abs(-9223372036854775807 - 1) END AS recovery_assertion").bind('restart-replay',id,code,reason,now,id)
   ]),'fresh binding must reject replay after a previous instance committed');
-  assert.equal((await restartedDb.prepare(
+  const auditAfterReplay=await restartedDb.prepare(
+    'SELECT id,action,prior_status,carrier_code,reason,created_at FROM owner_actions WHERE reservation_id=?'
+  ).bind(id).first();
+  assert.deepEqual({...auditAfterReplay},{
+    id:'http-retry',action:'force_unlock',prior_status:'connecting',
+    carrier_code:code,reason,created_at:now
+  },'replayed recovery must preserve the original audit contents, not merely its count');
+  assert.equal((await secondDb.prepare(
+    'SELECT status FROM reservations WHERE id=?'
+  ).bind(id).first()).status,'failed',
+  'a previously active independent binding must still observe the terminal state');
+  assert.equal((await secondDb.prepare(
     'SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?'
   ).bind(id).first()).n,1,
-  'replay from a fresh binding cannot append an audit');
+  'a previously active binding must observe exactly one audit after fresh-proxy replay');
 });
