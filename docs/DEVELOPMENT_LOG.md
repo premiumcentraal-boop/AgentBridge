@@ -640,3 +640,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added an unauthorized-agent-versus-authorized-owner concurrent HTTP control: agent token must receive 401 while the owner commits exactly one audited transition.
 - These tests use intentionally minimal local HTTP adapters and do **not** verify the production Worker owner-authentication handler, real Cloudflare D1 multi-isolate semantics, or carrier billing finality.
 - Exact-head CI for this new change is pending; no carrier activity, paid routing, merge, or deployment.
+
+
+## 2026-11-20 — Production owner HTTP response-loss test with distinct binding facades (draft PR #66)
+- Added an offline full-schema production Worker handler regression with two separate localhost HTTP servers and separate D1 binding facade objects sharing the same SQLite test database. The first authenticated owner request commits the real recovery handler then loses its socket; the second handler must reject an authenticated replay with 409 CANNOT_UNLOCK and an agent-token replay with 401. The original audit row and failed reservation state must remain unchanged.
+- This closes the prior gap between production-handler authorization and *two separate HTTP server environments*, but **does not** establish two independently initialized Wrangler D1 proxies, Cloudflare multi-isolate behavior, or real carrier finality. The separate facades deliberately share one in-memory SQLite database. Existing disposable Wrangler cross-proxy tests remain separate.
+- Source commit b0c920a2d0255a3148922142aff44e9a47763dd2. Exact-head CI and independent review are required. No routing activation, calls, purchases, payments, migrations, merge or deployment.
