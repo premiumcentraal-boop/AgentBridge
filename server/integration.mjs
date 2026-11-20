@@ -27,7 +27,17 @@ export async function inspectIntegration(env, fetcher = fetch) {
     };
     const setup = await call('get_bridge_setup', 1);
     const numbers = await call('list_my_numbers', 2);
-    return { status: 'connected', message: 'Private backend responded. Number discovery is read-only; live calling is not enabled by this studio.', setup, numbers, mcp_url: new URL('/mcp', base).href };
+    // A successful JSON-RPC envelope alone does not prove that the remote
+    // backend returned the expected read-only cards. Reject incompatible or
+    // unexpected responses rather than displaying them as a verified setup.
+    const preview = value => value && typeof value === 'object' && !Array.isArray(value) &&
+      value.mode === 'preview' && value.routing_enabled === false &&
+      value.purchase_enabled === false;
+    if (!preview(setup) || setup.card_type !== 'bridge_setup' ||
+        typeof setup.next_step !== 'string' ||
+        !preview(numbers) || !['owned_number', 'number_error'].includes(numbers.card_type) ||
+        !Array.isArray(numbers.numbers)) throw new Error('INVALID_READ_ONLY_CARD');
+    return { status: 'connected', message: 'Private backend returned preview-only setup. Live calling and carrier ownership are not verified.', setup, numbers, mcp_url: new URL('/mcp', base).href };
   } catch {
     // Never echo provider errors: they may contain a token, host, or carrier data.
     return { status: 'error', message: 'Backend could not be verified. Check the server URL, account token and backend health.', setup: null, numbers: [] };
