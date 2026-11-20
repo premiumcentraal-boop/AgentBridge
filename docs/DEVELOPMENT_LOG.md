@@ -614,3 +614,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Exact-head Actions #44609342772 failed one of 258 Node tests: the new synthetic post-commit failure test expected HTTP 503 but received 409. The owner handler re-reads the durable connecting state in its catch path; a committed unlock is no longer connecting and is conservatively reported as `CANNOT_UNLOCK` (409), not success.
 - Updated the regression to assert 409 and `CANNOT_UNLOCK` while preserving durable one-audit, retry rejection, and unauthorized-token checks. This is a test expectation correction, not a production behavior change. It does not prove a real network 503, and a 409 after a lost response must not be interpreted as proof that the caller's attempt never committed.
 - Await exact-head CI for the corrected branch; production multi-isolate D1 and real transport-loss behavior remain unverified. No merge, deployment, paid routing, calls, payments or carrier changes.
+
+
+## 2026-11-19 — Owner unlock localhost transport-loss regression (draft PR #66)
+- Added an offline Node HTTP server regression that sends an authenticated owner force-unlock through a real localhost socket, waits for the Worker handler to commit its D1-like transaction and audit, then destroys the socket before returning the response. The client must observe `ECONNRESET`; an authenticated HTTP retry must return 409 `CANNOT_UNLOCK`, with one durable audit and a failed reservation.
+- This exercises real Node socket loss at the owner HTTP boundary, but uses the existing in-memory SQLite-backed test environment, not remote Cloudflare D1 or an actual carrier. Exact-head CI was pending at commit time; no deployment, routing activation, provider calls, payments, or merges.
