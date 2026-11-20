@@ -502,3 +502,42 @@ test('production owner handler enforces authorization and one audit across disti
   assert.equal(status(DB,id),'failed');
   assert.deepEqual(DB.raw.prepare('SELECT id,reason FROM owner_actions WHERE reservation_id=?').all(id),before);
 });
+
+test('distinct production-handler bindings retain lock after failed audit and permit one later owner recovery',async t=>{
+  const {env,DB,id}=await stuck(t);
+  t.mock.method(globalThis,'fetch',async()=>new Response('carrier unavailable',{status:503}));
+  const binding=()=>({
+    prepare:sql=>env.DB.prepare(sql),
+    batch:statements=>env.DB.batch(statements)
+  });
+  const first={...env,DB:binding()};
+  const second={...env,DB:binding()};
+  assert.notEqual(first.DB,second.DB);
+  DB.raw.exec(`CREATE TRIGGER reject_cross_binding_audit BEFORE INSERT ON owner_actions
+    WHEN NEW.action='force_unlock' BEGIN SELECT RAISE(ABORT,'offline audit failure'); END`);
+  const failed=await worker.fetch(unlock(id,{
+    force:true,reason:'Owner verified carrier termination before retry'
+  }),first);
+  assert.equal(failed.status,503,'audit failure must not report successful recovery');
+  assert.equal(status(DB,id),'connecting','failed batch must not release reservation lock');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,0);
+  const agent=await worker.fetch(unlock(id,{
+    force:true,reason:'Agent cannot override owner-only recovery'
+  },TOKEN),second);
+  assert.equal(agent.status,401);
+  assert.equal(status(DB,id),'connecting');
+  DB.raw.exec('DROP TRIGGER reject_cross_binding_audit');
+  const recovered=await worker.fetch(unlock(id,{
+    force:true,reason:'Owner verified carrier termination after storage recovery'
+  }),second);
+  assert.equal(recovered.status,200,'fresh owner request may recover after audit storage repair');
+  assert.equal(status(DB,id),'failed');
+  const audits=DB.raw.prepare('SELECT action,reason FROM owner_actions WHERE reservation_id=?').all(id);
+  assert.equal(audits.length,1);
+  assert.equal(audits[0].action,'force_unlock');
+  assert.equal(audits[0].reason,'Owner verified carrier termination after storage recovery');
+  assert.equal((await worker.fetch(unlock(id,{
+    force:true,reason:'Duplicate owner recovery attempt'
+  }),first)).status,409);
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,1);
+});
