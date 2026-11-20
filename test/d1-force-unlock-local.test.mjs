@@ -226,4 +226,30 @@ CREATE TABLE owner_actions (id TEXT PRIMARY KEY,reservation_id TEXT NOT NULL,act
     'unauthorized concurrent request must not create a second recovery audit');
   assert.equal((await secondDb.prepare('SELECT id FROM owner_actions').first()).id,'http-retry',
     'only the authorized owner recovery may be audited');
+  // A third independently initialized binding simulates a fresh runtime after
+  // the winning handler has finished. It must observe the durable winner and
+  // must not be able to replay the recovery. This guards against a regression
+  // where only the two already-live proxies agree on cached state.
+  const restartProxy=await getPlatformProxy({configPath,persist:{path:join(dir,'state')}});
+  t.after(async()=>restartProxy.dispose());
+  const restartedDb=restartProxy.env.DB;
+  const durable=await restartedDb.prepare(
+    'SELECT id,action,prior_status FROM owner_actions WHERE reservation_id=?'
+  ).bind(id).first();
+  assert.deepEqual({...durable},{
+    id:'http-retry',action:'force_unlock',prior_status:'connecting'
+  },'fresh D1 proxy must observe the authorized winning audit');
+  assert.equal((await restartedDb.prepare(
+    'SELECT status FROM reservations WHERE id=?'
+  ).bind(id).first()).status,'failed',
+  'fresh D1 proxy must observe the committed reservation transition');
+  await assert.rejects(restartedDb.batch([
+    restartedDb.prepare("UPDATE reservations SET status='failed' WHERE id=? AND status='connecting'").bind(id),
+    restartedDb.prepare("INSERT INTO owner_actions (id,reservation_id,action,prior_status,carrier_code,reason,created_at) SELECT ?,?,'force_unlock','connecting',?,?,? WHERE changes()=1").bind('restart-replay',id,code,reason,now),
+    restartedDb.prepare("SELECT CASE WHEN (SELECT COUNT(*) FROM owner_actions WHERE id=? AND reservation_id=? AND action='force_unlock' AND prior_status='connecting' AND carrier_code=? AND reason=? AND created_at=?)=1 AND changes()=1 AND (SELECT COUNT(*) FROM reservations WHERE id=? AND status='failed')=1 THEN 1 ELSE abs(-9223372036854775807 - 1) END AS recovery_assertion").bind('restart-replay',id,code,reason,now,id)
+  ]),'fresh binding must reject replay after a previous instance committed');
+  assert.equal((await restartedDb.prepare(
+    'SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?'
+  ).bind(id).first()).n,1,
+  'replay from a fresh binding cannot append an audit');
 });
