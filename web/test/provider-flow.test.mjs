@@ -343,7 +343,12 @@ test("a live call deep link opens the room, joins listening and leaves without e
   const panel=document.querySelector(".live-room");
   assert.equal(panel.querySelector("input[type=checkbox]").checked,false);
   let micRequests=0, closed=false;
-  Object.defineProperty(window.navigator,"mediaDevices",{value:{getUserMedia:async()=>{micRequests++;throw Error("permission denied");}}});
+  Object.defineProperty(window.navigator, "mediaDevices", {value: {
+    async getUserMedia() {
+      micRequests++;
+      throw new window.DOMException("Permission denied", "NotAllowedError");
+    },
+  }});
   window.AudioContext=class {
     audioWorklet={addModule:async url=>assert.equal(url,"/assets/media/room-audio.js")};
     resume=async()=>{}; close=async()=>{};
@@ -365,7 +370,8 @@ test("a live call deep link opens the room, joins listening and leaves without e
   await until(()=>panel.querySelectorAll(".room-person").length===2);
   assert.equal(micRequests,0);
   named(panel,"Turn microphone on").click();
-  await until(()=>panel.textContent.includes("permission denied"));
+  await until(()=>panel.querySelector('[role="alert"]')?.textContent.includes("Allow microphone access"));
+  assert.equal(panel.querySelectorAll(".room-person").length, 2);
   assert.equal(micRequests,1);
   named(panel,"Mute speaker").click();
   await until(() => panel.querySelector('[aria-label="Turn speaker on"]')?.getAttribute("aria-pressed")==="false");
