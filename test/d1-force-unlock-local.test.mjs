@@ -6,6 +6,8 @@ import {mkdtemp,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createRequire} from 'node:module';
+import {createServer} from 'node:http';
+import {request as httpRequest} from 'node:http';
 const backendRequire=createRequire(new URL('../backend/package.json',import.meta.url));
 const {getPlatformProxy}=backendRequire('wrangler');
 
@@ -117,6 +119,66 @@ CREATE TABLE owner_actions (id TEXT PRIMARY KEY,reservation_id TEXT NOT NULL,act
     'retry after an ambiguous response must preserve committed state');
   assert.equal((await secondDb.prepare('SELECT COUNT(*) AS n FROM owner_actions').first()).n,1,
     'independent binding must see exactly one audit after ambiguous response');
+  // Real localhost transport loss across two independent local D1 bindings.
+  // These are minimal test HTTP adapters around the same audited D1 batch,
+  // NOT the production Worker owner-authentication handler.
+  const ownerToken='offline-owner-test-token';
+  const serve=async (runBatch,dropAfterCommit=false)=>{
+    const server=createServer(async(req,res)=>{
+      if(req.headers.authorization!=='Bearer '+ownerToken){
+        res.writeHead(401).end('UNAUTHORIZED');return;
+      }
+      if(req.method!=='POST'||req.url!=='/owner/force-unlock'){
+        res.writeHead(404).end('NOT_FOUND');return;
+      }
+      try{
+        await runBatch(dropAfterCommit?'http-committed':'http-retry');
+        if(dropAfterCommit){req.socket.destroy();return;}
+        res.writeHead(200).end('UNLOCKED');
+      }catch{
+        res.writeHead(409).end('CANNOT_UNLOCK');
+      }
+    });
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    t.after(()=>new Promise(resolve=>server.close(resolve)));
+    return server.address().port;
+  };
+  const send=(port,token=ownerToken)=>new Promise((resolve,reject)=>{
+    const req=httpRequest({hostname:'127.0.0.1',port,path:'/owner/force-unlock',
+      method:'POST',headers:{authorization:'Bearer '+token}},res=>{
+      let body='';res.setEncoding('utf8');
+      res.on('data',chunk=>body+=chunk);
+      res.on('end',()=>resolve({status:res.statusCode,body}));
+      res.on('error',reject);
+    });
+    req.on('error',reject);
+    req.end();
+  });
+  const firstPort=await serve(batch,true);
+  const retryPort=await serve(secondBatch);
+  await seed();
+  await assert.rejects(send(firstPort),err=>err.code==='ECONNRESET',
+    'first socket must be destroyed after successful D1 commit');
+  assert.deepEqual(await state(),{status:'failed',audits:1},
+    'lost HTTP response must not undo the committed D1 transition');
+  assert.deepEqual(await send(retryPort),{status:409,body:'CANNOT_UNLOCK'},
+    'second HTTP instance must reject the replay');
+  assert.deepEqual(await send(retryPort,'agent-token'),{status:401,body:'UNAUTHORIZED'},
+    'agent credentials must not authorize the retry adapter');
+  assert.deepEqual(await state(),{status:'failed',audits:1},
+    'both HTTP retries must preserve exactly one audit');
+  assert.equal((await secondDb.prepare('SELECT id FROM owner_actions').first()).id,
+    'http-committed','second D1 binding must see original HTTP commit audit');
+  // Pre-commit failure control: an aborting audit trigger must leave no unlock.
+  await seed();
+  await db.exec("CREATE TRIGGER http_abort_audit BEFORE INSERT ON owner_actions BEGIN SELECT RAISE(ABORT, 'audit rejected'); END;");
+  assert.deepEqual(await send(firstPort),{status:409,body:'CANNOT_UNLOCK'});
+  assert.deepEqual(await state(),{status:'connecting',audits:0},
+    'pre-commit audit failure must roll back the state change');
+  await db.exec('DROP TRIGGER http_abort_audit;');
+  assert.deepEqual(await send(retryPort),{status:200,body:'UNLOCKED'},
+    'retry after a pre-commit failure can recover exactly once');
+  assert.deepEqual(await state(),{status:'failed',audits:1});
   const originalAudit=await secondDb.prepare('SELECT id FROM owner_actions WHERE reservation_id=?').bind(id).first();
   assert.equal(originalAudit?.id,'response-lost',
     'retry must not replace the original audit evidence');
