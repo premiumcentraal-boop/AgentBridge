@@ -651,3 +651,7 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added a production Worker handler regression with distinct D1 binding facades over one full-schema offline SQLite fixture: an audit INSERT ABORT must roll back force-unlock, preserve the connecting lock, and deny an agent-token request from the second binding.
 - After removing the synthetic storage failure, the other binding must complete one owner-authorized recovery with one correct durable audit; a subsequent request from the original binding must reject duplicate recovery.
 - This is an offline test using shared in-memory SQLite, not independent Wrangler D1 proxies or Cloudflare production multi-isolate verification. Exact-head CI pending; no carrier calls, paid routing, merges or deployments.
+
+## 2026-11-20 — Cross-binding owner recovery failure assertions (draft PR #66)
+- Strengthened the production owner-handler two-binding offline SQLite regression: a rejected audit transaction must return `AUDIT_STORAGE_UNAVAILABLE`, retain the reservation lock against a fresh creation attempt from the other handler environment, and preserve the exact committed audit contents after a duplicate recovery attempt.
+- Source commit `48ed2d61bc6405fd3e0776511ce84b153e4a49d2`. New exact-head CI pending at commit time. This is shared in-memory SQLite with separate binding facades, **not** independently initialized Wrangler D1 or production Cloudflare D1. No carrier calls, paid routing, migrations, merge or deployment.
