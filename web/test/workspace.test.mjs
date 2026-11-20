@@ -413,8 +413,12 @@ test("numbers are obtained before a new connection is paired; country search, ed
   const card = [...document.querySelectorAll(".number-connection-card")].find(
     (item) => item.textContent.includes("Amsterdam office"),
   );
-  assert.match(card.textContent, /\+12025550130/);
-  assert.match(card.textContent, /\+31201234567/);
+  assert.match(card.textContent, /\+1 202 555 0130/);
+  assert.match(card.textContent, /\+31 20 123 4567/);
+  const searchBox = document.querySelector('input[aria-label="Search connections"]');
+  fieldValue(window, searchBox, "+31 20 123 4567");
+  await waitFor(() => document.querySelectorAll(".number-connection-card").length === 1);
+  assert.match(document.querySelector(".number-connection-card").textContent, /Amsterdam office/);
   fieldValue(
     window,
     document.querySelector('input[aria-label="Search connections"]'),
