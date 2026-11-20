@@ -3,10 +3,11 @@ on:
   schedule:
     - cron: '17 * * * *'
   workflow_dispatch:
+  pull_request:
 permissions:
   contents: read
 concurrency:
-  group: agentbridge-hourly-quality
+  group: agentbridge-hourly-quality-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   audit:
@@ -17,6 +18,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install root dependencies (required by shared phone validation)
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm --prefix web ci --ignore-scripts --no-audit --no-fund
       - name: Validate website and backend
         run: npm run ci
