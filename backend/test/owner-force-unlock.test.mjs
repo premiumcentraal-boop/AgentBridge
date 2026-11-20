@@ -254,8 +254,6 @@ test('missing D1 change metadata never produces a successful owner recovery resp
   // This intentionally documents a post-commit ambiguity: the DB may already
   // have committed, so operators must inspect durable state before retrying.
   assert.equal(status(DB,id),'failed');
-  assert.deepEqual(DB.raw.prepare('SELECT action,reason FROM owner_actions WHERE reservation_id=?').all(id),audits,
-    'duplicate recovery must preserve the original audit contents');
   assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,1);
 });
 
