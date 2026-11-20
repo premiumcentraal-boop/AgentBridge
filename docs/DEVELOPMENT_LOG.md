@@ -634,3 +634,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Extended the disposable local Wrangler D1 regression to submit two simultaneous authenticated HTTP force-unlock requests against independently initialized D1 bindings sharing persistence. One HTTP adapter intentionally drops its socket after a successful commit; the other returns a normal response.
 - Assert exactly one winner (HTTP 200 or post-commit ECONNRESET), one rejected contender (HTTP 409), and exactly one durable reservation transition and owner audit visible through both bindings. This supplements, rather than replaces, the existing direct D1 batch race and sequential HTTP retry tests.
 - Source commit `3bcaa72152cd2c0152404592661c4f0749987edd`. Exact-head CI pending; no claim of successful execution until checks finish. This remains a reduced-schema test adapter, not a production Worker owner-handler or real Cloudflare multi-isolate test. No routing enabled, carrier calls, deployment or merge.
+
+## 2026-11-20 — Cross-instance HTTP race winner attribution (draft PR #66)
+- Extended disposable local Wrangler D1 HTTP race coverage to assert that the durable force-unlock audit ID matches the actual winning request, not merely that one audit exists.
+- Added an unauthorized-agent-versus-authorized-owner concurrent HTTP control: agent token must receive 401 while the owner commits exactly one audited transition.
+- These tests use intentionally minimal local HTTP adapters and do **not** verify the production Worker owner-authentication handler, real Cloudflare D1 multi-isolate semantics, or carrier billing finality.
+- Exact-head CI for this new change is pending; no carrier activity, paid routing, merge, or deployment.
