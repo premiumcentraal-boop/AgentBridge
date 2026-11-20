@@ -180,6 +180,6 @@ CREATE TABLE owner_actions (id TEXT PRIMARY KEY,reservation_id TEXT NOT NULL,act
     'retry after a pre-commit failure can recover exactly once');
   assert.deepEqual(await state(),{status:'failed',audits:1});
   const originalAudit=await secondDb.prepare('SELECT id FROM owner_actions WHERE reservation_id=?').bind(id).first();
-  assert.equal(originalAudit?.id,'response-lost',
-    'retry must not replace the original audit evidence');
+  assert.equal(originalAudit?.id,'http-retry',
+    'successful retry after a rolled-back pre-commit failure must create its own audit');
 });
