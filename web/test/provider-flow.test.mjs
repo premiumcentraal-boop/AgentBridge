@@ -233,7 +233,7 @@ test("the rendered studio securely connects SignalWire, imports inventory, activ
   named(document, "Numbers", "a").click();
   await until(
     () =>
-      document.querySelector(".live-page-heading h1")?.textContent ===
+      document.querySelector(".number-page-title")?.textContent ===
       "Your numbers",
   );
   named(document.querySelector("main"), "Get a number").click();
@@ -249,7 +249,7 @@ test("the rendered studio securely connects SignalWire, imports inventory, activ
   await until(() => !document.querySelector("dialog[open]"));
   assert.match(
     document.querySelector(".live-workspace").textContent,
-    /\+12025551234/,
+    /\+1 202 555 1234/,
   );
   assert.equal(provider.posts().length, 0);
   named(document, "Connections", "a").click();
@@ -270,6 +270,7 @@ test("the rendered studio securely connects SignalWire, imports inventory, activ
       "London office",
   );
   assert.equal(provider.posts().length, 0);
+  document.querySelector(".provider-contact summary").click();
   named(document, "Activate forwarding").click();
   await until(() => document.querySelector("dialog[open] .provider-consent"));
   dialog = document.querySelector("dialog[open]");
@@ -293,7 +294,8 @@ test("the rendered studio securely connects SignalWire, imports inventory, activ
   assert.equal(provider.state.calls[0].status, "queued");
   named(document, "Calls", "a").click();
   await until(() => document.querySelector(".live-call-card"));
-  assert.match(document.querySelector(".live-call-card").textContent, /queued/);
+  assert.match(document.querySelector(".live-call-card").textContent, /Calling…/);
+  assert.match(document.querySelector(".floating-rail .nav-call-card").textContent, /Calling…/);
   assert.equal(document.querySelector(".sample-listen-dock"), null);
   assert.deepEqual(
     first.errors.map((e) => e.message),
@@ -366,7 +368,7 @@ test("a live call deep link opens the room, joins listening and leaves without e
   await until(()=>panel.textContent.includes("permission denied"));
   assert.equal(micRequests,1);
   named(panel,"Mute speaker").click();
-  await until(() => panel.textContent.includes("Turn speaker on"));
+  await until(() => panel.querySelector('[aria-label="Turn speaker on"]')?.getAttribute("aria-pressed")==="false");
   named(panel,"Leave room").click(); await until(()=>closed && !panel.querySelector(".room-person"));
   assert.equal(provider.state.calls[0].status,"in-progress");
   assert.deepEqual(errors,[]);

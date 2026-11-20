@@ -4,6 +4,7 @@ import { A } from "./context.jsx";
 import { Btn, DirectionArrow, Icon } from "./ui.jsx";
 import { ActiveCallCard } from "./studio-navigation.jsx";
 import { CALL_COUNTRIES } from "../../shared/call-plans.mjs";
+import { displayPhone } from "../../shared/phone.mjs";
 import {
   validateNumberConnection,
   validateNumberOrder,
@@ -56,6 +57,10 @@ export function NumberWorkspace({
   recentConnections = {},
   initialSearch = "",
   initialCountry = "all",
+  renderConnection,
+  homeLead,
+  setupStep,
+  showSetupAfterCall = false,
 }) {
   const [country, setCountry] = useState(initialCountry),
     [query, setQuery] = useState(initialSearch);
@@ -76,6 +81,7 @@ export function NumberWorkspace({
       setExpanded(true);
     }
   }, [initialCountry]);
+  const numberAction = renderConnection ? "Get a number" : "Buy a number";
   const numbers = (snapshot.routing_numbers || []).filter(
     (item) => item.status === "owned",
   );
@@ -98,12 +104,23 @@ export function NumberWorkspace({
       ...(country !== "all" ? [country] : []),
     ]),
   ];
-  const needle = query.trim().toLowerCase();
+  const term = query.trim().toLowerCase();
+  const needle = /^[+\d\s().-]+$/.test(term)
+    ? term.replace(/[\s().-]/g, "")
+    : term;
   const lastUse = (item) =>
     Math.max(
       recentConnections[item.id] || 0,
+      ...(snapshot.calls || [])
+        .filter(
+          (c) =>
+            c.connection_id === item.id || c.destination === item.destination,
+        )
+        .map((c) => Date.parse(c.started_at) || 0),
       Date.parse(item.last_used_at || item.updated_at || item.created_at) || 0,
-      item.destination === call.destination ? callStarted.current : 0,
+      call.active && item.destination === call.destination
+        ? callStarted.current
+        : 0,
     );
   const filtered = links
     .filter(
@@ -142,7 +159,8 @@ export function NumberWorkspace({
               ? "Routing"
               : "Connections"}
       </h1>
-      {page === "overview" && call.active && (
+      {page === "overview" && homeLead}
+      {page === "overview" && !homeLead && call.active && (
         <ActiveCallCard
           call={call}
           onOpen={onOpenCall}
@@ -151,6 +169,7 @@ export function NumberWorkspace({
           onToggleCapture={onToggleCapture}
         />
       )}
+      {page === "overview" && (!call.active || showSetupAfterCall) && setupStep}
       {page === "overview" ? (
         <nav
           className="workspace-primary-actions"
@@ -160,7 +179,7 @@ export function NumberWorkspace({
           <button
             type="button"
             className="workspace-primary-action buy-action"
-            aria-label="Buy a number"
+            aria-label={numberAction}
             onClick={onBuy}
           >
             <span className="workspace-action-icon">
@@ -170,8 +189,8 @@ export function NumberWorkspace({
               </i>
             </span>
             <span>
-              <strong>Buy a number</strong>
-              <small>Choose a line for your calls</small>
+              <strong>{numberAction}</strong>
+              <small>Use a dedicated routing number</small>
             </span>
             <DirectionArrow />
           </button>
@@ -192,12 +211,7 @@ export function NumberWorkspace({
           </button>
           {[
             ["calls", "Calls", "Live calls and recent conversations", "calls"],
-            [
-              "memory",
-              "Recordings",
-              "Audio, transcripts and call notes",
-              "transcript",
-            ],
+            ["memory", "Transcripts", "Read saved conversations", "transcript"],
             [
               "numbers",
               "Your numbers",
@@ -207,7 +221,10 @@ export function NumberWorkspace({
           ].map(([pageId, title, detail, icon]) => (
             <A
               key={pageId}
-              to={navTo(pageId)}
+              to={
+                navTo(pageId) +
+                (pageId === "memory" ? "?filter=transcript" : "")
+              }
               className="workspace-primary-action"
               aria-label={title}
             >
@@ -225,7 +242,13 @@ export function NumberWorkspace({
       ) : (
         <div className="number-page-actions">
           <Btn
-            label={numberPage ? "Buy a number" : "Connect a destination"}
+            label={
+              numberPage
+                ? numberAction
+                : renderConnection
+                  ? "Connect destination"
+                  : "Connect a destination"
+            }
             icon={numberPage ? "plus" : "connection"}
             primary
             onClick={numberPage ? onBuy : () => onAdd("", "GB")}
@@ -234,7 +257,9 @@ export function NumberWorkspace({
       )}
       <div className="connections-section-heading">
         <div>
-          <h2>{numberPage ? "Routing numbers" : "Connections"}</h2>
+          {page !== "connections" && (
+            <h2>{numberPage ? "Routing numbers" : "Connections"}</h2>
+          )}
           <span>
             {numberPage ? `${numbers.length} owned` : "Most recently used"}
           </span>
@@ -267,13 +292,13 @@ export function NumberWorkspace({
               ref={search}
               type="search"
               aria-label={
-                numberPage ? "Search your numbers" : "Search connections"
-              }
-              placeholder={
                 numberPage
-                  ? "Search numbers"
-                  : "Search names, countries or numbers"
+                  ? "Search your numbers"
+                  : renderConnection
+                    ? "Search live connections"
+                    : "Search connections"
               }
+              placeholder={numberPage ? "Search numbers" : "Search connections"}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
@@ -353,7 +378,7 @@ export function NumberWorkspace({
                   {COUNTRY_FLAGS[number.country]}
                 </span>
                 <div>
-                  <strong>{number.e164}</strong>
+                  <strong>{displayPhone(number.e164)}</strong>
                   <span>
                     {number.label} · {providerName(number.provider)}
                   </span>
@@ -386,6 +411,7 @@ export function NumberWorkspace({
           tabIndex={expanded ? undefined : 0}
         >
           {filtered.map((link) => {
+            if (renderConnection) return renderConnection(link);
             const number = numbers.find(
               (item) => item.id === link.routing_number_id,
             );
@@ -408,13 +434,15 @@ export function NumberWorkspace({
                 <div className="connection-number-pair">
                   <div>
                     <small>Routing number</small>
-                    <strong>{number?.e164 || "Number unavailable"}</strong>
+                    <strong>
+                      {displayPhone(number?.e164) || "Number unavailable"}
+                    </strong>
                     <span>{providerName(number?.provider)}</span>
                   </div>
                   <Icon name="arrow" size={18} />
                   <div>
                     <small>Destination number</small>
-                    <strong>{link.destination}</strong>
+                    <strong>{displayPhone(link.destination)}</strong>
                     <span>{countryName(link.country)}</span>
                   </div>
                 </div>
@@ -479,19 +507,12 @@ export function NumberWorkspace({
           </h2>
           <p>
             {!numbers.length
-              ? "Buy a dedicated number, then connect an outside destination."
+              ? "Get a dedicated routing number, then connect a destination."
               : "Choose a country, enter the number and select your routing number."}
           </p>
-          <Btn
-            label={numbers.length ? "Connect a destination" : "Buy a number"}
-            primary
-            icon="plus"
-            onClick={
-              numbers.length
-                ? () => onAdd("", country === "all" ? "GB" : country)
-                : onBuy
-            }
-          />
+          {!numberPage && !numbers.length && page !== "overview" && (
+            <Btn label={numberAction} primary icon="plus" onClick={onBuy} />
+          )}
         </div>
       )}
       {(snapshot.number_orders || []).filter(
@@ -512,7 +533,7 @@ export function NumberWorkspace({
             ))}
         </section>
       )}
-      {!numberPage && unassigned.length > 0 && (
+      {!renderConnection && !numberPage && unassigned.length > 0 && (
         <section className="unassigned-destinations">
           <h2>Unassigned destinations</h2>
           {unassigned.map((route) => (
@@ -638,6 +659,31 @@ export function ConnectionEditor({
           }
         }}
       >
+        <label htmlFor={id + "-routing"}>
+          Your routing number
+          <select
+            id={id + "-routing"}
+            required
+            value={value.routing_number_id}
+            onChange={(event) => set("routing_number_id", event.target.value)}
+          >
+            <option value="">Select an owned number</option>
+            {numbers.map((number) => (
+              <option
+                key={number.id}
+                value={number.id}
+                disabled={links.some(
+                  (link) => link.routing_number_id === number.id,
+                )}
+              >
+                {number.e164} · {number.label}
+                {links.some((link) => link.routing_number_id === number.id)
+                  ? " · Already connected"
+                  : ""}
+              </option>
+            ))}
+          </select>
+        </label>
         <label htmlFor={id + "-name"}>
           Name
           <input
@@ -702,33 +748,22 @@ export function ConnectionEditor({
             }
             maxLength={24}
             required
-            onChange={(event) => set("destination", event.target.value)}
+            onChange={(event) => {
+              const destination = event.target.value;
+              const digits = destination.replace(/[\s().-]/g, "");
+              const possible = CALL_COUNTRIES.filter((country) =>
+                digits.startsWith("+" + country.prefix),
+              );
+              setValue((current) => ({
+                ...current,
+                destination,
+                country:
+                  possible.find((c) => c.code === current.country)?.code ||
+                  possible[0]?.code ||
+                  current.country,
+              }));
+            }}
           />
-        </label>
-        <label htmlFor={id + "-routing"}>
-          Routing number
-          <select
-            id={id + "-routing"}
-            required
-            value={value.routing_number_id}
-            onChange={(event) => set("routing_number_id", event.target.value)}
-          >
-            <option value="">Select an owned number</option>
-            {numbers.map((number) => (
-              <option
-                key={number.id}
-                value={number.id}
-                disabled={links.some(
-                  (link) => link.routing_number_id === number.id,
-                )}
-              >
-                {number.e164} · {number.label}
-                {links.some((link) => link.routing_number_id === number.id)
-                  ? " · Already connected"
-                  : ""}
-              </option>
-            ))}
-          </select>
         </label>
         {!availableNumbers.length && (
           <p className="number-checkout-note" role="status">
@@ -747,6 +782,14 @@ export function ConnectionEditor({
           <Icon name="plus" size={15} />
           Get another routing number
         </button>
+        {value.routing_number_id && value.label.trim() && (
+          <p className="connection-summary">
+            <Icon name="connection" size={17} />
+            {
+              numbers.find((n) => n.id === value.routing_number_id)?.label
+            } → {value.label}
+          </p>
+        )}
         {error && (
           <p className="tools-error" role="alert">
             {error}

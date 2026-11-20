@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { Btn, Card, Icon, Pill } from "./ui.jsx";
-import { ConnectionEditor } from "./number-studio.jsx";
+import { ConnectionEditor, NumberWorkspace } from "./number-studio.jsx";
 import { AccountProfile, accountRequest } from "./account-auth.jsx";
 import {
   CallHistoryList,
@@ -9,8 +9,23 @@ import {
   ContactMemoryDialog,
 } from "./conversations.jsx";
 import "./provider-live.css";
+import { useRoute, A } from "./context.jsx";
+import {
+  ActiveCallCard,
+  currentCarrierCalls,
+  carrierCallView,
+  carrierConnected,
+  isActiveCarrierCall as active,
+} from "./studio-navigation.jsx";
+import { displayPhone } from "../../shared/phone.mjs";
+import { contactNotes } from "../../shared/conversations.mjs";
 import { LiveRoom } from "./live-room.jsx";
-import { TranscriptionSettings, TranscribeRecording, AgentReportedCalls, SavedTranscript } from './launch-settings.jsx';
+import {
+  TranscribeRecording,
+  AgentReportedCalls,
+  SavedTranscript,
+  SetupChecklist,
+} from "./launch-settings.jsx";
 
 export async function providerRequest(path, options = {}) {
   const response = await fetch("/api/studio/" + path, {
@@ -89,15 +104,37 @@ export function SignalWireSettings({ onModeChange = () => location.reload() }) {
         Your API token is encrypted on the server. It is never shown again or
         saved in browser storage.
       </p>
-      <details className="provider-quickstart"><summary>Set up your first outbound call</summary>
+      <details className="provider-quickstart">
+        <summary>Set up your first outbound call</summary>
         <ol>
-          <li>In your SignalWire dashboard, create a project token with Voice and Numbers permissions. Copy the Space, Project ID and token into the fields below.</li>
+          <li>
+            In your SignalWire dashboard, create a project token with Voice and
+            Numbers permissions. Copy the Space, Project ID and token into the
+            fields below.
+          </li>
           <li>Choose Save and verify, then Use my SignalWire project.</li>
-          <li>In Numbers, import a voice number you own or buy a number. In Connections, save the outside destination with its country code.</li>
-          <li>Choose Test callback, enter a different phone you can answer and confirm the charges. When you answer, SignalWire dials the destination.</li>
+          <li>
+            In Numbers, import a voice number you own or buy a number. In
+            Connections, save the outside destination with its country code.
+          </li>
+          <li>
+            Choose Test callback, enter a different phone you can answer and
+            confirm the charges. When you answer, SignalWire dials the
+            destination.
+          </li>
         </ol>
-        <p>On a trial, verify both outside phones. For calls abroad, enable international service and the destination country in your SignalWire Space.</p>
-        <a href="https://signalwire.com/docs/platform/voice/make-and-receive-calls" target="_blank" rel="noreferrer">SignalWire calling guide</a>
+        <p>
+          On a trial, verify both outside phones. For calls abroad, enable
+          international service and the destination country in your SignalWire
+          Space.
+        </p>
+        <a
+          href="https://signalwire.com/docs/platform/voice/make-and-receive-calls"
+          target="_blank"
+          rel="noreferrer"
+        >
+          SignalWire calling guide
+        </a>
       </details>
       {status && !status.vault_ready && (
         <p role="status">
@@ -263,14 +300,6 @@ export function SignalWireSettings({ onModeChange = () => location.reload() }) {
   );
 }
 
-const blank = {
-  routing_numbers: [],
-  connections: [],
-  calls: [],
-  events: [],
-  pending_actions: [],
-};
-const active = (c) => ["queued", "ringing", "in-progress"].includes(c.status);
 const duration = (n) =>
   `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`;
 function ChargeConsent({ checked, onChange, recording = false }) {
@@ -291,12 +320,13 @@ function ChargeConsent({ checked, onChange, recording = false }) {
   );
 }
 
-function LiveNumberDialog({ open, onClose, onAdded, runBusy, space }) {
+function LiveNumberDialog({ open, onClose, onAdded, space }) {
   const id = useId();
   const [tab, setTab] = useState("owned"),
     [inventory, setInventory] = useState([]),
     [results, setResults] = useState([]),
     [area, setArea] = useState("202"),
+    [searched, setSearched] = useState(false),
     [chosen, setChosen] = useState(""),
     [label, setLabel] = useState("Main line"),
     [consent, setConsent] = useState(false),
@@ -306,6 +336,10 @@ function LiveNumberDialog({ open, onClose, onAdded, runBusy, space }) {
   useEffect(() => {
     if (!open) return;
     let alive = true;
+    setTab("owned");
+    setInventory([]);
+    setResults([]);
+    setSearched(false);
     setBusy(true);
     setError("");
     setChosen("");
@@ -321,6 +355,15 @@ function LiveNumberDialog({ open, onClose, onAdded, runBusy, space }) {
   }, [open]);
   const submit = async (event) => {
     event.preventDefault();
+    if (
+      !chosen ||
+      busy ||
+      !(tab === "owned" ? inventory : results).some(
+        (n) => (n.id || n.number) === chosen && !n.imported,
+      ) ||
+      (tab === "buy" && !consent)
+    )
+      return;
     setBusy(true);
     setError("");
     try {
@@ -358,6 +401,7 @@ function LiveNumberDialog({ open, onClose, onAdded, runBusy, space }) {
         <div className="provider-tabs">
           <button
             type="button"
+            disabled={busy}
             aria-pressed={tab === "owned"}
             onClick={() => {
               setTab("owned");
@@ -369,6 +413,7 @@ function LiveNumberDialog({ open, onClose, onAdded, runBusy, space }) {
           </button>
           <button
             type="button"
+            disabled={busy}
             aria-pressed={tab === "buy"}
             onClick={() => {
               setTab("buy");
@@ -394,6 +439,7 @@ function LiveNumberDialog({ open, onClose, onAdded, runBusy, space }) {
                   area_code: area,
                 });
                 setResults(data.numbers);
+                setSearched(true);
               } catch (e) {
                 setError(e.message);
               } finally {
@@ -410,7 +456,14 @@ function LiveNumberDialog({ open, onClose, onAdded, runBusy, space }) {
                 pattern="[2-9][0-9]{2}"
                 inputMode="numeric"
                 maxLength={3}
-                onChange={(e) => setArea(e.target.value)}
+                disabled={busy}
+                onChange={(e) => {
+                  setArea(e.target.value);
+                  setChosen("");
+                  setConsent(false);
+                  setSearched(false);
+                  setResults([]);
+                }}
               />
             </label>
             <Btn
@@ -456,21 +509,25 @@ function LiveNumberDialog({ open, onClose, onAdded, runBusy, space }) {
               <p>
                 {tab === "owned"
                   ? "No owned voice numbers found. Buy a number to get started."
-                  : "Search an area code to see current availability."}
+                  : searched
+                    ? "No numbers available in this area code. Try another US area code."
+                    : "Search an area code to see current availability."}
               </p>
             )}
           </fieldset>
-          <label htmlFor={id + "label"}>
-            Number name
-            <input
-              id={id + "label"}
-              value={label}
-              required
-              maxLength={80}
-              onChange={(e) => setLabel(e.target.value)}
-            />
-          </label>
-          {tab === "buy" && (
+          {chosen && (
+            <label htmlFor={id + "label"}>
+              Number name
+              <input
+                id={id + "label"}
+                value={label}
+                required
+                maxLength={80}
+                onChange={(e) => setLabel(e.target.value)}
+              />
+            </label>
+          )}
+          {tab === "buy" && chosen && (
             <>
               <p className="provider-muted">
                 SignalWire does not include prices in search results. Review
@@ -507,9 +564,7 @@ function LiveNumberDialog({ open, onClose, onAdded, runBusy, space }) {
                     ? "Use this number"
                     : "Buy selected number"
               }
-              disabled={
-                busy || runBusy || !chosen || (tab === "buy" && !consent)
-              }
+              disabled={busy || !chosen || (tab === "buy" && !consent)}
             />
           </div>
         </form>
@@ -518,7 +573,14 @@ function LiveNumberDialog({ open, onClose, onAdded, runBusy, space }) {
   );
 }
 
-function LiveActionDialog({ action, onClose, onSubmit, connections, space, rooms }) {
+function LiveActionDialog({
+  action,
+  onClose,
+  onSubmit,
+  connections,
+  space,
+  rooms,
+}) {
   const id = useId(),
     key = useRef(requestId());
   const [consent, setConsent] = useState(false),
@@ -548,7 +610,7 @@ function LiveActionDialog({ action, onClose, onSubmit, connections, space, rooms
     start: "Start a test call",
     record: "Record this call",
     transfer: "Transfer the call",
-    end: "End this call",
+    end: "End call for everyone",
     remove: "Remove connection",
     review: "Review an uncertain request",
     delete_recording: "Delete recording",
@@ -595,7 +657,19 @@ function LiveActionDialog({ action, onClose, onSubmit, connections, space, rooms
             closed, until you deactivate it.
           </p>
         )}
-        {rooms && ["start", "activate"].includes(action.type) && <label className="provider-consent"><input type="checkbox" checked={studioRoom} onChange={e => setStudioRoom(e.target.checked)} /><span>Enable Studio call room. Route audio through AgentBridge to join, mute participants or turn on live captions.</span></label>}
+        {rooms && ["start", "activate"].includes(action.type) && (
+          <label className="provider-consent">
+            <input
+              type="checkbox"
+              checked={studioRoom}
+              onChange={(e) => setStudioRoom(e.target.checked)}
+            />
+            <span>
+              Enable Studio call room. Route audio through AgentBridge to join,
+              mute participants or turn on live captions.
+            </span>
+          </label>
+        )}
         {action.type === "deactivate" && (
           <p>
             Restore the number’s previous SignalWire call handling. Existing
@@ -648,7 +722,10 @@ function LiveActionDialog({ action, onClose, onSubmit, connections, space, rooms
           </p>
         )}
         {action.type === "end" && (
-          <p>This requests an end to the selected live call.</p>
+          <p>
+            Disconnect the phones and everyone in this call. To leave just your
+            browser audio, choose Leave room.
+          </p>
         )}
         {action.type === "remove" && (
           <p>
@@ -726,46 +803,53 @@ function LiveActionDialog({ action, onClose, onSubmit, connections, space, rooms
 
 export function LiveWorkspace({
   page,
+  data,
+  pathFor,
+  searchTarget,
   onState,
   account,
   onSignout,
   navTo,
-  onModeChange,
   initialHistoryFilter = "all",
 }) {
-  const [data, setData] = useState(blank),
-    [error, setError] = useState(""),
+  const { search } = useRoute();
+  const [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
     [numberOpen, setNumberOpen] = useState(false),
     [editing, setEditing] = useState(null),
     [editorOpen, setEditorOpen] = useState(false),
     [action, setAction] = useState(null),
-    [query, setQuery] = useState(""),
+    [selectedNumber, setSelectedNumber] = useState(""),
     [selectedCall, setSelectedCall] = useState(""),
     [recordings, setRecordings] = useState([]),
     [transcripts, setTranscripts] = useState([]);
   const [memoryContact, setMemoryContact] = useState(null);
+  const currentCallId = useRef(selectedCall);
+  currentCallId.current = selectedCall;
   const mounted = useRef(true),
     syncing = useRef(false),
+    sequence = useRef(0),
+    appliedSearch = useRef(null),
     stateCallback = useRef(onState);
   stateCallback.current = onState;
-  const setSnapshot = (s) => {
-    if (mounted.current) {
-      setData(s);
+  const setSnapshot = (s, order) => {
+    if (mounted.current && order === sequence.current) {
       stateCallback.current?.(s);
     }
   };
   const refresh = async () => {
+    const order = ++sequence.current;
     const snapshot = await providerRequest("live/overview");
-    setSnapshot(snapshot);
+    setSnapshot(snapshot, order);
     return snapshot;
   };
   const sync = async () => {
     if (syncing.current) return;
     syncing.current = true;
+    const order = ++sequence.current;
     try {
-      setSnapshot(await write("live/sync"));
+      setSnapshot(await write("live/sync"), order);
     } catch (e) {
       if (mounted.current && e.code !== "PROVIDER_BUSY") setError(e.message);
     } finally {
@@ -798,7 +882,7 @@ export function LiveWorkspace({
     }
   };
   const connections = data.connections.filter((c) => c.status === "saved"),
-    calls = data.calls.filter(c => active(c) && (!c.room_call_id || c.room_call_id === c.id)),
+    calls = currentCarrierCalls(data),
     history = [
       ...new Map(
         [...data.calls.filter((c) => !active(c)), ...(data.call_history || [])]
@@ -808,8 +892,21 @@ export function LiveWorkspace({
     ].sort(
       (a, b) => Date.parse(b.started_at || 0) - Date.parse(a.started_at || 0),
     );
-  const matches = (value) =>
-    !query || JSON.stringify(value).toLowerCase().includes(query.toLowerCase());
+  const addConnection = (id = "") => {
+    setSelectedNumber(id);
+    setEditing(null);
+    setEditorOpen(true);
+  };
+  useEffect(() => {
+    if (
+      searchTarget?.page !== page ||
+      appliedSearch.current === searchTarget.id
+    )
+      return;
+    appliedSearch.current = searchTarget.id;
+    if (searchTarget.action === "buy") setNumberOpen(true);
+    if (searchTarget.action === "connect") addConnection();
+  }, [page, searchTarget]);
   const details =
     data.calls.find((c) => c.id === selectedCall) ||
     (data.call_history || []).find((c) => c.id === selectedCall);
@@ -826,28 +923,39 @@ export function LiveWorkspace({
     await refresh();
   };
   useEffect(() => {
-    if (page !== "call") { setSelectedCall(""); return; }
-    const requested = new URLSearchParams(location.search).get("id");
+    if (page !== "call") {
+      setSelectedCall("");
+      return;
+    }
+    const requested = new URLSearchParams(search).get("id");
     if (requested) setSelectedCall(requested);
     else if (!selectedCall) {
-      const first = data.calls.find(c => active(c) && !c.parent_call_id && (!c.room_call_id || c.room_call_id === c.id));
+      const first = data.calls.find(
+        (c) =>
+          active(c) &&
+          !c.parent_call_id &&
+          (!c.room_call_id || c.room_call_id === c.id),
+      );
       if (first) setSelectedCall(first.id);
     }
-  }, [page, data.calls, selectedCall]);
+  }, [page, data.calls, selectedCall, search]);
+  useEffect(() => {
+    setRecordings([]);
+    setTranscripts([]);
+  }, [selectedCall]);
   const loadRecordings = async (id) => {
     const r = await providerRequest("live/calls/" + id + "/recordings");
-    setRecordings(r.recordings);
+    if (currentCallId.current === id) setRecordings(r.recordings);
   };
   useEffect(() => {
     if (!selectedCall) return;
     let alive = true;
-    setRecordings([]);
     providerRequest("live/calls/" + selectedCall + "/recordings")
       .then((r) => alive && setRecordings(r.recordings))
       .catch((e) => alive && setError(e.message));
-    providerRequest('transcription/calls/' + selectedCall)
-      .then(r=>alive&&setTranscripts(r.transcripts))
-      .catch(e=>alive&&setError(e.message));
+    providerRequest("transcription/calls/" + selectedCall)
+      .then((r) => alive && setTranscripts(r.transcripts))
+      .catch((e) => alive && setError(e.message));
     return () => {
       alive = false;
     };
@@ -856,7 +964,9 @@ export function LiveWorkspace({
     const body = {
       request_id: value.request_id,
       confirm_charges: value.confirm_charges,
-      ...(value.studio_room && ["start", "activate"].includes(value.type) ? { studio_room: true } : {}),
+      ...(value.studio_room && ["start", "activate"].includes(value.type)
+        ? { studio_room: true }
+        : {}),
     };
     if (value.type === "activate" || value.type === "deactivate")
       await write(
@@ -902,92 +1012,55 @@ export function LiveWorkspace({
       "SignalWire request completed. Call status updates from the provider.",
     );
   };
-  const callCard = (call) => (
-    <button
-      key={call.id}
-      className="live-call-card"
-      onClick={() => {
-        openCall(call);
-      }}
-    >
-      <span className="provider-icon">
-        <Icon name="calls" size={24} />
-      </span>
-      <span>
-        <strong>{call.to}</strong>
-        <small>From {call.from}</small>
-      </span>
-      <Pill>{call.status}</Pill>
-      <span>{duration(call.duration)}</span>
-      <Icon name="arrow" />
-    </button>
+  const callCard = (record) => (
+    <div className="live-call-card" key={record.id}>
+      <ActiveCallCard
+        call={carrierCallView(record, data)}
+        expandable
+        onOpen={() => openCall(record)}
+      />
+    </div>
   );
-  const connectionCards = connections.filter(matches).map((c) => {
+  function connectionCard(c) {
     const number = data.routing_numbers.find(
       (n) => n.id === c.routing_number_id,
     );
+    const notes = contactNotes(data, c.destination);
     return (
-      <article className="live-connection-card" key={c.id}>
+      <article className="live-connection-card provider-contact" key={c.id}>
         <div className="live-card-heading">
           <h2>{c.label}</h2>
-          <Pill>
+          <span
+            className="forwarding-status"
+            data-on={c.routing_state === "active"}
+          >
             {c.routing_state === "active"
               ? "Forwarding on"
               : c.routing_state === "inactive"
-                ? "Saved"
+                ? "Forwarding off"
                 : "Needs review"}
-          </Pill>
+          </span>
         </div>
         <div className="live-number-pair">
           <div>
-            <small>Routing number</small>
-            <strong>{number?.e164 || "Number unavailable"}</strong>
+            <small>Your routing number</small>
+            <strong>{displayPhone(number?.e164) || "Unavailable"}</strong>
+            <small>{number?.label}</small>
           </div>
           <Icon name="arrow" />
           <div>
             <small>Destination</small>
-            <strong>{c.destination}</strong>
+            <strong>{displayPhone(c.destination)}</strong>
+            <small>{c.country}</small>
           </div>
         </div>
+        {notes && <p className="contact-note">{notes}</p>}
         <div className="provider-actions">
-          {c.routing_state === "active" ? (
-            <Btn
-              label="Deactivate"
-              disabled={busy}
-              onClick={() => setAction({ type: "deactivate", connection: c })}
-            />
-          ) : c.routing_state === "inactive" ? (
-            <>
-              <Btn
-                label="Activate forwarding"
-                primary
-                disabled={busy || number?.status !== "owned"}
-                onClick={() => setAction({ type: "activate", connection: c })}
-              />
-              <Btn
-                label="Edit"
-                end={null}
-                onClick={() => {
-                  setEditing(c);
-                  setEditorOpen(true);
-                }}
-              />
-              <button
-                className="provider-text-button"
-                onClick={() => setAction({ type: "remove", connection: c })}
-              >
-                Remove
-              </button>
-            </>
-          ) : (
-            <Btn
-              label="Reconcile provider state"
-              onClick={() => run(() => write("live/reconcile"))}
-            />
-          )}
           <Btn
             label="Test callback"
+            primary
             icon="calls"
+            end={null}
             disabled={busy || number?.status !== "owned"}
             onClick={() => setAction({ type: "start", connection: c })}
           />
@@ -999,20 +1072,74 @@ export function LiveWorkspace({
             onClick={() => setMemoryContact(c)}
           />
         </div>
-        {c.routing_state === "active" && (
-          <p className="provider-muted">
-            Give {number?.e164} to your calling agent. Incoming calls forward to{" "}
-            {c.destination}.{c.studio_room && " You can join from Calls."}
-          </p>
-        )}
+        <details className="more-call-actions">
+          <summary>More actions</summary>
+          <div className="provider-actions">
+            {c.routing_state === "active" ? (
+              <Btn
+                label="Deactivate forwarding"
+                end={null}
+                disabled={busy}
+                onClick={() => setAction({ type: "deactivate", connection: c })}
+              />
+            ) : c.routing_state === "inactive" ? (
+              <>
+                <Btn
+                  label="Activate forwarding"
+                  end={null}
+                  disabled={busy || number?.status !== "owned"}
+                  onClick={() => setAction({ type: "activate", connection: c })}
+                />
+                <Btn
+                  label="Edit connection"
+                  end={null}
+                  onClick={() => {
+                    setEditing(c);
+                    setEditorOpen(true);
+                  }}
+                />
+                <button
+                  className="provider-text-button"
+                  onClick={() => setAction({ type: "remove", connection: c })}
+                >
+                  Remove connection
+                </button>
+              </>
+            ) : (
+              <Btn
+                label="Check provider status"
+                end={null}
+                disabled={busy}
+                onClick={() => run(() => write("live/reconcile"))}
+              />
+            )}
+          </div>
+        </details>
       </article>
     );
-  });
+  }
+  if (["agents", "connection", "design"].includes(page)) return null;
+  if (!data.mode && !error)
+    return (
+      <p className="provider-muted" role="status">
+        Loading your project…
+      </p>
+    );
   if (page === "settings")
     return (
       <div className="live-workspace">
-        <SignalWireSettings onModeChange={onModeChange} />
-        <TranscriptionSettings />
+        <h1>Settings</h1>
+        <nav className="settings-links" aria-label="Workspace resources">
+          <A to={pathFor("connection")}>
+            Calling setup <Icon name="arrow" />
+          </A>
+          <A to={pathFor("activity")}>
+            Activity <Icon name="arrow" />
+          </A>
+          <A to={pathFor("design")}>
+            Design gallery <Icon name="arrow" />
+          </A>
+        </nav>
         {account && (
           <AccountProfile
             account={account}
@@ -1045,32 +1172,11 @@ export function LiveWorkspace({
     );
   return (
     <div className="live-workspace">
-      <div className="live-page-heading">
-        <div>
-          <span className="live-mode-label">LIVE TESTING · SIGNALWIRE</span>
-          <h1>
-            {page === "numbers"
-              ? "Your numbers"
-              : page === "connections"
-                ? "Connections"
-                : page === "routes"
-                  ? "Routing"
-                  : ["call", "calls", "memory"].includes(page)
-                    ? "Calls"
-                    : "Studio"}
-          </h1>
+      {["call", "calls", "memory"].includes(page) && (
+        <div className="live-page-heading">
+          <h1>{details ? "Call overview" : "Calls"}</h1>
         </div>
-        <Btn
-          label="Refresh provider"
-          icon="activity"
-          disabled={busy || syncing.current}
-          onClick={() =>
-            run(async () => {
-              await sync();
-            })
-          }
-        />
-      </div>
+      )}
       {error && (
         <p className="provider-error" role="alert">
           {error}
@@ -1098,113 +1204,44 @@ export function LiveWorkspace({
           ))}
         </section>
       )}
-      {page === "overview" && (
+      {["overview", "connections", "numbers", "routes"].includes(page) && (
         <>
-          <div className="live-shortcuts">
-            <button onClick={() => setNumberOpen(true)}>
-              <Icon name="numbers" size={28} />
-              <strong>Get a number</strong>
-              <span>Use owned or buy new</span>
-              <Icon name="arrow" />
-            </button>
-            <button
-              onClick={() => {
-                setEditing(null);
-                setEditorOpen(true);
-              }}
-            >
-              <Icon name="connections" size={28} />
-              <strong>Connect a destination</strong>
-              <span>Pair it with your routing number</span>
-              <Icon name="arrow" />
-            </button>
-          </div>
-          {calls.length > 0 && (
-            <section>
-              <h2>Live calls</h2>
-              <div className="live-call-list">
-                {calls.filter((c) => !c.parent_call_id).map(callCard)}
-              </div>
-            </section>
-          )}
-          <section>
-            <div className="live-section-heading">
-              <h2>Connections</h2>
-              <Btn label="View all" onClick={() => navTo("connections")} />
-            </div>
-            <div className="live-connections-grid">
-              {connectionCards.length ? (
-                connectionCards
-              ) : (
-                <p>Add a SignalWire number, then connect a destination.</p>
-              )}
-            </div>
-          </section>
-        </>
-      )}
-      {page === "numbers" && (
-        <>
-          <div className="provider-actions">
-            <Btn
-              label="Get a number"
-              icon="plus"
-              primary
-              onClick={() => setNumberOpen(true)}
-            />
-          </div>
-          <div className="live-connections-grid">
-            {data.routing_numbers.map((n) => (
-              <article className="live-connection-card" key={n.id}>
-                <div className="live-card-heading">
-                  <h2>{n.label}</h2>
-                  <Pill>
-                    {n.status === "owned" ? "Owned" : "Check provider"}
-                  </Pill>
-                </div>
-                <strong className="live-number">{n.e164}</strong>
-                <p className="provider-muted">SignalWire · {n.country}</p>
-                <Btn
-                  label="Connect destination"
-                  disabled={n.status !== "owned"}
-                  onClick={() => {
-                    setEditing(null);
-                    setEditorOpen(true);
-                  }}
-                />
-              </article>
-            ))}
-          </div>
-          {!data.routing_numbers.length && (
-            <p>
-              Import a number from your project, or search SignalWire for a new
-              one.
-            </p>
-          )}
-        </>
-      )}
-      {["connections", "routes"].includes(page) && (
-        <>
-          <div className="live-section-heading">
-            <input
-              type="search"
-              aria-label="Search live connections"
-              placeholder="Search connections…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-            <Btn
-              label="Connect destination"
-              icon="plus"
-              onClick={() => {
-                setEditing(null);
-                setEditorOpen(true);
-              }}
-            />
-          </div>
-          <div className="live-connections-grid">{connectionCards}</div>
-          {!connections.length && (
-            <p>Your saved destinations will appear here.</p>
-          )}
+          <NumberWorkspace
+            key={
+              page + ":" + (searchTarget?.page === page ? searchTarget.id : "")
+            }
+            page={page}
+            snapshot={data}
+            call={carrierCallView(calls[0], data)}
+            navTo={pathFor}
+            onBuy={() => setNumberOpen(true)}
+            onAdd={addConnection}
+            onEdit={(c) => {
+              setEditing(c);
+              setEditorOpen(true);
+            }}
+            renderConnection={connectionCard}
+            initialSearch={
+              searchTarget?.page === page ? searchTarget.query : ""
+            }
+            initialCountry={
+              searchTarget?.page === page ? searchTarget.country : "all"
+            }
+            homeLead={
+              calls.length ? (
+                <section aria-label="Live calls" className="live-call-list">
+                  {calls.map(callCard)}
+                </section>
+              ) : null
+            }
+            setupStep={<SetupChecklist snapshot={data} live />}
+          />
+          {page === "numbers" &&
+            data.routing_numbers
+              .filter((n) => n.status !== "owned")
+              .map((n) => (
+                <p key={n.id}>{n.e164} · Check provider ownership</p>
+              ))}
         </>
       )}
       {["calls", "call", "memory"].includes(page) && (
@@ -1222,24 +1259,46 @@ export function LiveWorkspace({
                   }}
                 />
               </div>
-              <p>From {details.from}</p>
-              <p>
-                <strong>{details.status}</strong> · {duration(details.duration)}
+              <p className="provider-muted">
+                Routing number{" "}
+                {displayPhone(details.routing_number || details.from)} ·
+                Destination {displayPhone(details.destination || details.to)}
               </p>
+              <p>
+                <strong>
+                  {active(details)
+                    ? carrierConnected(details)
+                      ? "Connected"
+                      : "Calling…"
+                    : details.status}
+                </strong>{" "}
+                · {duration(details.duration)}
+              </p>
+              {active(details) &&
+                details.room_call_id &&
+                !details.room_ready && (
+                  <p role="status">
+                    Waiting for the first phone to answer before you can join.
+                  </p>
+                )}
+              {active(details) && details.room_ready && (
+                <LiveRoom
+                  key={details.room_call_id}
+                  callId={details.room_call_id}
+                  connections={connections}
+                  write={write}
+                />
+              )}
+              {active(details) &&
+                !details.room_call_id &&
+                data.features?.browser_audio && (
+                  <p className="conversation-help">
+                    For browser audio, select Enable Studio call room when
+                    starting a callback or activating forwarding.
+                  </p>
+                )}
               {active(details) && (
                 <div className="provider-actions">
-                  <Btn
-                    label="End call"
-                    icon="end"
-                    onClick={() => setAction({ type: "end", call: details })}
-                  />
-                  <Btn
-                    label="Transfer"
-                    icon="routes"
-                    onClick={() =>
-                      setAction({ type: "transfer", call: details })
-                    }
-                  />
                   <button
                     type="button"
                     className={
@@ -1294,9 +1353,27 @@ export function LiveWorkspace({
                   </button>
                 </div>
               )}
-              {active(details) && details.room_call_id && !details.room_ready && <p role="status">Waiting for the first phone to answer before you can join.</p>}
-              {active(details) && details.room_ready && <LiveRoom key={details.room_call_id} callId={details.room_call_id} connections={connections} write={write} />}
-              {active(details) && !details.room_call_id && data.features?.browser_audio && <p className="conversation-help">For browser audio, select Enable Studio call room when starting a callback or activating forwarding.</p>}
+              {active(details) && (
+                <details className="more-call-actions">
+                  <summary>Call actions</summary>
+                  <div className="provider-actions">
+                    <Btn
+                      label="End call for everyone"
+                      icon="end"
+                      end={null}
+                      onClick={() => setAction({ type: "end", call: details })}
+                    />
+                    <Btn
+                      label="Transfer"
+                      icon="routes"
+                      end={null}
+                      onClick={() =>
+                        setAction({ type: "transfer", call: details })
+                      }
+                    />
+                  </div>
+                </details>
+              )}
               <h3>Recordings</h3>
               {recordings.map((r) => (
                 <article className="live-recording" key={r.id}>
@@ -1312,7 +1389,19 @@ export function LiveWorkspace({
                     />
                   )}
                   <div className="provider-actions">
-                    {r.status === 'completed' && <TranscribeRecording recording={r} onSaved={value=>{setTranscripts(old=>[value,...old.filter(t=>t.id!==value.id)]);refresh();}}/>}
+                    {r.status === "completed" && (
+                      <TranscribeRecording
+                        recording={r}
+                        onSaved={(value) => {
+                          if (currentCallId.current !== details.id) return;
+                          setTranscripts((old) => [
+                            value,
+                            ...old.filter((t) => t.id !== value.id),
+                          ]);
+                          refresh();
+                        }}
+                      />
+                    )}
                     {["in-progress", "paused"].includes(r.status) && (
                       <>
                         <Btn
@@ -1394,7 +1483,11 @@ export function LiveWorkspace({
                         const result = await providerRequest(
                           "live/calls/" + details.id + "/transcripts",
                         );
-                        setTranscripts(old=>[...old.filter(t=>t.source==='xai'),...result.transcripts]);
+                        if (currentCallId.current !== details.id) return;
+                        setTranscripts((old) => [
+                          ...old.filter((t) => t.source === "xai"),
+                          ...result.transcripts,
+                        ]);
                       })
                     }
                   />
@@ -1406,7 +1499,16 @@ export function LiveWorkspace({
                       recordings.some((r) => r.id === t.recording_id),
                   )
                   .map((t) => (
-                    <SavedTranscript key={t.id} transcript={t} onDeleted={()=>{setTranscripts(old=>old.filter(item=>item.id!==t.id));refresh();}}/>
+                    <SavedTranscript
+                      key={t.id}
+                      transcript={t}
+                      onDeleted={() => {
+                        setTranscripts((old) =>
+                          old.filter((item) => item.id !== t.id),
+                        );
+                        refresh();
+                      }}
+                    />
                   ))}
                 {!transcripts.some(
                   (t) =>
@@ -1414,7 +1516,8 @@ export function LiveWorkspace({
                     recordings.some((r) => r.id === t.recording_id),
                 ) && (
                   <p className="conversation-help">
-                    No saved transcript. Choose Transcribe on a completed recording, or load an existing provider transcript.
+                    No saved transcript. Choose Transcribe on a completed
+                    recording, or load an existing provider transcript.
                   </p>
                 )}
               </section>
@@ -1464,13 +1567,14 @@ export function LiveWorkspace({
           )}
         </>
       )}
-      <LiveNumberDialog
-        space={data.provider?.space}
-        open={numberOpen}
-        onClose={() => setNumberOpen(false)}
-        onAdded={refresh}
-        runBusy={busy}
-      />
+      {numberOpen && (
+        <LiveNumberDialog
+          space={data.provider?.space}
+          open={numberOpen}
+          onClose={() => setNumberOpen(false)}
+          onAdded={refresh}
+        />
+      )}
       <ContactMemoryDialog
         contact={memoryContact}
         snapshot={data}
@@ -1483,6 +1587,7 @@ export function LiveWorkspace({
       <ConnectionEditor
         open={editorOpen}
         initial={editing}
+        selectedNumber={selectedNumber}
         snapshot={data}
         onClose={() => setEditorOpen(false)}
         onBuy={() => {
@@ -1506,10 +1611,13 @@ export function LiveWorkspace({
         onSubmit={submitAction}
         connections={connections}
       />
-      <p className="provider-muted live-footer-note">
-        Your SignalWire project pays number rental, calls and recording charges.
-        Forwarding is limited to five minutes per call.
-      </p>
+      <button
+        className="provider-text-button provider-refresh"
+        disabled={busy}
+        onClick={() => run(sync)}
+      >
+        <Icon name="activity" size={15} /> Refresh provider status
+      </button>
     </div>
   );
 }

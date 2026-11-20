@@ -18,6 +18,16 @@ import { AccountEmail } from "./account-auth.jsx";
 function Pages() {
   const { path, offline, accountDemo } = useRoute();
   const [mode, setMode] = useState("dark");
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("agentbridge-theme");
+      if (saved === "light" || saved === "dark") setMode(saved);
+    } catch {}
+  }, []);
+  const changeTheme = (next) => {
+    setMode(next);
+    try { localStorage.setItem("agentbridge-theme", next); } catch {}
+  };
   const studio = path.startsWith("/studio/") || path.startsWith("/app/");
   const localDemo =
     offline ||
@@ -63,11 +73,11 @@ function Pages() {
           <Studio
             key={String(localDemo)}
             mode={mode}
-            setMode={setMode}
+            setMode={changeTheme}
             isDemo={localDemo}
           />
         ) : (
-          <PublicShell mode={mode} setMode={setMode}>
+          <PublicShell mode={mode} setMode={changeTheme}>
             {page}
           </PublicShell>
         )}

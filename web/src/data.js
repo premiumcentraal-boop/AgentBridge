@@ -165,10 +165,10 @@ export const TITLES = {
   "/features/": "Calling, memory & joining | AgentBridge",
   "/international-calling/": "International calling | AgentBridge",
   "/call-memory/": "Optional recording & transcription | AgentBridge",
-  "/join-call/": "Let me join | AgentBridge",
+  "/join-call/": "Join a call | AgentBridge",
   "/": "AgentBridge — Connect agents worldwide",
   "/how-it-works/": "How it works | AgentBridge",
-  "/pricing/": "Preview & plans | AgentBridge",
+  "/pricing/": "Calling costs | AgentBridge",
   "/connect/": "Get connected | AgentBridge",
   "/docs/": "Documentation | AgentBridge",
 };

@@ -2,6 +2,7 @@ import React, { useEffect, useId, useRef, useState } from "react";
 import { BotFace, StateTag } from "./grok-ui.jsx";
 import { Btn, DirectionArrow, Icon, Wave } from "./ui.jsx";
 import { CallCaptureControls } from "./conversations.jsx";
+import { displayPhone } from "../../shared/phone.mjs";
 
 export const callDuration = (seconds) =>
   `${Math.floor((seconds || 0) / 60)
@@ -9,6 +10,39 @@ export const callDuration = (seconds) =>
     .padStart(2, "0")}:${Math.floor((seconds || 0) % 60)
     .toString()
     .padStart(2, "0")}`;
+
+export const isActiveCarrierCall = (call) =>
+  ["queued", "ringing", "in-progress"].includes(call.status);
+export const carrierConnected = (call) =>
+  call.status === "in-progress" || call.room_ready === true;
+export function currentCarrierCalls(snapshot) {
+  return (snapshot.calls || []).filter(
+    (call) =>
+      isActiveCarrierCall(call) &&
+      !call.parent_call_id &&
+      (!call.room_call_id || call.room_call_id === call.id),
+  );
+}
+export function carrierCallView(call, snapshot) {
+  if (!call) return { active: false, elapsed: 0, loading: !snapshot.mode };
+  const contact = snapshot.connections.find(
+    (c) =>
+      c.id === call.connection_id ||
+      c.destination === (call.destination || call.to),
+  );
+  const number = snapshot.routing_numbers.find(
+    (n) => n.id === contact?.routing_number_id,
+  );
+  return {
+    ...call,
+    active: true,
+    carrier: true,
+    label: contact?.label || call.label || call.to,
+    destination: call.destination || contact?.destination || call.to,
+    routing_number: call.routing_number || number?.e164 || call.from,
+    elapsed: call.duration || 0,
+  };
+}
 
 export function ActiveCallCard({
   call,
@@ -19,6 +53,7 @@ export function ActiveCallCard({
   expandable = false,
   transcript = [],
   onToggleCapture,
+  actionLabel,
 }) {
   const [expanded, setExpanded] = useState(false);
   const detailsId = useId();
@@ -29,7 +64,9 @@ export function ActiveCallCard({
     return (
       <div className="nav-call-empty">
         <Icon name="phone" size={17} />
-        {!compact && <span>No active call</span>}
+        {!compact && (
+          <span>{call.loading ? "Checking calls…" : "No active call"}</span>
+        )}
       </div>
     );
   const openOverview = onOpen || onJump;
@@ -40,16 +77,27 @@ export function ActiveCallCard({
         (call.listening ? call.samplePosition || 0 : call.elapsed),
     )
     .slice(-3);
+  const connected = !call.carrier || carrierConnected(call);
   const body = (
     <>
-      <BotFace size={navigation ? 36 : 56} tone="neutral" state="working" />
+      {call.carrier ? (
+        <span className="carrier-call-icon">
+          <Icon name="calls" size={navigation ? 20 : 26} />
+        </span>
+      ) : (
+        <BotFace size={navigation ? 36 : 56} tone="neutral" state="working" />
+      )}
       <div className="active-call-identity">
         <strong>{call.label || "London studio"}</strong>
-        {!compact && <span>{call.destination || "+442079460123"}</span>}
+        {!compact && (
+          <span>{displayPhone(call.destination || "+442079460123")}</span>
+        )}
       </div>
       {!compact && (
         <div className="active-call-status">
-          <StateTag state="working">Connected</StateTag>
+          <StateTag state={connected ? "done" : "working"}>
+            {connected ? "Connected" : "Calling…"}
+          </StateTag>
           <time>{callDuration(call.elapsed)}</time>
         </div>
       )}
@@ -106,7 +154,7 @@ export function ActiveCallCard({
                 <b>{call.destination || "+442079460123"}</b>
               </span>
             </div>
-            {expandable && (
+            {expandable && !call.carrier && (
               <div className="active-call-transcript">
                 <div className="active-call-transcript-heading">
                   <Icon name="transcript" size={16} />
@@ -132,7 +180,7 @@ export function ActiveCallCard({
                 )}
               </div>
             )}
-            {expandable && (
+            {expandable && onToggleCapture && (
               <CallCaptureControls
                 call={call}
                 onToggle={onToggleCapture}
@@ -142,9 +190,16 @@ export function ActiveCallCard({
           </div>
           {openOverview && (
             <div className="active-call-actions">
-              {expandable && <Wave animated />}
+              {expandable && !call.carrier && <Wave animated />}
               <Btn
-                label="Call overview"
+                label={
+                  actionLabel ||
+                  (call.carrier
+                    ? call.room_ready
+                      ? "Join call"
+                      : "View call"
+                    : "Call overview")
+                }
                 icon="calls"
                 primary
                 end="arrow"
@@ -230,7 +285,7 @@ export function StudioDrawer({ open, onClose, children }) {
       };
       timer = setTimeout(
         finish,
-        window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 220,
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 160,
       );
     }
     return () => {

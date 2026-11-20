@@ -29,7 +29,8 @@ export function RouterProvider({
   children,
   accountDemo = false,
 }) {
-  const [path, setPath] = useState(initialPath);
+  const [path, setPath] = useState(initialPath.split(/[?#]/)[0]);
+  const [search, setSearch] = useState("");
   useEffect(() => {
     const read = () => {
       const next = offline
@@ -37,7 +38,9 @@ export function RouterProvider({
         : location.pathname.slice(base.length) || "/";
       // Ordinary document fragments (including the skip link) are not routes.
       if (!next.startsWith("/")) return;
-      setPath(next.endsWith("/") ? next : next + "/");
+      setSearch(offline ? next.split("?")[1] || "" : location.search);
+      const route = next.split(/[?#]/)[0];
+      setPath(route.endsWith("/") ? route : route + "/");
     };
     window.addEventListener(offline ? "hashchange" : "popstate", read);
     read();
@@ -59,6 +62,7 @@ export function RouterProvider({
       window.location.assign(base + url);
       return;
     }
+    setSearch(url.split("?")[1] || "");
     if (offline) {
       location.hash = url;
       setPath(url.split(/[?#]/)[0]);
@@ -86,7 +90,7 @@ export function RouterProvider({
   }, [path]);
   return (
     <Router.Provider
-      value={{ path, base, offline, accountDemo, go, href, link }}
+      value={{ path, search, base, offline, accountDemo, go, href, link }}
     >
       {children}
     </Router.Provider>

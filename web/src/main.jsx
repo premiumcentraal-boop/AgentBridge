@@ -10,6 +10,7 @@ import "./studio-interface.css";
 import "./studio-refinements.css";
 import "./control-states.css";
 import "./call-room.css";
+import "./product-studio.css";
 const root = document.getElementById("foundation-root");
 const offline = root.dataset.offline === "true";
 const accountDemo = root.dataset.accountDemo === "true";

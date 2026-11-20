@@ -1,6 +1,6 @@
-import React, { useRef, useState } from "react";
-import { A, useRoute } from "./context.jsx";
-import { Btn, Card, Icon, Mark, Pill, Wave } from "./ui.jsx";
+import React, { useEffect, useRef, useState } from "react";
+import { A } from "./context.jsx";
+import { Card, Icon, Mark, Wave } from "./ui.jsx";
 import { SampleRecording } from "./call-tools.jsx";
 import { BotFace } from "./grok-ui.jsx";
 export const EXTENSIONS = [
@@ -9,7 +9,7 @@ export const EXTENSIONS = [
     path: "/international-calling/",
     icon: "globe",
     eyebrow: "INTERNATIONAL CALLING",
-    title: "A little further. Just as familiar.",
+    title: "Call across borders.",
     description:
       "Prepare an international destination and a clear brief. Your original agent stays with the conversation.",
     action: "Explore international calling",
@@ -19,7 +19,7 @@ export const EXTENSIONS = [
     path: "/call-memory/",
     icon: "record",
     eyebrow: "OPTIONAL RECORDING & TRANSCRIPTION",
-    title: "Keep the details you choose.",
+    title: "Recordings and transcripts.",
     description:
       "Return to the audio, search the words and find the result. Recording and transcription are separate choices.",
     action: "Explore call memory",
@@ -28,8 +28,8 @@ export const EXTENSIONS = [
     key: "join",
     path: "/join-call/",
     icon: "join",
-    eyebrow: "LET ME JOIN",
-    title: "A place in the conversation.",
+    eyebrow: "CALL ROOMS",
+    title: "Join the call.",
     description:
       "Step in alongside your agent when a personal explanation or decision needs you. Then leave the agent to continue.",
     action: "Explore joining a call",
@@ -37,23 +37,33 @@ export const EXTENSIONS = [
 ];
 function FeatureArt({ type, interactive = false }) {
   const [joined, setJoined] = useState(false),
-    [country, setCountry] = useState("NL");
+    [country, setCountry] = useState("US");
+  const [countries, setCountries] = useState(null);
+  useEffect(() => {
+    const list =
+      document.getElementById("foundation-root")?.dataset.callbackCountries;
+    if (list !== undefined) setCountries(list.split(","));
+  }, []);
   return (
     <div className={"extension-art extension-art-" + type}>
       {type === "international" ? (
         <>
-          <div className="feature-country">
-            <span>🇺🇸</span>
-            <small>US access</small>
-          </div>
-          <div className="feature-connection-line">
-            <i />
-            <Mark />
-            <i />
-          </div>
-          <div className="feature-country">
-            <span>{{ NL: "🇳🇱", GB: "🇬🇧", DE: "🇩🇪", JP: "🇯🇵" }[country]}</span>
-            <small>{country} destination</small>
+          <div className="country-route">
+            <div className="feature-country">
+              <span>🇺🇸</span>
+              <small>US access</small>
+            </div>
+            <div className="feature-connection-line">
+              <i />
+              <Mark />
+              <i />
+            </div>
+            <div className="feature-country">
+              <span>
+                {{ US: "🇺🇸", NL: "🇳🇱", GB: "🇬🇧", DE: "🇩🇪", JP: "🇯🇵" }[country]}
+              </span>
+              <small>{country} destination</small>
+            </div>
           </div>
           {interactive && (
             <div
@@ -61,7 +71,7 @@ function FeatureArt({ type, interactive = false }) {
               role="group"
               aria-label="Illustrative destination"
             >
-              {["NL", "GB", "DE", "JP"].map((c) => (
+              {["US", "NL", "GB", "DE", "JP"].map((c) => (
                 <button
                   type="button"
                   key={c}
@@ -73,6 +83,18 @@ function FeatureArt({ type, interactive = false }) {
               ))}
             </div>
           )}
+          {interactive && (
+            <small
+              className="art-caption country-eligibility"
+              aria-live="polite"
+            >
+              {!countries
+                ? "Check callback availability in Studio → Agents."
+                : countries.includes(country)
+                  ? "Eligible for agent-requested callbacks on this site. Your carrier must allow the destination."
+                  : "Outside this site’s agent-requested callback countries. You can still save the contact."}
+            </small>
+          )}
         </>
       ) : type === "memory" ? (
         <>
@@ -81,7 +103,7 @@ function FeatureArt({ type, interactive = false }) {
           </div>
           <div className="feature-memory-wave">
             <Wave />
-            <span>Every word, with a place to return.</span>
+            <span>London studio viewing</span>
           </div>
           <div className="feature-transcript-mini">
             <i />
@@ -116,17 +138,17 @@ function FeatureArt({ type, interactive = false }) {
               onClick={() => setJoined(!joined)}
             >
               <Icon name={joined ? "check" : "join"} size={16} />
-              {joined ? "Leave illustration" : "Let me join"}
+              {joined ? "Leave illustration" : "Join sample room"}
             </button>
           ) : (
             <span className="join-art-hint">
               <Icon name="join" size={15} />
-              Room for you
+              Call room
             </span>
           )}
           {interactive && (
             <small className="art-caption">
-              Interactive illustration · No real call or microphone
+              Illustrated call room · Microphone off
             </small>
           )}
         </>
@@ -140,20 +162,6 @@ export function FeatureCards({ standalone = false }) {
       className={"extension-section frame " + (standalone ? "standalone" : "")}
       aria-label="AgentBridge calling extensions"
     >
-      <div className="section-heading">
-        <div>
-          <span className="eyebrow">MORE FROM EVERY CONVERSATION</span>
-          <h2>
-            Reach further.
-            <br />
-            <span>Stay a little closer.</span>
-          </h2>
-        </div>
-        <p>
-          International calling, optional memory and a way to join. Explore the
-          complete flows in the working studio preview.
-        </p>
-      </div>
       <div className="extension-grid">
         {EXTENSIONS.map((feature) => (
           <Card key={feature.key} className="extension-card" padding={0}>
@@ -176,145 +184,99 @@ export function FeatureCards({ standalone = false }) {
 export function Features() {
   return (
     <main id="main" tabIndex={-1}>
-      <section className="page-intro frame">
-        <Pill>THE CALLING EXTENSIONS · PRODUCT PREVIEW</Pill>
-        <h1>
-          One familiar agent.
-          <br />
-          <span>More possibilities.</span>
-        </h1>
-        <p>
-          Connect internationally, choose what to keep and join when a
-          conversation needs you. Explore real pages and sample interactions.
-        </p>
-      </section>
+      <header className="guide-intro frame">
+        <h1>Calling tools</h1>
+        <p>Connect a destination, keep a record and join a call from Studio.</p>
+      </header>
       <FeatureCards standalone />
-      <section className="extension-bottom-note frame">
-        <Icon name="shield" />
-        <p>
-          The website and sample studio are available to explore. Live calling,
-          capture and participant joining require an authorized, configured
-          calling backend.
-        </p>
-      </section>
     </main>
   );
 }
 const COPY = {
   international: {
-    heading: (
-      <>
-        A familiar voice.
-        <br />
-        <span>A further destination.</span>
-      </>
-    ),
+    title: "Call across borders.",
     description:
-      "Your agent calls an access number. AgentBridge is designed to prepare an approved route to the person you need to reach, with the destination, permission and price considered first.",
+      "Save a contact with its country code. Availability depends on the calling method, your workspace and your carrier.",
     steps: [
       [
-        "Choose the destination",
-        "Use the country code and full international number. Save a brief for your agent.",
+        "Save the number",
+        "Enter the complete international number and give the destination a name.",
       ],
       [
-        "Choose your options",
-        "Keep capture off, request a transcript, or request an audio recording after the required permission.",
+        "Check the country",
+        "Studio → Agents lists the countries enabled for agent-requested callbacks. Your SignalWire project must also permit the destination.",
       ],
       [
-        "Review before connecting",
-        "A verified carrier route, caller authorization and price are required before a real call can be placed.",
+        "Review both phones",
+        "Choose the callback phone you will answer. Check the destination and both call legs before confirming.",
       ],
     ],
     faq: [
       [
-        "Are all displayed countries live?",
-        "No. The planner accepts destination details; it does not confirm live carrier coverage. Availability, calling permissions and a verified quote must be checked for each route.",
+        "Does Grok native calling use the same coverage?",
+        "Native Grok calling follows its own US calling rules. An AgentBridge provider callback uses your SignalWire account and its enabled destinations.",
       ],
       [
-        "Does AgentBridge replace my agent?",
-        "The original agent remains the conversational AI. AgentBridge provides the calling route and the surrounding controls.",
-      ],
-      [
-        "Will saving a plan start a call?",
-        "No. Saving a plan stores preparation only. It creates no paid carrier reservation or phone call.",
+        "Does saving a contact dial it?",
+        "Saving a destination adds it to your connections. Calling and forwarding each require a separate action.",
       ],
     ],
   },
   memory: {
-    heading: (
-      <>
-        The conversation ends.
-        <br />
-        <span>The details can stay.</span>
-      </>
-    ),
+    title: "Keep the details you choose.",
     description:
-      "Choose an audio recording, a searchable transcript, or leave both off. Return to an important phrase, the proposed time or the reference you need, with a clear view of what is sample and what is real.",
+      "Record with everyone’s permission, listen back and find a line in the transcript. Hear how it works in this 34-second sample.",
     steps: [
       [
-        "Make a choice",
-        "Recording and transcription are independent and off by default. Save your preferences in the studio.",
+        "Record with permission",
+        "Start or stop recording from the call overview. Capture starts off.",
       ],
       [
-        "Confirm permission",
-        "Capture needs the required notice and permission for the people on the call. A preference never starts capture.",
+        "Find a moment",
+        "Read a saved transcript or transcribe a completed recording with your xAI project. Live captions appear only during the room session.",
       ],
       [
-        "Return to the details",
-        "Explore the sample player, search by phrase or speaker and jump to the matching point in the audio.",
+        "Return to the contact",
+        "Open Calls to see the contact, duration, notes and any saved recordings or transcripts.",
       ],
     ],
     faq: [
       [
-        "Can I have a transcript without keeping audio?",
-        "The product flow supports that preference. A live implementation needs a transcript service and a verified policy for audio processing and provider retention.",
+        "Can I recover audio after a call?",
+        "Only audio captured with recording enabled can be played back. You can request a saved transcript later from an available completed recording.",
       ],
       [
-        "Can I pause recording?",
-        "The sample call includes pause and resume controls. Live recording pause needs authenticated carrier control; a separate live transcription stream must be paused or excluded too when appropriate.",
-      ],
-      [
-        "Is the sample conversation real?",
-        "No. It is an original fictional script with synthetic demonstration voices. The booking, reference and participants are not a real call.",
+        "Who pays for capture?",
+        "Your SignalWire project handles recording and storage. Your xAI project handles optional transcription.",
       ],
     ],
   },
   join: {
-    heading: (
-      <>
-        Your agent calls.
-        <br />
-        <span>You can be there too.</span>
-      </>
-    ),
+    title: "Join the conversation.",
     description:
-      "Some moments need a personal explanation. Join alongside your agent, listen first, add what matters and leave when you’re ready. Your agent can continue the conversation.",
+      "Open a live Studio call room, see the participants and start listening with your microphone off.",
     steps: [
       [
-        "Choose how you join",
-        "The flow supports browser participation or a callback preference. Live joining needs a configured conference connection.",
+        "Enable a room",
+        "Select Enable Studio call room when starting a callback or activating forwarding.",
       ],
       [
-        "Step in on your terms",
-        "Start muted, listen and choose when to speak. The studio shows you alongside the agent and recipient.",
+        "Choose how to join",
+        "After the first phone answers, select Join call. Leave the microphone off to listen, or turn it on to speak.",
       ],
       [
-        "Leave the agent to continue",
-        "Leaving your participant connection is separate from ending the whole call. Try both controls in the sample studio.",
+        "Leave the phones connected",
+        "Mute yourself or a named participant. Leave room exits your browser audio. End call for everyone also disconnects the phones.",
       ],
     ],
     faq: [
       [
-        "Does joining replace the AI agent?",
-        "No. The intended conference flow adds you as another participant. The original agent can remain on the call.",
+        "Does every call have a room?",
+        "Only room-enabled calls have browser audio. Direct phone calls still have a call overview and carrier controls.",
       ],
       [
-        "Will the preview access my microphone or call me?",
-        "No. Joining the sample only changes the demonstration participants. No microphone permission or carrier callback is requested.",
-      ],
-      [
-        "What is needed for a real join?",
-        "An active conference-capable call, verified participant authorization and a configured media connection or callback route. The current number-discovery integration does not provide live joining.",
+        "Can I follow the words?",
+        "In a joined room, turn on live captions after everyone agrees. Completed recordings can be transcribed separately.",
       ],
     ],
   },
@@ -322,106 +284,83 @@ const COPY = {
 export function FeaturePage({ type }) {
   const feature = EXTENSIONS.find((f) => f.key === type),
     copy = COPY[type],
-    sampleRef = useRef();
+    sampleRef = useRef(null);
   return (
-    <main id="main" tabIndex={-1}>
+    <main id="main" tabIndex={-1} className="public-guide">
       <section className="extension-hero frame">
         <div>
-          <Pill>PRODUCT PREVIEW</Pill>
-          <span className="eyebrow">{feature.eyebrow}</span>
-          <h1>{copy.heading}</h1>
+          <h1>{copy.title}</h1>
           <p>{copy.description}</p>
-          <div className="tools-actions">
+          {type === "memory" ? (
+            <button
+              className="product-button"
+              onClick={() => {
+                sampleRef.current?.scrollIntoView({ block: "start" });
+                sampleRef.current
+                  ?.querySelector("audio")
+                  ?.focus({ preventScroll: true });
+              }}
+            >
+              <Icon name="headphones" />
+              Explore the sample
+            </button>
+          ) : (
             <A
-              to={
-                type === "international"
-                  ? "/studio/demo/calls/"
-                  : type === "memory"
-                    ? "/studio/demo/memory/"
-                    : "/studio/demo/call/"
-              }
-              className="ab-button extension-primary"
+              to={type === "international" ? "/connect/" : "/how-it-works/"}
+              className="product-text-action"
             >
               {type === "international"
-                ? "Plan a sample call"
-                : type === "memory"
-                  ? "Open call memory"
-                  : "Try joining the sample call"}
-              <Icon name="arrow" size={16} />
+                ? "Set up a destination"
+                : "How calls work"}{" "}
+              <Icon name="arrow" />
             </A>
-            {type === "memory" && (
-              <Btn
-                label="Try sample playback"
-                end="play"
-                onClick={() =>
-                  sampleRef.current?.scrollIntoView({
-                    block: "start",
-                    behavior: "instant",
-                  })
-                }
-              />
-            )}
-          </div>
+          )}
         </div>
         <FeatureArt type={type} interactive />
       </section>
+      {type === "memory" && (
+        <section
+          className="frame guide-sample"
+          ref={sampleRef}
+          aria-label="Sample call player"
+        >
+          <SampleRecording />
+        </section>
+      )}
       <section className="extension-steps frame">
-        {copy.steps.map(([title, text], i) => (
+        {copy.steps.map(([title, body]) => (
           <article key={title}>
-            <span>0{i + 1}</span>
             <h2>{title}</h2>
-            <p>{text}</p>
+            <p>{body}</p>
           </article>
         ))}
       </section>
-      {type === "memory" && (
-        <section className="public-section frame" ref={sampleRef}>
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">A WORKING SAMPLE</span>
-              <h2>
-                Press play.
-                <br />
-                <span>Find the moment.</span>
-              </h2>
-            </div>
-            <p>
-              Explore a fictional conversation, the matching transcript and a
-              demonstration outcome. Playback stays local.
-            </p>
-          </div>
-          <Card className="public-sample-card" padding={0}>
-            <SampleRecording />
-          </Card>
-        </section>
-      )}
       <section className="extension-faq frame">
+        <h2>Common questions</h2>
         <div>
-          <span className="eyebrow">A LITTLE CLARITY</span>
-          <h2>Good to know.</h2>
-        </div>
-        <div>
-          {copy.faq.map(([question, answer]) => (
-            <details key={question}>
+          {copy.faq.map(([q, a]) => (
+            <details key={q}>
               <summary>
-                {question}
-                <Icon name="plus" size={16} />
+                {q}
+                <Icon name="plus" />
               </summary>
-              <p>{answer}</p>
+              <p>{a}</p>
             </details>
           ))}
         </div>
       </section>
-      <section className="extension-related frame">
-        <span className="eyebrow">CONNECTED POSSIBILITIES</span>
-        {EXTENSIONS.filter((f) => f.key !== type).map((f) => (
+      <nav
+        className="extension-related frame"
+        aria-label="Related calling tools"
+      >
+        {EXTENSIONS.filter((f) => f !== feature).map((f) => (
           <A key={f.key} to={f.path}>
             <Icon name={f.icon} />
             <strong>{f.title}</strong>
-            <Icon name="diagonal" size={15} />
+            <Icon name="arrow" />
           </A>
         ))}
-      </section>
+      </nav>
     </main>
   );
 }
@@ -441,7 +380,7 @@ export function ExtensionShortcuts({ navTo }) {
           "Call memory",
           "Recording and transcripts, if you choose.",
         ],
-        ["call", "join", "Let me join", "A place alongside your agent."],
+        ["call", "join", "Join sample room", "A place alongside your agent."],
       ].map(([page, icon, title, text]) => (
         <A key={page} to={navTo(page)}>
           <Icon name={icon} />

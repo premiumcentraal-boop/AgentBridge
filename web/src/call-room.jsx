@@ -198,21 +198,36 @@ export function CallRoom({
                   : "Unmuted · Demo microphone"}
               </small>
             </div>
-            <Btn
-              label={call.userMuted ? "Unmute" : "Mute"}
-              aria-label={
-                call.userMuted ? "Unmute microphone" : "Mute microphone"
-              }
-              icon={call.userMuted ? "muted" : "mute"}
-              end={null}
-              aria-pressed={!call.userMuted}
-              data-control-state={call.userMuted ? "off" : "enabled"}
-              onClick={onMic}
-              disabled={!call.active}
-            />
           </article>
         )}
       </div>
+      {call.joined && (
+        <div
+          className="personal-call-controls"
+          role="group"
+          aria-label="Your call controls"
+        >
+          <Btn
+            label={call.userMuted ? "Mic off" : "Mic on"}
+            aria-label={
+              call.userMuted ? "Unmute microphone" : "Mute microphone"
+            }
+            icon={call.userMuted ? "muted" : "mute"}
+            end={null}
+            aria-pressed={!call.userMuted}
+            onClick={onMic}
+          />
+          <Btn
+            label={call.muted ? "Speaker off" : "Speaker on"}
+            aria-label={call.muted ? "Unmute speakers" : "Mute speakers"}
+            icon="headphones"
+            end={null}
+            aria-pressed={!call.muted}
+            onClick={onSpeakerMute}
+          />
+          <Btn label="Leave room" end={null} onClick={onLeave} />
+        </div>
+      )}
       {call.joined && (
         <div className="call-room-participant-actions">
           <span>
@@ -235,55 +250,39 @@ export function CallRoom({
       <div className="call-room-capture">
         <CallCaptureControls call={call} onToggle={onCapture} />
       </div>
-      <div className="call-room-toolbar tools-actions">
-        <div>
-          {call.joined && (
+      {call.active ? (
+        <details className="more-call-actions">
+          <summary>Call actions</summary>
+          <div className="call-room-toolbar tools-actions">
             <Btn
-              label={call.muted ? "Unmute speakers" : "Mute speakers"}
-              icon={call.muted ? "muted" : "headphones"}
+              label="Route call"
+              icon="routes"
               end={null}
-              aria-pressed={Boolean(call.muted)}
-              data-control-state={call.muted ? "muted" : "off"}
-              onClick={onSpeakerMute}
+              onClick={onRoute}
             />
-          )}
-          <Btn
-            label="Route call"
-            icon="routes"
-            end={null}
-            disabled={!call.active}
-            onClick={onRoute}
-          />
-          {call.recording && (
+            {call.recording && (
+              <Btn
+                label={
+                  call.recordingPaused ? "Resume recording" : "Pause recording"
+                }
+                icon={call.recordingPaused ? "play" : "pause"}
+                end={null}
+                aria-pressed={Boolean(call.recordingPaused)}
+                onClick={() => onCapture("pause")}
+              />
+            )}
             <Btn
-              label={
-                call.recordingPaused ? "Resume recording" : "Pause recording"
-              }
-              icon={call.recordingPaused ? "play" : "pause"}
-              end={null}
-              aria-pressed={Boolean(call.recordingPaused)}
-              data-control-state={call.recordingPaused ? "paused" : "off"}
-              onClick={() => onCapture("pause")}
-            />
-          )}
-        </div>
-        <div>
-          {call.joined && (
-            <Btn label="Leave call" end={null} onClick={onLeave} />
-          )}
-          {call.active ? (
-            <Btn
-              label="End call"
+              label="End call for everyone"
               icon="end"
               end={null}
               className="call-room-end"
               onClick={onEnd}
             />
-          ) : (
-            <Btn label="Restart call" onClick={onRestart} />
-          )}
-        </div>
-      </div>
+          </div>
+        </details>
+      ) : (
+        <Btn label="Restart call" onClick={onRestart} />
+      )}
       {call.proposedRoute && (
         <p className="call-room-route">
           <Icon name="routes" size={15} />
