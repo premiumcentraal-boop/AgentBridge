@@ -182,4 +182,28 @@ CREATE TABLE owner_actions (id TEXT PRIMARY KEY,reservation_id TEXT NOT NULL,act
   const originalAudit=await secondDb.prepare('SELECT id FROM owner_actions WHERE reservation_id=?').bind(id).first();
   assert.equal(originalAudit?.id,'http-retry',
     'successful retry after a rolled-back pre-commit failure must create its own audit');
+  // Concurrent authenticated HTTP requests against distinct D1 bindings must
+  // have a single winner. The first adapter deliberately loses its response
+  // only if its transaction commits; the second adapter returns HTTP 200.
+  // Either may win, so assert the invariant rather than request ordering.
+  await seed();
+  const competing=await Promise.allSettled([send(firstPort),send(retryPort)]);
+  const outcomes=competing.map(result=>{
+    if(result.status==='rejected'){
+      assert.equal(result.reason?.code,'ECONNRESET',
+        'only a post-commit socket drop is an expected transport failure');
+      return 'committed-without-response';
+    }
+    assert.ok([200,409].includes(result.value.status),
+      'unexpected HTTP status from racing owner recovery');
+    return result.value.status===200?'committed':'rejected';
+  });
+  assert.equal(outcomes.filter(x=>x.startsWith('committed')).length,1,
+    'exactly one concurrent HTTP request may commit');
+  assert.equal(outcomes.filter(x=>x==='rejected').length,1,
+    'the competing HTTP request must fail closed');
+  assert.deepEqual(await state(),{status:'failed',audits:1},
+    'HTTP race across two D1 bindings must persist exactly one transition and audit');
+  assert.equal((await secondDb.prepare('SELECT COUNT(*) AS n FROM owner_actions').first()).n,1,
+    'both bindings must agree on the single durable audit after the HTTP race');
 });
