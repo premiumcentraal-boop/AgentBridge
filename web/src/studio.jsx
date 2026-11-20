@@ -49,7 +49,7 @@ import { DEFAULT_CAPTURE, CALL_COUNTRIES } from "../../shared/call-plans.mjs";
 import { BotFace } from "./grok-ui.jsx";
 import { RoutingReview } from "./connection-hub.jsx";
 import sampleAudio from "./samples/sample-call.mp3";
-import { ActiveCallCard, StudioDrawer } from "./studio-navigation.jsx";
+import { ActiveCallCard, StudioDrawer, currentCarrierCalls, carrierCallView } from "./studio-navigation.jsx";
 import {
   NumberWorkspace,
   ConnectionEditor,
@@ -64,6 +64,7 @@ const empty = () => ({
   call_history: [],
   contact_memories: [],
   capture_preferences: { ...DEFAULT_CAPTURE },
+  calls: [],
   routes: [],
   events: [],
   settings: { experience: "simple" },
@@ -81,7 +82,7 @@ const uuid = () =>
     ? crypto.randomUUID()
     : `draft-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 export function Studio({ mode, setMode, isDemo }) {
-  const { path, base, offline, accountDemo, href, link, go } = useRoute();
+  const { path, search, base, offline, accountDemo, href, link, go } = useRoute();
   const studioBase = isDemo ? "/studio/demo/" : "/studio/";
   const current =
     path.replace(/^\/(?:studio\/(?:demo\/)?|app\/)/, "").split("/")[0] ||
@@ -153,7 +154,7 @@ export function Studio({ mode, setMode, isDemo }) {
   const [routingDestination, setRoutingDestination] = useState("");
   const sampleAudioRef = useRef(null);
   const samplePlayAttempt = useRef(0);
-  const [call, setCall] = useState({
+  const [demoCall, setCall] = useState({
       id: isDemo ? "sample-current-london" : undefined,
       connection_id: isDemo ? "connection-demo-london" : undefined,
       started_at: new Date(Date.now() - 18_000).toISOString(),
@@ -178,6 +179,8 @@ export function Studio({ mode, setMode, isDemo }) {
       message: "Connect a private backend to inspect your assigned number.",
     }),
     [checking, setChecking] = useState(false);
+  const call = liveMode ? carrierCallView(currentCarrierCalls(snapshot)[0], snapshot) : demoCall;
+  const historyFilter = current === "memory" ? new URLSearchParams(search).get("filter") === "transcript" ? "transcript" : "recording" : "all";
   const toastTimer = useRef();
   const notify = (text) => {
     setMessage(text);
@@ -216,10 +219,8 @@ export function Studio({ mode, setMode, isDemo }) {
         const data = await api("session");
         if (!alive) return;
         setSession({ ...data, loading: false });
-        if (data.authenticated) {
-          const state = await api(
-            data.provider_live_enabled ? "live/overview" : "overview",
-          );
+        if (data.authenticated && !data.provider_live_enabled) {
+          const state = await api("overview");
           if (alive) {
             setSnapshot({ ...empty(), ...state });
             if (
@@ -1042,15 +1043,9 @@ export function Studio({ mode, setMode, isDemo }) {
   };
   const selectSearchResult = (entry) => {
     if (liveMode) {
-      go(
-        navTo(
-          entry.action === "buy" || entry.action === "number"
-            ? "numbers"
-            : ["connect", "connection", "country"].includes(entry.action)
-              ? "connections"
-              : entry.page || "overview",
-        ),
-      );
+      const target = ["buy", "number"].includes(entry.action) ? "numbers" : ["connect", "connection", "country"].includes(entry.action) ? "connections" : entry.page || "overview";
+      setSearchTarget({ id: uuid(), page: target, action: entry.action, query: entry.action === "connection" ? entry.record.destination : entry.action === "number" ? entry.record.e164 : "", country: entry.action === "country" ? entry.record.code : "all" });
+      go(navTo(target) + (target === "call" && call.id ? "?id=" + encodeURIComponent(call.id) : ""));
       return;
     }
     if (entry.action === "buy") setBuyNumberOpen(true);
@@ -1142,7 +1137,7 @@ export function Studio({ mode, setMode, isDemo }) {
         ))}
       </div>
       <div className="studio-nav-secondary">
-        {NAV.filter(([id]) => !primaryIds.includes(id)).map(([id, label]) => (
+        {NAV.filter(([id]) => !primaryIds.includes(id) && !["design", "activity"].includes(id)).map(([id, label]) => (
           <a
             key={id}
             href={href(navTo(id))}
@@ -1234,7 +1229,11 @@ export function Studio({ mode, setMode, isDemo }) {
           </div>
         )}
         <main className="workspace-main" id="main" tabIndex={-1}>
-          {page==='overview' && session.account && <SetupChecklist/>}
+
+          {liveMode && <LiveWorkspace page={page} account={session.account} data={snapshot}
+            initialHistoryFilter={historyFilter} searchTarget={searchTarget}
+            onSignout={signout} pathFor={navTo} navTo={(target, id) => go(navTo(target) + (id ? "?id=" + encodeURIComponent(id) : ""))}
+            onState={setSnapshot} />}
           {page === "agents" ? (
             <AgentsStudio api={api} isDemo={isDemo} />
           ) : page === "connection" && session.account ? (
@@ -1243,41 +1242,7 @@ export function Studio({ mode, setMode, isDemo }) {
               <SignalWireSettings />
               <TranscriptionSettings />
             </div>
-          ) : liveMode && page !== "design" ? (
-            <LiveWorkspace
-              initialHistoryFilter={current === "memory" ? "recording" : "all"}
-              page={page}
-              account={session.account}
-              onSignout={signout}
-              navTo={(target, callId) => go(navTo(target) + (callId ? "?id=" + encodeURIComponent(callId) : ""))}
-              onModeChange={() => location.reload()}
-              onState={(state) => {
-                setSnapshot({ ...empty(), ...state });
-                const active = (state.calls || []).find(
-                  (c) => c.status === "in-progress" && !c.parent_call_id && (!c.room_call_id || c.room_call_id === c.id),
-                );
-                const route =
-                  active &&
-                  (state.connections || []).find(
-                    (c) => c.destination === active.to,
-                  );
-                setCall(
-                  active
-                    ? {
-                        ...active,
-                        active: true,
-                        label: active.label || route?.label || active.to,
-                        destination: active.destination || active.to,
-                        routing_number: active.routing_number || active.from,
-                        elapsed: active.duration,
-                        muted: false,
-                        joined: false,
-                      }
-                    : { active: false, elapsed: 0 },
-                );
-              }}
-            />
-          ) : ["calls", "memory", "call"].includes(page) ? (
+          ) : liveMode && page !== "design" ? null : ["calls", "memory", "call"].includes(page) ? (
             <>
             <CallExtensions
               page={page}
@@ -1304,7 +1269,7 @@ export function Studio({ mode, setMode, isDemo }) {
               onDeleteNote={deleteCallNote}
               onHistoryCapture={historyCapture}
               onMemory={setMemoryContact}
-              initialHistoryFilter={current === "memory" ? "recording" : "all"}
+              initialHistoryFilter={historyFilter}
             />
             {session.account && <AgentReportedCalls/>}
             </>
@@ -1317,6 +1282,8 @@ export function Studio({ mode, setMode, isDemo }) {
               snapshot={snapshot}
               call={call}
               navTo={navTo}
+              setupStep={session.account && <SetupChecklist snapshot={snapshot}/>}
+              showSetupAfterCall={persistentDemo}
               onOpenCall={openCall}
               onToggleCapture={sandbox ? toggleCapture : undefined}
               onMemory={setMemoryContact}
@@ -1378,6 +1345,7 @@ export function Studio({ mode, setMode, isDemo }) {
               mode={mode}
               setMode={setMode}
               save={saveGuidance}
+              navTo={navTo}
               exportData={exportData}
               signout={signout}
               account={session.account}
@@ -1723,6 +1691,7 @@ function Settings({
   mode,
   setMode,
   save,
+  navTo,
   exportData,
   signout,
   isDemo,
@@ -1732,10 +1701,14 @@ function Settings({
     [error, setError] = useState("");
   return (
     <>
-      {providerSettings && <SignalWireSettings />}
-      {providerSettings && <TranscriptionSettings />}
+
       {account && <AccountProfile account={account} onSave={saveAccount} />}
       <PageHead eyebrow="" title="Settings" description="" />
+      <nav className="settings-links" aria-label="Workspace resources">
+        {providerSettings && <A to={navTo("connection")}>Calling setup <Icon name="arrow"/></A>}
+        <A to={navTo("activity")}>Activity <Icon name="arrow"/></A>
+        <A to={navTo("design")}>Design gallery <Icon name="arrow"/></A>
+      </nav>
       <div className="studio-data-source">
         <span>Data source</span>
         <strong>{isDemo ? "Example data" : "Private workspace"}</strong>

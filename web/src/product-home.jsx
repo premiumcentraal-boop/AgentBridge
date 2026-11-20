@@ -1,194 +1,255 @@
-import React from "react";
+import React, { useRef, useState } from "react";
 import { A, useRoute } from "./context.jsx";
-import { Btn, Icon } from "./ui.jsx";
-import { BotFace, LandingActivity } from "./grok-ui.jsx";
+import { BotFace } from "./grok-ui.jsx";
+import { Icon, Wave } from "./ui.jsx";
 import { WorldNetwork } from "./world-network.jsx";
+import sample from "./samples/sample-call.json";
+import audioFile from "./samples/sample-call.mp3";
 
-function SignupEntry({ label = "Sign me up" }) {
-  const { href, link } = useRoute();
+export function PublicEntry({
+  children = "Sign me up",
+  fallback = "Hear a sample call",
+}) {
   return (
-    <Btn
-      label={label}
-      primary
-      href={href("/signup/")}
-      onClick={(event) => link(event, "/signup/")}
-      end="arrow"
-    />
+    <>
+      <A className="product-button signup-open" to="/signup/">
+        {children}
+        <Icon name="arrow" />
+      </A>
+      <A className="product-button signup-closed" to="/call-memory/">
+        {fallback}
+        <Icon name="arrow" />
+      </A>
+    </>
   );
 }
 
+const minutes = (seconds) =>
+  "0:" + String(Math.floor(seconds)).padStart(2, "0");
+
 export function ProductHome() {
+  const audio = useRef(null);
+  const transcript = useRef(null);
+  const [playing, setPlaying] = useState(false),
+    [position, setPosition] = useState(0);
+  const [error, setError] = useState(false);
+  const { href } = useRoute();
+  const label = playing
+    ? "Pause sample"
+    : position >= sample.duration - 0.1
+      ? "Replay sample call"
+      : position > 0
+        ? "Resume sample"
+        : "Play sample call";
+  async function toggle(event) {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+      return;
+    event.preventDefault();
+    const player = audio.current;
+    if (!player) return;
+    if (!player.paused) {
+      player.pause();
+      return;
+    }
+    setError(false);
+    try {
+      if (player.ended) player.currentTime = 0;
+      await player.play();
+    } catch {
+      setError(true);
+      transcript.current.open = true;
+    }
+  }
+  const lines = sample.transcript.filter((line) => line.start <= position);
+  const agent = lines.findLast((line) => line.speaker === "Agent");
+  const recipient =
+    lines.findLast((line) => line.speaker === "Recipient") ||
+    sample.transcript[1];
+  const speaking =
+    playing && agent && position < agent.end && position >= agent.start;
   return (
-    <main id="main" tabIndex={-1} className="gb-product-home">
-      <section className="gb-product-hero frame">
-        <div className="gb-hero-copy">
-          <h1 aria-label="Connect agents worldwide">
+    <main id="main" tabIndex={-1} className="product-redesign">
+      <section className="product-hero frame" aria-label="AgentBridge calling">
+        <div className="product-hero-copy">
+          <h1>
             Connect agents
-            <br /> <span>worldwide</span>
+            <br /> worldwide
           </h1>
           <p>
-            Bring your agents to the conversation.
-            <br />
-            See the call. Follow the words. Listen in.
+            Connect a phone number, follow the conversation and join when you’re
+            needed.
           </p>
-          <div className="gb-hero-actions">
-            <SignupEntry />
-            <A to="/studio/">
-              Open studio <Icon name="arrow" size={16} />
+          <div className="gb-hero-actions product-actions">
+            <A to="/signup/" className="product-button signup-open">
+              Sign me up <Icon name="arrow" />
             </A>
+            <a
+              className="product-button signup-closed"
+              href={href("/call-memory/")}
+              onClick={toggle}
+              aria-controls="hero-audio"
+            >
+              <Icon name={playing ? "pause" : "play"} />
+              {label}
+            </a>
           </div>
         </div>
-        <LandingActivity />
-      </section>
-      <section
-        className="gb-everyday frame"
-        aria-label="Connection, made simple"
-      >
-        <div className="gb-section-heading">
-          <h2>
-            Agentic calling.
-            <br />
-            <span>Made easy.</span>
-          </h2>
-          <p>
-            Connect your agents to people and businesses worldwide. Start a
-            call, follow the conversation and jump in when it needs you.
-          </p>
-        </div>
-        <div className="gb-workflow-grid">
-          <A to="/studio/demo/connections/" className="gb-workflow-card">
-            <div className="gb-memory-art">
+        <div className="call-specimen">
+          <WorldNetwork />
+          <div className="specimen-content">
+            <div className="specimen-heading">
               <div>
-                <BotFace size={46} tone="teal" />
-                <strong>
-                  London studio <span aria-hidden="true">🇬🇧</span>
-                </strong>
+                <h2>London studio viewing</h2>
+                <small>Sample call · Synthetic voices</small>
               </div>
-              <p>Last call: ask about access to reception.</p>
-              <small>Contact saved · Context for next time</small>
+              <div className="specimen-time">
+                <Wave animated={playing} muted={!playing} />
+                <time>{minutes(position)} / 0:34</time>
+              </div>
             </div>
-            <span className="gb-step-number">01 / CONNECT</span>
-            <h3>
-              Your contacts.
-              <br />
-              Ready to call.
-            </h3>
-            <p>
-              Save contacts and keep notes from past conversations, ready for
-              your agent’s next call.
-            </p>
-            <span className="gb-card-action">
-              Save a contact <Icon name="arrow" size={16} />
-            </span>
-          </A>
-          <A to="/studio/demo/calls/" className="gb-workflow-card">
-            <div className="gb-transcript-art">
-              <div>
-                <BotFace size={28} tone="teal" />
-                <span>Asking about a viewing…</span>
-              </div>
-              <div>
-                <span>LD</span>
-                <span>Tuesday at 10:30 works.</span>
-              </div>
-              <small>00:18 · Important moment saved</small>
-            </div>
-            <span className="gb-step-number">02 / FOLLOW</span>
-            <h3>
-              Keep the conversation.
-              <br />
-              And the important parts.
-            </h3>
-            <p>
-              Record with permission, read the transcript, and save highlights
-              you’ll want to revisit.
-            </p>
-            <span className="gb-card-action">
-              Explore call history <Icon name="arrow" size={16} />
-            </span>
-          </A>
-          <A to="/join-call/" className="gb-workflow-card">
-            <div className="gb-listen-art has-chat">
-              <BotFace size={68} state="working" tone="purple" />
-              <span className="gb-listen-chip">
-                <Icon name="headphones" size={18} /> Listening
+            <div className="specimen-line">
+              <span className="specimen-speaker">
+                <BotFace size={26} state={speaking ? "working" : "idle"} />
+                <b>Your agent</b>
               </span>
-              <div className="gb-join-chat">
-                <span>
-                  <strong>You joined the conversation.</strong>
+              <p>
+                {position > 0
+                  ? agent?.text
+                  : "Could we arrange a studio viewing for Tuesday morning?"}
+              </p>
+            </div>
+            <div className="specimen-line">
+              <span className="specimen-speaker">
+                <span className="reception-avatar" aria-hidden="true">
+                  R
                 </span>
-                <span>You: “I’ll take it from here.”</span>
-                <div className="gb-join-control">
-                  <Icon name="pause" size={14} />
-                  <span>Pause agent</span>
-                  <Icon name="muted" size={14} />
+                <b>Reception</b>
+              </span>
+              <p>{recipient.text}</p>
+            </div>
+            <div className="specimen-progress" aria-hidden="true">
+              <i
+                style={{
+                  width:
+                    Math.min(100, (position / sample.duration) * 100) + "%",
+                }}
+              />
+            </div>
+            <a
+              className="product-text-action signup-open"
+              href={href("/call-memory/")}
+              onClick={toggle}
+              aria-controls="hero-audio"
+            >
+              <Icon name={playing ? "pause" : "play"} />
+              {label}
+            </a>
+            <details ref={transcript} className="specimen-transcript">
+              <summary>Read transcript</summary>
+              <ol>
+                {sample.transcript.map((line) => (
+                  <li key={line.id}>
+                    <small>
+                      {minutes(line.start)} ·{" "}
+                      {line.speaker === "Agent" ? "Your agent" : "Reception"}
+                    </small>
+                    <p>{line.text}</p>
+                  </li>
+                ))}
+              </ol>
+            </details>
+            {error && (
+              <p role="status">
+                Audio couldn’t play here. The full transcript is open.
+              </p>
+            )}
+            <audio
+              ref={audio}
+              id="hero-audio"
+              src={audioFile}
+              preload="none"
+              onTimeUpdate={(e) => setPosition(e.currentTarget.currentTime)}
+              onPlay={() => setPlaying(true)}
+              onPause={() => setPlaying(false)}
+              onEnded={() => setPlaying(false)}
+            />
+          </div>
+        </div>
+      </section>
+      <section className="product-story frame" aria-labelledby="story-heading">
+        <header>
+          <h2 id="story-heading">One call, from start to finish.</h2>
+        </header>
+        <div className="story-grid">
+          <article>
+            <div className="story-art contact-art">
+              <div className="sample-contact">
+                <span className="contact-monogram">L</span>
+                <div>
+                  <strong>London studio</strong>
+                  <small>Saved contact</small>
                 </div>
               </div>
+              <p>Next time, ask for reception.</p>
             </div>
-            <span className="gb-step-number">03 / JOIN</span>
-            <h3>
-              Join the conversation.
-              <br />
-              Take over when needed.
-            </h3>
+            <h3>Remember the contact.</h3>
             <p>
-              Follow your agent’s call and step in when it matters, with clear
-              controls close at hand.
+              Save the number and a note. Your agent can check the last
+              conversation before the next call.
             </p>
-            <span className="gb-card-action">
-              See how joining works <Icon name="arrow" size={16} />
-            </span>
-          </A>
+            <A to="/connect/" className="product-text-action">
+              Connect a destination <Icon name="arrow" />
+            </A>
+          </article>
+          <article>
+            <div className="story-art time-art">
+              <Icon name="transcript" size={26} />
+              <div>
+                <small>0:11 · Your agent</small>
+                <p>Ten thirty London time works.</p>
+              </div>
+            </div>
+            <h3>Keep the details.</h3>
+            <p>
+              Record with permission, read a saved transcript and find the
+              moment you want to revisit.
+            </p>
+            <A to="/call-memory/" className="product-text-action">
+              Explore call history <Icon name="arrow" />
+            </A>
+          </article>
+          <article>
+            <div className="story-art join-art">
+              <BotFace size={42} />
+              <div>
+                <strong>You joined the call</strong>
+                <small>
+                  <Icon name="muted" size={14} /> Your microphone is off
+                </small>
+              </div>
+            </div>
+            <h3>Join when it matters.</h3>
+            <p>
+              See who’s on the line. Listen first, then turn on your microphone
+              when you want to speak.
+            </p>
+            <A to="/join-call/" className="product-text-action">
+              See the call room <Icon name="arrow" />
+            </A>
+          </article>
         </div>
       </section>
-      <section className="gb-world-section frame">
-        <div className="gb-world-copy">
-          <span className="gb-hero-kicker">INTERNATIONAL CALLING</span>
-          <h2>
-            Same agent.
-            <br />
-            <span>Bigger reach.</span>
-          </h2>
-          <p>
-            Connect your agent to people and businesses in other countries. Keep
-            the same agent, voice and conversation.
-          </p>
-          <A className="gb-card-action" to="/international-calling/">
-            Explore international calling <Icon name="arrow" size={17} />
-          </A>
-        </div>
-        <WorldNetwork />
-      </section>
-      <section className="gb-control-section frame">
-        <div className="gb-control-visual">
-          <BotFace size={132} state="working" tone="teal" />
-          <span className="gb-control-tag">
-            <Icon name="headphones" size={16} /> Listen in
-          </span>
-          <span className="gb-control-tag">
-            <Icon name="transcript" size={16} /> Follow along
-          </span>
-          <span className="gb-control-tag">
-            <Icon name="routes" size={16} /> Review routing
-          </span>
-        </div>
+      <section className="product-close frame">
         <div>
-          <span className="gb-hero-kicker">CALLS, TRANSCRIPTS & ROUTING</span>
-          <h2>
-            Your agent.
-            <br />
-            <span>Connected to the world.</span>
-          </h2>
+          <h2>Same agent. Bigger reach.</h2>
           <p>
-            See who’s on the line, follow the transcript and choose when to
-            listen or join. Keep calls, connections and routing in one
-            workspace.
+            See how country availability, forwarding and outbound callbacks work
+            with your own number.
           </p>
-          <SignupEntry />
-          <A to="/call-memory/" className="gb-secondary-link">
-            See recording & transcripts <Icon name="arrow" size={15} />
-          </A>
         </div>
+        <A to="/international-calling/" className="product-button quiet">
+          Explore international calling <Icon name="arrow" />
+        </A>
       </section>
     </main>
   );

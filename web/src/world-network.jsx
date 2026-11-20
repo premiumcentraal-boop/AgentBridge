@@ -401,7 +401,6 @@ export function WorldNetwork() {
         <Scene prefix={prefix} svgRef={svgRef} />
       </div>
       <div className="world-map-footer">
-        <span>Many routes. One connected world.</span>
         <IconBtn
           label={
             paused ? "Play connection animation" : "Pause connection animation"

@@ -322,7 +322,7 @@ test("the hosted tester creates a real account, pairs an API-owned number, calls
   assert.equal(snapshot.demo_call.agentMuted, true);
   assert.equal(snapshot.demo_call.joined, true);
   assert.equal(snapshot.demo_call.userMuted, false);
-  named(document, "Leave call").click();
+  named(document, "Leave room").click();
   await until(() => !document.querySelector(".call-room.is-joined"));
   const settings = document.querySelector(
     '.floating-rail a[aria-label="Settings"]',

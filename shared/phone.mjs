@@ -3,6 +3,11 @@ import {
   isSupportedCountry,
 } from "libphonenumber-js";
 
+export function displayPhone(value) {
+  if (!value) return "";
+  return parsePhoneNumberFromString(value, { extract: false })?.formatInternational() || value;
+}
+
 export function canonicalPhone(value, country) {
   if (typeof value !== "string" || value.length > 80 || /[a-z@#*]/i.test(value))
     return null;

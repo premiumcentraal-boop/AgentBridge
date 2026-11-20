@@ -2,8 +2,8 @@ import React, { useEffect, useId, useState } from "react";
 import { A, useRoute } from "./context.jsx";
 import { BotFace } from "./grok-ui.jsx";
 import { Btn, Icon } from "./ui.jsx";
-import { AccountData } from './launch-settings.jsx';
-import {agentReturnPath} from '../../shared/return-path.mjs';
+import { AccountData } from "./launch-settings.jsx";
+import { agentReturnPath } from "../../shared/return-path.mjs";
 
 export async function accountRequest(endpoint, options = {}) {
   const response = await fetch("/api/auth/" + endpoint, {
@@ -26,7 +26,13 @@ function accountReturnPath() {
       : "");
   return agentReturnPath(target);
 }
-const authLink=path=>{const target=accountReturnPath();return path+(target==='/studio/'?'':'?return_to='+encodeURIComponent(target));};
+const authLink = (path) => {
+  const target = accountReturnPath();
+  return (
+    path +
+    (target === "/studio/" ? "" : "?return_to=" + encodeURIComponent(target))
+  );
+};
 export function AccountAuth({ signup = false, embedded = false }) {
   const { offline, go } = useRoute(),
     id = useId();
@@ -74,13 +80,12 @@ export function AccountAuth({ signup = false, embedded = false }) {
   const emailSignup = signup && session?.email_verification_required;
   const body = (
     <>
-      <span className="hub-kicker">AGENTBRIDGE ACCOUNT</span>
-      <h2>{signup ? "Create your account." : "Welcome back."}</h2>
+      <h1>{signup ? "Create your account" : "Sign in to Studio"}</h1>
       {offline ? (
         <div className="account-offline">
           <p>
-            Accounts need the online demo. This portable file keeps its sample
-            workspace separate.
+            Open the hosted site to create or sign in to an account. You can
+            explore the sample Studio here.
           </p>
           <A to="/studio/demo/" className="gb-secondary-link">
             Open the sample studio <Icon name="arrow" size={16} />
@@ -96,9 +101,7 @@ export function AccountAuth({ signup = false, embedded = false }) {
           </A>
         </div>
       ) : !session.configured ? (
-        <p>
-          The account service needs to be configured before you can sign in.
-        </p>
+        <p>Sign-in is currently unavailable.</p>
       ) : notice ? (
         <div className="account-email-notice" role="status">
           <BotFace size={60} state="idle" />
@@ -120,10 +123,11 @@ export function AccountAuth({ signup = false, embedded = false }) {
           <p>
             {session.signup_mode === "public"
               ? "Email signup is being configured. Please try again shortly."
-              : session.account_exists
-                ? "The tester account is already registered."
-                : "Registration is available by private invitation."}
+              : "Public signup is currently closed. You can hear a sample call or sign in to an existing account."}
           </p>
+          <A to="/call-memory/" className="gb-secondary-link">
+            Hear a sample call <Icon name="play" size={16} />
+          </A>
           <A to="/signin/" className="gb-secondary-link">
             Sign in <Icon name="arrow" size={16} />
           </A>
@@ -170,7 +174,7 @@ export function AccountAuth({ signup = false, embedded = false }) {
                     name: value.name,
                     email: value.email,
                     agent_name: value.agent_name,
-                    ...(emailSignup ? {return_to: accountReturnPath()} : {}),
+                    ...(emailSignup ? { return_to: accountReturnPath() } : {}),
                     ...(platform || emailSignup
                       ? {}
                       : {
@@ -308,27 +312,17 @@ export function AccountAuth({ signup = false, embedded = false }) {
   if (embedded)
     return (
       <main id="main" tabIndex={-1} className="account-access">
-        <h1 className="sr-only">Sign in to AgentBridge</h1>
         <section className="signup-card" aria-label="Account sign in">
           {body}
         </section>
       </main>
     );
   return (
-    <main id="main" tabIndex={-1} className="signup-page frame">
-      <div className="signup-intro">
-        <BotFace size={94} tone="teal" state="idle" />
-        <h1>
-          {signup ? "Your agent." : "Your account."}
-          <br />
-          <span>{signup ? "Connected." : "Connected."}</span>
-        </h1>
-        <p>
-          {signup
-            ? "Set up your account, choose a demo number and connect your first destination."
-            : "Your connections, calls and preferences are saved in your account."}
-        </p>
-      </div>
+    <main
+      id="main"
+      tabIndex={-1}
+      className="signup-page account-form-page frame"
+    >
       <section
         className="signup-card"
         aria-label={signup ? "Create account" : "Account sign in"}
@@ -376,30 +370,16 @@ export function AccountEmail({ mode }) {
   const title = forgot
     ? "Forgot your password?"
     : verify
-      ? "One last connection."
+      ? "Verify your email"
       : "Choose a new password.";
   return (
-    <main id="main" tabIndex={-1} className="signup-page frame">
-      <div className="signup-intro">
-        <BotFace size={94} state="idle" />
-        <h1>
-          {forgot ? "Back in." : verify ? "You’re almost" : "A fresh"}
-          <br />
-          <span>
-            {forgot ? "Connected." : verify ? "connected." : "start."}
-          </span>
-        </h1>
-        <p>
-          {forgot
-            ? "We’ll email you a link to get back to your workspace."
-            : verify
-              ? "Verify your email and choose a password to open your studio."
-              : "Your numbers, connections and preferences stay right where you left them."}
-        </p>
-      </div>
+    <main
+      id="main"
+      tabIndex={-1}
+      className="signup-page account-form-page frame"
+    >
       <section className="signup-card" aria-label={title}>
-        <span className="hub-kicker">AGENTBRIDGE ACCOUNT</span>
-        <h2>{title}</h2>
+        <h1>{title}</h1>
         {offline ? (
           <p>Account emails need the hosted website.</p>
         ) : !session ? (
@@ -574,66 +554,70 @@ export function AccountProfile({ account, onSave }) {
     [account.name, account.agent_name],
   );
   return (
-    <><section className="account-profile-card">
-      <h2>Your account</h2>
-      <p>
-        {account.email}
-      </p>
-      <form
-        onSubmit={async (event) => {
-          event.preventDefault();
-          setBusy(true);
-          setError("");
-          try {
-            await onSave(value);
-          } catch (error) {
-            setError(error.message);
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <label htmlFor={id + "name"}>
-          Your name
-          <input
-            id={id + "name"}
-            required
-            maxLength={80}
-            autoComplete="name"
-            value={value.name}
-            onChange={(event) =>
-              setValue((current) => ({ ...current, name: event.target.value }))
+    <>
+      <section className="account-profile-card">
+        <h2>Your account</h2>
+        <p>{account.email}</p>
+        <form
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setBusy(true);
+            setError("");
+            try {
+              await onSave(value);
+            } catch (error) {
+              setError(error.message);
+            } finally {
+              setBusy(false);
             }
+          }}
+        >
+          <label htmlFor={id + "name"}>
+            Your name
+            <input
+              id={id + "name"}
+              required
+              maxLength={80}
+              autoComplete="name"
+              value={value.name}
+              onChange={(event) =>
+                setValue((current) => ({
+                  ...current,
+                  name: event.target.value,
+                }))
+              }
+            />
+          </label>
+          <label htmlFor={id + "agent"}>
+            Agent name
+            <input
+              id={id + "agent"}
+              required
+              maxLength={80}
+              value={value.agent_name}
+              onChange={(event) =>
+                setValue((current) => ({
+                  ...current,
+                  agent_name: event.target.value,
+                }))
+              }
+            />
+          </label>
+          {error && (
+            <p role="alert" className="form-error">
+              {error}
+            </p>
+          )}
+          <Btn
+            label={busy ? "Saving…" : "Save account"}
+            primary
+            type="submit"
+            disabled={busy}
+            end={null}
           />
-        </label>
-        <label htmlFor={id + "agent"}>
-          Agent name
-          <input
-            id={id + "agent"}
-            required
-            maxLength={80}
-            value={value.agent_name}
-            onChange={(event) =>
-              setValue((current) => ({
-                ...current,
-                agent_name: event.target.value,
-              }))
-            }
-          />
-        </label>
-        {error && (
-          <p role="alert" className="form-error">
-            {error}
-          </p>
-        )}
-        <Btn
-          label={busy ? "Saving…" : "Save account"}
-          primary
-          type="submit"
-          disabled={busy}
-          end={null}
-        />
-      </form>
-    </section><AccountData account={account}/></>
+        </form>
+      </section>
+      <AccountData account={account} />
+    </>
   );
 }

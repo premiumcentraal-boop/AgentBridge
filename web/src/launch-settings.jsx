@@ -55,12 +55,20 @@ export function TranscriptionSettings() {
         </span>
         <div>
           <h2>Transcription</h2>
-          <p>{status?.live_transcription ? "Live captions and saved recordings." : "Turn a saved recording into text."}</p>
+          <p>
+            {status?.live_transcription
+              ? "Live captions and saved recordings."
+              : "Turn a saved recording into text."}
+          </p>
         </div>
         {status?.configured && <Pill>Key saved</Pill>}
       </div>
       <p className="provider-muted">
-        Your xAI project pays for transcription. Audio is sent when you confirm {status?.live_transcription ? "live captions or transcription of a saved recording" : "transcription of a saved recording"}.
+        Your xAI project pays for transcription. Audio is sent when you confirm{" "}
+        {status?.live_transcription
+          ? "live captions or transcription of a saved recording"
+          : "transcription of a saved recording"}
+        .
       </p>
       <form
         onSubmit={(e) => {
@@ -501,80 +509,66 @@ export function AgentReportedCalls() {
   );
 }
 
-export function SetupChecklist() {
+export function SetupChecklist({ snapshot, live = false }) {
   const [data, setData] = useState(null);
   useEffect(() => {
     let alive = true;
     request("studio/agents")
-      .then((result) => alive && setData(result))
+      .then((result) => {
+        if (alive) setData(result.setup);
+      })
       .catch(() => {});
     return () => {
       alive = false;
     };
   }, []);
   if (!data) return null;
-  const appReady = data.grants.some((grant) => !grant.revoked_at),
-    setup = data.setup;
-  if (
-    setup.provider_connected &&
-    setup.live_enabled &&
-    setup.numbers &&
-    appReady
-  )
-    return null;
+  const hasNumber = live
+    ? snapshot.routing_numbers.some((n) => n.status === "owned")
+    : Boolean(data.numbers);
+  const hasConnection =
+    live && snapshot.connections.some((c) => c.status === "saved");
+  let step;
+  if (!data.provider_connected || !data.live_enabled)
+    step = [
+      "connection",
+      "key",
+      "Connect SignalWire",
+      data.provider_connected
+        ? "Enable your project for live calls."
+        : "Add the project you’ll use for numbers and calls.",
+    ];
+  else if (!hasNumber)
+    step = [
+      "numbers",
+      "numbers",
+      "Get a routing number",
+      "Use an owned number or choose one from SignalWire.",
+    ];
+  else if (!hasConnection)
+    step = [
+      "connections",
+      "connection",
+      "Connect a destination",
+      "Pair your routing number with a contact.",
+    ];
+  else if (!snapshot.calls?.length && !snapshot.call_history?.length)
+    step = [
+      "connections",
+      "calls",
+      "Try your first callback",
+      "Open a contact and choose Test callback.",
+    ];
+  if (!step) return null;
   return (
     <section className="agent-panel setup-checklist" aria-label="Account setup">
-      <h2>Your setup</h2>
-      <A to="/studio/connection/">
-        <Icon name="key" />
+      <A to={"/studio/" + step[0] + "/"}>
+        <Icon name={step[1]} />
         <div>
-          <strong>Connect SignalWire</strong>
-          <small>
-            {setup.provider_connected
-              ? setup.live_enabled
-                ? "Connected · live mode on"
-                : "Connected · switch on live mode to use your project"
-              : "Use your own project for numbers and calling"}
-          </small>
+          <strong>{step[2]}</strong>
+          <small>{step[3]}</small>
         </div>
-        <Icon
-          name={
-            setup.provider_connected && setup.live_enabled ? "check" : "arrow"
-          }
-          className={
-            setup.provider_connected && setup.live_enabled ? "setup-done" : ""
-          }
-        />
-      </A>
-      <A to="/studio/numbers/">
-        <Icon name="number" />
-        <div>
-          <strong>Get a routing number</strong>
-          <small>
-            {setup.numbers
-              ? `${setup.numbers} number${setup.numbers === 1 ? "" : "s"} connected`
-              : "Import a number you own, or buy one from SignalWire"}
-          </small>
-        </div>
-        <Icon
-          name={setup.numbers ? "check" : "arrow"}
-          className={setup.numbers ? "setup-done" : ""}
-        />
-      </A>
-      <A to="/studio/agents/">
-        <Icon name="agents" />
-        <div>
-          <strong>Connect your agent</strong>
-          <small>
-            {appReady
-              ? "Your agent can recognize contacts and recall past calls"
-              : "Give Grok access to your contacts and call history"}
-          </small>
-        </div>
-        <Icon
-          name={appReady ? "check" : "arrow"}
-          className={appReady ? "setup-done" : ""}
-        />
+        <Icon name="arrow" />
       </A>
     </section>
   );

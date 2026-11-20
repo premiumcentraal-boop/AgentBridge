@@ -41,10 +41,19 @@ export function LiveRoom({ callId, connections, write }) {
     if (!navigator.mediaDevices?.getUserMedia)
       throw new Error("This browser cannot open a microphone here.");
     if (session.stream) return;
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true },
-      video: false,
-    });
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true },
+        video: false,
+      });
+    } catch (error) {
+      throw new Error(
+        error.name === "NotAllowedError"
+          ? "Microphone off. Allow microphone access in your browser, then turn it on here. You can keep listening."
+          : "Microphone unavailable. Check your input device and try again. You can keep listening.",
+      );
+    }
     if (ref.current !== session) {
       stream.getTracks().forEach((t) => t.stop());
       return;
@@ -93,8 +102,8 @@ export function LiveRoom({ callId, connections, write }) {
         try {
           await microphone(session);
           micReady = true;
-        } catch {
-          setError("Microphone access was unavailable. You can still listen.");
+        } catch (error) {
+          setError(error.message);
         }
       }
       if (ref.current !== session) return;
@@ -180,12 +189,24 @@ export function LiveRoom({ callId, connections, write }) {
   }
   const me = room?.participants.find((p) => p.id === self);
   return (
-    <section className="live-room" aria-label="Call room">
-      <h3>Call room</h3>
+    <section
+      className="live-room"
+      data-room-state={state}
+      aria-label="Call room"
+    >
+      <div className="room-heading">
+        <h3>Call room</h3>
+        {state === "joined" && (
+          <span>{room.participants.length} participants</span>
+        )}
+      </div>
       {state === "ended" ? (
         <p>The call has ended.</p>
       ) : state !== "joined" ? (
         <>
+          <p className="provider-muted">
+            Join to listen. Turn on your microphone whenever you want to speak.
+          </p>
           <label className="provider-consent">
             <input
               type="checkbox"
@@ -216,14 +237,18 @@ export function LiveRoom({ callId, connections, write }) {
         </>
       ) : (
         <>
-          <div className="room-people">
+          <div
+            className="room-people"
+            role="group"
+            aria-label="Call participants"
+          >
             {room.participants.map((p) => (
               <div className="room-person" key={p.id}>
                 <Icon
                   name={p.role === "studio" ? "headphones" : "calls"}
                   size={22}
                 />
-                <strong>{p.label}</strong>
+                <strong>{p.id === self ? "You" : p.label}</strong>
                 <span>
                   {p.status === "connected"
                     ? p.muted
@@ -237,16 +262,22 @@ export function LiveRoom({ callId, connections, write }) {
                     aria-pressed={p.muted}
                     onClick={() => sendMute(p.id, !p.muted)}
                   >
-                    {p.muted ? "Unmute" : "Mute"}{" "}
-                    {p.role === "caller" ? "caller" : p.label}
+                    {p.muted ? "Unmute" : "Mute"} {p.label}
                   </button>
                 )}
               </div>
             ))}
           </div>
-          <div className="provider-actions">
+          <div
+            className="personal-call-controls"
+            role="group"
+            aria-label="Your call controls"
+          >
             <button
               className="room-toggle"
+              aria-label={
+                me?.muted ? "Turn microphone on" : "Mute my microphone"
+              }
               aria-pressed={!me?.muted}
               disabled={busy}
               onClick={() =>
@@ -263,10 +294,12 @@ export function LiveRoom({ callId, connections, write }) {
                 })
               }
             >
-              {me?.muted ? "Turn microphone on" : "Mute my microphone"}
+              <Icon name={me?.muted ? "muted" : "mute"} size={17} />
+              {me?.muted ? "Mic off" : "Mic on"}
             </button>
             <button
               className="room-toggle"
+              aria-label={speakerOn ? "Mute speaker" : "Turn speaker on"}
               aria-pressed={speakerOn}
               onClick={() => {
                 const session = ref.current;
@@ -275,10 +308,12 @@ export function LiveRoom({ callId, connections, write }) {
                 setSpeakerOn(!speakerOn);
               }}
             >
-              {speakerOn ? "Mute speaker" : "Turn speaker on"}
+              <Icon name="headphones" size={17} />
+              {speakerOn ? "Speaker on" : "Speaker off"}
             </button>
             <Btn
               label="Leave room"
+              end={null}
               onClick={() => {
                 leave();
                 setState("outside");
@@ -286,7 +321,16 @@ export function LiveRoom({ callId, connections, write }) {
               }}
             />
           </div>
-          <h4>Live captions</h4>
+          <h4>
+            Live captions{" "}
+            <span className="caption-state" data-on={room.captions === "on"}>
+              {room.captions === "on"
+                ? "On"
+                : room.captions === "starting"
+                  ? "Starting…"
+                  : "Off"}
+            </span>
+          </h4>
           {room.captions === "off" && (
             <label className="provider-consent">
               <input

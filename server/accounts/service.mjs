@@ -28,6 +28,7 @@ export function createAccountService({ database, testerEmail, publicOrigin, pass
   // Node/Railway adapter and never trust browser-supplied identity headers.
   const publicSignup = signupMode === 'public' && !platformIdentity;
   const allowedEmail = email(testerEmail), configured = Boolean(database) && (publicSignup ? Boolean(passwords) : validEmail(allowedEmail));
+  const publicRegistrationOpen = publicSignup && configured && Boolean(mailer?.ready);
   const method = platformIdentity ? 'chatgpt' : 'password';
   const secure = !publicOrigin?.startsWith('http://127.0.0.1') && !publicOrigin?.startsWith('http://localhost');
   const cookie = (token, age = 28800) => `ab_customer=${token}; HttpOnly; SameSite=Strict; Path=/api; Max-Age=${age}${secure ? '; Secure' : ''}`;
@@ -57,7 +58,7 @@ export function createAccountService({ database, testerEmail, publicOrigin, pass
   }
   const emailAuth = createEmailAuth({ database, passwords, mailer, session, json });
   return {
-    accountFor,
+    accountFor, publicRegistrationOpen,
     async fetch(request, { clientAddress } = {}) {
       const path = new URL(request.url).pathname, verb = request.method;
       const authPath = path.startsWith('/api/auth/');
@@ -74,7 +75,7 @@ export function createAccountService({ database, testerEmail, publicOrigin, pass
           const count = configured ? await database.first('SELECT COUNT(*) AS n FROM ab_accounts') : { n: 0 };
           const user = identity(request);
           const provider=current?await providerSummary(database,current.id,vaultKey):null;
-          return json(200, { configured, authenticated: Boolean(current), account: publicAccount(current), sandbox: Boolean(current), provider_live_enabled:provider?.live_enabled||false, mode: provider?.live_enabled?'live-testing':'demo', auth_method: method, registration_available: configured && (publicSignup ? Boolean(mailer?.ready) : count.n === 0 && (platformIdentity || /^[a-f0-9]{64}$/.test(signupInviteHash || ""))), signup_mode: publicSignup ? 'public' : 'tester', email_verification_required: publicSignup, password_reset_available: publicSignup && Boolean(mailer?.ready), invitation_required: !platformIdentity && !publicSignup, account_exists: publicSignup ? undefined : count.n > 0, verified_email: platformIdentity && user?.subject && user.email === allowedEmail ? user.email : undefined, signin_url: '/signin-with-chatgpt?return_to=%2Fstudio%2F', signout_url: '/signout-with-chatgpt?return_to=%2Fsignin%2F' });
+          return json(200, { configured, authenticated: Boolean(current), account: publicAccount(current), sandbox: Boolean(current), provider_live_enabled:provider?.live_enabled||false, mode: provider?.live_enabled?'live-testing':'demo', auth_method: method, registration_available: publicSignup ? publicRegistrationOpen : configured && count.n === 0 && (platformIdentity || /^[a-f0-9]{64}$/.test(signupInviteHash || "")), signup_mode: publicSignup ? 'public' : 'tester', email_verification_required: publicSignup, password_reset_available: publicSignup && Boolean(mailer?.ready), invitation_required: !platformIdentity && !publicSignup, account_exists: publicSignup ? undefined : count.n > 0, verified_email: platformIdentity && user?.subject && user.email === allowedEmail ? user.email : undefined, signin_url: '/signin-with-chatgpt?return_to=%2Fstudio%2F', signout_url: '/signout-with-chatgpt?return_to=%2Fsignin%2F' });
         }
         if (!configured) deny(503, 'SETUP_REQUIRED', 'The account service needs to be configured.');
         if (authPath && publicSignup && verb === 'POST' && ['register', 'forgot-password', 'verify-email', 'reset-password'].includes(route)) {

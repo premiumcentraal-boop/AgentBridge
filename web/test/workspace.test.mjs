@@ -137,7 +137,7 @@ async function joinFixtureCall(document, microphoneOn = false) {
   await waitFor(() => document.querySelector(".call-room.is-joined"));
 }
 async function endFixtureCall(document) {
-  named(document.querySelector("main"), "End call").click();
+  named(document.querySelector("main"), "End call for everyone").click();
   await waitFor(() =>
     document.querySelector('dialog[open][aria-label="End call confirmation"]'),
   );
@@ -155,7 +155,7 @@ async function endFixtureCall(document) {
     document.querySelector("main .active-call-card"),
     "Cancelling end must keep the call active",
   );
-  named(document.querySelector("main"), "End call").click();
+  named(document.querySelector("main"), "End call for everyone").click();
   await waitFor(() =>
     document.querySelector('dialog[open][aria-label="End call confirmation"]'),
   );
@@ -172,7 +172,7 @@ test("working preview navigates real pages and keeps call state in the floating 
   // mount effect before interacting, rather than clicking the inert SSR copy.
   await waitFor(() => document.title.includes("Connect agents worldwide"));
   await waitFor(() =>
-    document.querySelector('.gb-hero-actions a[href="#/studio/"]'),
+    document.querySelector('.public-header a[href="#/studio/"]'),
   );
   assert.match(
     document.querySelector("h1").textContent,
@@ -283,11 +283,11 @@ test("working preview navigates real pages and keeps call state in the floating 
     "false",
   );
   await navigate(document, "/how-it-works/");
-  named(document, "02 Review").click();
+  named(document, "Callback").click();
   await pause(20);
   assert.match(
     document.querySelector(".flow-detail").textContent,
-    /considered pause/,
+    /SignalWire dials the second phone/,
   );
   await navigate(document, "/studio/demo/");
   await waitFor(() => document.querySelector(".floating-rail"));
@@ -306,7 +306,7 @@ test("working preview navigates real pages and keeps call state in the floating 
   await joinFixtureCall(document);
   named(document.querySelector("main"), "Mute speakers").click();
   await waitFor(() =>
-    document.querySelector('main button[aria-pressed="true"]'),
+    document.querySelector('main button[aria-label="Unmute speakers"][aria-pressed="false"]'),
   );
   await navigate(document, "/studio/demo/numbers/");
   assert.equal(document.querySelectorAll(".owned-number-card").length, 3);
@@ -323,7 +323,7 @@ test("working preview navigates real pages and keeps call state in the floating 
     named(document.querySelector("main"), "Unmute speakers").getAttribute(
       "aria-pressed",
     ),
-    "true",
+    "false",
   );
   named(document.querySelector("main"), "Route call").click();
   await waitFor(() =>
@@ -353,6 +353,7 @@ test("working preview navigates real pages and keeps call state in the floating 
   );
   await endFixtureCall(document);
   await waitFor(() => document.querySelector(".nav-call-empty"));
+  await navigate(document, "/studio/demo/settings/");
   await navigate(document, "/studio/demo/activity/");
   assert.match(document.querySelector("main").textContent, /Call ended/);
   assert.deepEqual(requests, []);
@@ -412,8 +413,12 @@ test("numbers are obtained before a new connection is paired; country search, ed
   const card = [...document.querySelectorAll(".number-connection-card")].find(
     (item) => item.textContent.includes("Amsterdam office"),
   );
-  assert.match(card.textContent, /\+12025550130/);
-  assert.match(card.textContent, /\+31201234567/);
+  assert.match(card.textContent, /\+1 202 555 0130/);
+  assert.match(card.textContent, /\+31 20 123 4567/);
+  const searchBox = document.querySelector('input[aria-label="Search connections"]');
+  fieldValue(window, searchBox, "+31 20 123 4567");
+  await waitFor(() => document.querySelectorAll(".number-connection-card").length === 1);
+  assert.match(document.querySelector(".number-connection-card").textContent, /Amsterdam office/);
   fieldValue(
     window,
     document.querySelector('input[aria-label="Search connections"]'),
@@ -485,7 +490,7 @@ test("public navigation keeps a native top-level studio link across the CSP boun
   );
   t.after(() => dom.window.close());
   await pause(150);
-  const studio = document.querySelector('.gb-hero-actions a[href="/studio/"]');
+  const studio = document.querySelector('.public-header a[href="/studio/"]');
   assert.equal(studio.target, "_top");
   let prevented;
   const cancelDefault = (event) => {
@@ -516,18 +521,16 @@ test("public navigation keeps a native top-level studio link across the CSP boun
   );
 });
 
-test("the portable review links to signup without pretending to create a server account", async (t) => {
+test("the portable signup route opens the offline workspace and makes no account request", async (t) => {
   const { dom, document, errors, requests } = setup();
   t.after(() => dom.window.close());
   await waitFor(() => document.title.includes("Connect agents worldwide"));
-  const signup = document.querySelector('.gb-hero-actions a[href="#/signup/"]');
-  assert.ok(signup);
-  signup.click();
+  dom.window.location.hash = "/signup/";
   await waitFor(() => document.querySelector(".account-offline"));
   assert.equal(document.querySelector(".signup-card form"), null);
   assert.match(
     document.querySelector(".account-offline").textContent,
-    /Accounts need the online demo/,
+    /hosted site/,
   );
   named(document, "Open the sample studio", "a").click();
   await waitFor(() => document.querySelector(".workspace-shell"));
@@ -644,9 +647,8 @@ test("mobile navigation is a dismissible left drawer with all destinations and a
     "Connections",
     "Calls",
     "Calling setup",
-    "Activity",
+    "Agents",
     "Settings",
-    "Design boards",
   ])
     assert.ok(named(drawer, label, "a"));
   assert.equal(
@@ -994,7 +996,7 @@ test("sample call joins and leaves without ending, requires capture permission a
       .querySelector(".call-participants")
       .textContent.includes("Unmuted"),
   );
-  named(document, "Leave call").click();
+  named(document, "Leave room").click();
   await waitFor(
     () =>
       !document
@@ -1101,14 +1103,14 @@ test("feature pages link into international planning, call memory and joining th
   await navigate(document, "/features/");
   assert.match(
     document.querySelector("main h1").textContent,
-    /More possibilities/,
+    /Calling tools/,
   );
   await navigate(document, "/international-calling/");
   assert.match(
     document.querySelector("main h1").textContent,
-    /further destination/,
+    /Call across borders/,
   );
-  assert.ok(document.querySelector('a[href="#/studio/demo/calls/"]'));
+  assert.ok(document.querySelector('main a[href="#/connect/"]'));
   await navigate(document, "/call-memory/");
   assert.ok(document.querySelector("audio"));
   assert.match(
@@ -1116,7 +1118,7 @@ test("feature pages link into international planning, call memory and joining th
     /synthetic demonstration voices/i,
   );
   await navigate(document, "/join-call/");
-  named(document, "Let me join").click();
+  named(document, "Join sample room").click();
   await waitFor(() =>
     document.querySelector(".feature-people").textContent.includes("You’re in"),
   );
@@ -1127,7 +1129,7 @@ test("feature pages link into international planning, call memory and joining th
         .querySelector(".feature-people")
         .textContent.includes("You’re in"),
   );
-  assert.ok(document.querySelector('a[href="#/studio/demo/call/"]'));
+  assert.ok(document.querySelector('main a[href="#/how-it-works/"]'));
   assert.deepEqual(requests, []);
   assert.deepEqual(
     errors.map((e) => e.message),
@@ -1187,7 +1189,7 @@ test("studio search groups live calls, connections, numbers, countries and setti
   );
   assert.match(
     document.querySelector(".owned-number-card").textContent,
-    /\+12025550111/,
+    /\+1 202 555 0111/,
   );
   input.focus();
   fieldValue(window, input, "Netherlands");
@@ -1456,7 +1458,7 @@ test("number acquisition has a visible exit, handles missing inventory, and cont
     const editor = document.querySelector(
       'dialog[open][aria-label="Add connection"]',
     );
-    const routing = labelled(editor, "Routing number");
+    const routing = labelled(editor, "Your routing number");
     assert.equal(routing.selectedOptions[0].disabled, false);
     assert.ok(routing.value);
     named(editor, "Close").click();
@@ -1485,12 +1487,12 @@ test("studio shortcuts form one five-item rail and the single circle arrow expan
   assert.ok(named(rail, "Connect a destination"));
   for (const [label, route] of [
     ["Calls", "calls"],
-    ["Recordings", "memory"],
+    ["Transcripts", "memory"],
     ["Your numbers", "numbers"],
   ])
     assert.equal(
       named(rail, label, "a").getAttribute("href"),
-      `#/studio/demo/${route}/`,
+      `#/studio/demo/${route}/${route === "memory" ? "?filter=transcript" : ""}`,
     );
   for (const item of rail.children)
     assert.equal(item.querySelectorAll(".direction-arrow").length, 1);
@@ -1936,7 +1938,7 @@ test("one Join call entry opens a participant room with independent agent, micro
     document.querySelector(".call-room.is-joined"),
     "The demo audio ending must keep the joined room and transcript open",
   );
-  named(document, "Leave call").click();
+  named(document, "Leave room").click();
   await waitFor(() => !document.querySelector(".call-room.is-joined"));
   assert.equal(document.querySelector(".sample-listen-dock").hidden, true);
   assert.ok(named(document.querySelector("main"), "Join call"));
