@@ -655,3 +655,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 ## 2026-11-20 — Cross-binding owner recovery failure assertions (draft PR #66)
 - Strengthened the production owner-handler two-binding offline SQLite regression: a rejected audit transaction must return `AUDIT_STORAGE_UNAVAILABLE`, retain the reservation lock against a fresh creation attempt from the other handler environment, and preserve the exact committed audit contents after a duplicate recovery attempt.
 - Source commit `48ed2d61bc6405fd3e0776511ce84b153e4a49d2`. New exact-head CI pending at commit time. This is shared in-memory SQLite with separate binding facades, **not** independently initialized Wrangler D1 or production Cloudflare D1. No carrier calls, paid routing, migrations, merge or deployment.
+
+## 2026-11-20 — Repair owner-recovery regression CI (draft PR #66)
+- Exact-head GitHub Actions run [44763209151](https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/44763209151) failed 1/261 tests: `missing D1 change metadata never produces a successful owner recovery response` referenced an undefined `audits` fixture at `backend/test/owner-force-unlock.test.mjs:257`.
+- Removed the invalid duplicate-audit comparison from that metadata-uncertainty test. Its HTTP 503, `AUDIT_STORAGE_UNAVAILABLE`, committed `failed` state, and exactly-one-audit assertions remain intact. Separate duplicate-recovery tests continue to check audit immutability.
+- This is a test-only CI repair on draft PR #66; no paid routing, carrier changes, merge or deployment. Exact-head CI for the repair must pass before review.
