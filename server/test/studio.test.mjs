@@ -101,7 +101,7 @@ test('integration uses only allowlisted read-only tools and does not forward pri
     };
     return Response.json({jsonrpc:'2.0',id:body.id,result:{structuredContent:cards[body.params.name]}});
   });
-  assert.equal(result.status,'connected');assert.deepEqual(names,['get_bridge_setup','list_my_numbers']);
+  assert.equal(result.status,'needs_setup');assert.deepEqual(names,['get_bridge_setup','list_my_numbers']);
   for(const AGENTBRIDGE_BACKEND_URL of ['http://private.example','https://user:password@private.example','https://private.example/path'])assert.equal((await inspectIntegration({...env,AGENTBRIDGE_BACKEND_URL},()=>{throw new Error('must not fetch');})).status,'error');
   const failure=await inspectIntegration(env,async()=>Response.json({error:'secret-test-token'},{status:500}));assert.equal(failure.status,'error');assert.ok(!JSON.stringify(failure).includes('secret-test-token'));
   assert.equal((await inspectIntegration({})).status,'not_configured');
