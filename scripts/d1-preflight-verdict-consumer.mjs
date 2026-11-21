@@ -1,0 +1,70 @@
+/**
+ * Fail-closed consumer contract for read-only D1 preflight reports.
+ * This is NOT a migration approval API. No possible report authorizes writes.
+ * A caller must also check that the preflight subprocess exited successfully.
+ */
+import {MIGRATION_FILES} from './d1-migration-preflight.mjs';
+
+const allowedMigrations = new Set(MIGRATION_FILES);
+function validMigrationList(value) {
+  return Array.isArray(value) && value.every(name => typeof name === 'string' && allowedMigrations.has(name)) &&
+    new Set(value).size === value.length;
+}
+
+export function interpretPreflightObservation(exitCode, stdout) {
+  if (exitCode !== 0) return {accepted:false, reason:'PREFLIGHT_PROCESS_FAILED'};
+  if (typeof stdout !== 'string' || stdout.length === 0 || stdout.length > 262144)
+    return {accepted:false, reason:'MISSING_OR_OVERSIZED_REPORT'};
+  let report;
+  try { report = JSON.parse(stdout); }
+  catch { return {accepted:false, reason:'INVALID_JSON'}; }
+  if (!report || typeof report !== 'object' || Array.isArray(report))
+    return {accepted:false, reason:'INVALID_REPORT'};
+  const v = report.verdict;
+  if (!v || typeof v !== 'object' || Array.isArray(v) || v.version !== 1)
+    return {accepted:false, reason:'UNSUPPORTED_VERDICT'};
+  if (v.status !== 'observational_only' && v.status !== 'blocked')
+    return {accepted:false, reason:'INVALID_STATUS'};
+  if (v.atomicSnapshot !== false || v.authorizesMigration !== false ||
+      v.requiresOperatorApproval !== true ||
+      v.requiresExclusiveMaintenanceWindow !== true ||
+      v.requiresVerifiedBackup !== true)
+    return {accepted:false, reason:'UNSAFE_VERDICT'};
+  if (typeof v.reason !== 'string' || ![
+    'UNSAFE_SCHEMA_OR_HISTORY','UNRECONCILED_MIGRATION_HISTORY',
+    'PENDING_MIGRATIONS','NO_PENDING_MIGRATIONS'
+  ].includes(v.reason)) return {accepted:false, reason:'INVALID_REASON'};
+  if (typeof report.unsafe !== 'boolean' || !report.plan ||
+      typeof report.plan !== 'object' || Array.isArray(report.plan) ||
+      typeof report.plan.safe !== 'boolean' ||
+      !validMigrationList(report.plan.apply) || !validMigrationList(report.plan.baseline) ||
+      report.plan.apply.some(name => report.plan.baseline.includes(name)))
+    return {accepted:false, reason:'INVALID_PLAN'};
+  // A safe producer report partitions the canonical migration inventory into
+  // applied, pending, and schema-present-but-untracked entries.
+  if (!validMigrationList(report.applied))
+    return {accepted:false, reason:'INVALID_APPLIED_HISTORY'};
+  if (!report.unsafe) {
+    const all=[...report.applied,...report.plan.apply,...report.plan.baseline];
+    if (all.length !== MIGRATION_FILES.length || new Set(all).size !== MIGRATION_FILES.length)
+      return {accepted:false, reason:'INCOMPLETE_MIGRATION_INVENTORY'};
+  }
+  // The producer has exactly four possible reason/status/plan combinations.
+  // A blocked observation cannot borrow a clean-state reason, and an unsafe
+  // schema always produces an unsafe plan with no proposed migration actions.
+  const {unsafe,plan} = report;
+  const expected = unsafe
+    ? {status:'blocked',reason:'UNSAFE_SCHEMA_OR_HISTORY'}
+    : !plan.safe
+      ? null
+      : plan.baseline.length > 0
+        ? {status:'blocked',reason:'UNRECONCILED_MIGRATION_HISTORY'}
+        : plan.apply.length > 0
+          ? {status:'observational_only',reason:'PENDING_MIGRATIONS'}
+          : {status:'observational_only',reason:'NO_PENDING_MIGRATIONS'};
+  if (!expected || (unsafe && (plan.safe || plan.apply.length || plan.baseline.length)) ||
+      v.status !== expected.status || v.reason !== expected.reason)
+    return {accepted:false, reason:'CONTRADICTORY_VERDICT'};
+  return {accepted:true, status:v.status, authorizesMigration:false,
+    requiresManualApproval:true};
+}

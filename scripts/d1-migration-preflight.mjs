@@ -24,8 +24,14 @@ export const MIGRATION_FILES=['0001_routing_controls.sql','0002_approval_binding
  * This plan is the guard: it only ever lists 0001 when NONE of its columns exist.
  * 0002/0003 are CREATE ... IF NOT EXISTS and safe to re-run.
  */
+function migrationPresent(state,file){
+  return ({'0001_routing_controls.sql':state.v1,'0002_approval_bindings.sql':state.v2,
+    '0003_owner_actions.sql':state.v3,'0004_inbound_call_log.sql':state.v4})[file]==='complete';
+}
 export function migrationPlan(state,applied=[]){
   if(state.unsafe)return {safe:false,apply:[],baseline:[]};
+  // A recorded migration is not proof its schema survived a restore or drift.
+  if(!Array.isArray(applied)||applied.some(f=>typeof f!=='string'||!MIGRATION_FILES.includes(f)||!migrationPresent(state,f))||new Set(applied).size!==applied.length)return {safe:false,apply:[],baseline:[]};
   const done=new Set(applied);
   const present={'0001_routing_controls.sql':state.v1==='complete',
     '0002_approval_bindings.sql':state.v2==='complete','0003_owner_actions.sql':state.v3==='complete',
@@ -33,11 +39,6 @@ export function migrationPlan(state,applied=[]){
   const baseline=MIGRATION_FILES.filter(f=>present[f]&&!done.has(f));
   const apply=MIGRATION_FILES.filter(f=>!present[f]&&!done.has(f));
   return {safe:true,apply,baseline};
-}
-export function baselineSql(files){
-  if(!files.length)return '';
-  return "CREATE TABLE IF NOT EXISTS d1_migrations(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL); "+
-    files.map(f=>"INSERT OR IGNORE INTO d1_migrations (name) VALUES ('"+f+"');").join(' ');
 }
 export function classifyMigrationState(columns,tables){
   const col=new Set(columns),tab=new Set(tables);
@@ -49,18 +50,90 @@ export function classifyMigrationState(columns,tables){
   const v2=next.length===0?'absent':next.length===V2.length?'complete':'PARTIAL';
   const v3=V3.every(x=>tab.has(x))?'complete':'absent';
   const v4=V4.every(x=>tab.has(x))?'complete':'absent';
-  const unsafe=v1==='PARTIAL'||v2==='PARTIAL'||(v2==='complete'&&v1!=='complete')||
+  // ALTER TABLE in 0001 cannot bootstrap a fresh database. Missing base tables
+  // must block the plan even if all migration-specific columns are absent.
+  const missingBase=!tab.has('accounts')||!tab.has('reservations');
+  const unsafe=missingBase||v1==='PARTIAL'||v2==='PARTIAL'||(v2==='complete'&&v1!=='complete')||
     (v3==='complete'&&v2!=='complete')||(v4==='complete'&&v1!=='complete');
-  return {v1,v2,v3,v4,unsafe,reasons:unsafe?['Schema is inconsistent. Do not apply migrations before backup and manual reconciliation.']:[]};
+  return {v1,v2,v3,v4,unsafe,reasons:unsafe?[missingBase?'Missing base accounts/reservations tables. Initialize only through an approved baseline process; do not apply additive migrations.':'Schema is inconsistent. Do not apply migrations before backup and manual reconciliation.']:[]};
+}
+
+// Structural checks complement table-name/column-name checks. These are read-only
+// PRAGMAs; a restored or manually created table must not be trusted by name alone.
+export function validateCriticalSchema(reservationColumns,ownerColumns,ownerForeignKeys,hasOwnerActions,reservationForeignKeys=[]){
+  const failures=[];
+  const byName=rows=>new Map(rows.map(row=>[row.name,row]));
+  const reservations=byName(reservationColumns);
+  for(const name of ['id','account_id','destination','idempotency_key','status','created_at','expires_at']){
+    const column=reservations.get(name);
+    if(!column)failures.push('reservations.'+name+' missing');
+    else if(name==='id' ? Number(column.pk)!==1 :
+      Number(column.notnull)!==1)failures.push('reservations.'+name+' constraint mismatch');
+  }
+  if(!reservationForeignKeys.some(row=>row.from==='account_id'&&row.table==='accounts'&&row.to==='id'&&String(row.on_delete).toUpperCase()==='RESTRICT'))
+    failures.push('reservations account ownership foreign key missing or weakened');
+  if(hasOwnerActions){
+    const owner=byName(ownerColumns);
+    for(const name of ['id','reservation_id','action','prior_status','carrier_code','reason','created_at']){
+      const column=owner.get(name);
+      if(!column)failures.push('owner_actions.'+name+' missing');
+      else if(name==='id'?Number(column.pk)!==1:Number(column.notnull)!==1)
+        failures.push('owner_actions.'+name+' constraint mismatch');
+    }
+    if(!ownerForeignKeys.some(row=>row.from==='reservation_id'&&row.table==='reservations'&&row.to==='id'&&String(row.on_delete).toUpperCase()==='RESTRICT'))
+      failures.push('owner_actions reservation foreign key missing or weakened');
+  }
+  return failures;
+}
+// Verify the exact account-scoped idempotency key, not merely the column names.
+// Partial, expression-based, reversed, or non-unique indexes do not establish
+// the database invariant relied upon by replay-safe reservation creation.
+export function validateIdempotencyIndex(indexList,indexDetails){
+  if(!Array.isArray(indexList)||!Array.isArray(indexDetails))return ['reservation idempotency index metadata unavailable'];
+  const valid=indexList.some(index=>{
+    if(Number(index.unique)!==1||Number(index.partial)!==0||typeof index.name!=='string')return false;
+    const columns=indexDetails.find(entry=>entry.name===index.name)?.columns;
+    if(!Array.isArray(columns))return false;
+    const keys=columns.filter(column=>Number(column.key)===1).sort((a,b)=>Number(a.seqno)-Number(b.seqno));
+    return keys.length===2&&keys.every((column,i)=>Number.isInteger(Number(column.cid))&&Number(column.cid)>=0&&
+      column.name===['account_id','idempotency_key'][i]&&Number(column.seqno)===i);
+  });
+  return valid?[]:['reservations UNIQUE(account_id,idempotency_key) missing or weakened'];
+}
+// Validate the migration tracker before trusting any rows it reports. This is
+// the schema emitted by baselineSql and Wrangler's standard D1 tracker.
+export function validateMigrationTracker(columns,indexes,indexDetails){
+  const failures=[];
+  if(!Array.isArray(columns)||!Array.isArray(indexes)||!Array.isArray(indexDetails))
+    return ['d1_migrations metadata unavailable'];
+  const byName=new Map(columns.map(column=>[column.name,column]));
+  const id=byName.get('id'),name=byName.get('name'),applied=byName.get('applied_at');
+  if(!id||Number(id.pk)!==1||String(id.type).toUpperCase()!=='INTEGER')
+    failures.push('d1_migrations.id primary key missing or weakened');
+  if(!name||String(name.type).toUpperCase()!=='TEXT')
+    failures.push('d1_migrations.name TEXT column missing');
+  if(!applied||Number(applied.notnull)!==1||String(applied.dflt_value??'').trim().toUpperCase()!=='CURRENT_TIMESTAMP')
+    failures.push('d1_migrations.applied_at must be NOT NULL with CURRENT_TIMESTAMP default');
+  const unique=indexes.some(index=>{
+    if(Number(index.unique)!==1||Number(index.partial)!==0||typeof index.name!=='string')return false;
+    const cols=indexDetails.find(item=>item.name===index.name)?.columns;
+    if(!Array.isArray(cols))return false;
+    const keys=cols.filter(col=>Number(col.key)===1);
+    return keys.length===1&&keys[0].name==='name'&&Number(keys[0].cid)>=0&&Number(keys[0].seqno)===0;
+  });
+  if(!unique)failures.push('d1_migrations UNIQUE(name) missing or weakened');
+  return failures;
 }
 function parseWranglerJson(raw){
   const trimmed=String(raw).trim();
   let parsed;
   try{parsed=JSON.parse(trimmed);}catch{throw Error('Wrangler did not return JSON. Refusing to guess database state.');}
-  const item=Array.isArray(parsed)?parsed[0]:parsed;
-  if(!item||!Array.isArray(item.results)||item.success===false)
+  // One SQL statement must yield exactly one explicitly successful result.
+  // Reject ambiguous batches and missing success flags instead of trusting the first entry.
+  if(!Array.isArray(parsed)||parsed.length!==1||!parsed[0]||
+     parsed[0].success!==true||!Array.isArray(parsed[0].results))
     throw Error('Unexpected D1 query response. No schema state can be trusted.');
-  return item.results;
+  return parsed[0].results;
 }
 function inspect(database,mode,sql){
   const executable=process.env.AGENTBRIDGE_WRANGLER||(existsSync(PINNED_WRANGLER)?PINNED_WRANGLER:'wrangler');
@@ -77,26 +150,79 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
     process.exit(2);
   }
   try{
+    // Compare observable schema/history before and after the read-only inspection.
+    // Wrangler denies PRAGMA schema_version (SQLITE_AUTH); do not depend on it.
+    // Separate queries are NOT an atomic snapshot: require an exclusive migration
+    // window, backup and explicit operator approval before any application.
+    const schemaBefore=inspect(database,mode,'SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name');
     const cols=inspect(database,mode,'PRAGMA table_info(reservations)').map(x=>x.name);
     const tables=inspect(database,mode,"SELECT name FROM sqlite_master WHERE type='table'").map(x=>x.name);
     const state=classifyMigrationState(cols,tables);
     const tracked=tables.includes('d1_migrations');
-    const applied=tracked?inspect(database,mode,'SELECT name FROM d1_migrations').map(x=>x.name):[];
+    // Never read or rely on migration history until the tracker is structurally sound.
+    if(tracked){
+      const trackerColumns=inspect(database,mode,'PRAGMA table_info(d1_migrations)');
+      const trackerIndexes=inspect(database,mode,'PRAGMA index_list(d1_migrations)');
+      const trackerDetails=trackerIndexes.filter(index=>Number(index.unique)===1&&Number(index.partial)===0&&typeof index.name==='string')
+        .map(index=>({name:index.name,columns:inspect(database,mode,
+          'SELECT seqno, cid, name, "key" FROM pragma_index_xinfo(\''+index.name.replaceAll("'","''")+'\')')}));
+      const trackerFailures=validateMigrationTracker(trackerColumns,trackerIndexes,trackerDetails);
+      if(trackerFailures.length)throw Error('Untrusted D1 migration tracker: '+trackerFailures.join('; '));
+    }
+    const historySql='SELECT id, name, applied_at FROM d1_migrations ORDER BY name, id';
+    const historyBefore=tracked?inspect(database,mode,historySql):[];
+    const applied=historyBefore.map(x=>x.name);
+    const structuralFailures=validateCriticalSchema(
+      inspect(database,mode,'PRAGMA table_info(reservations)'),
+      tables.includes('owner_actions')?inspect(database,mode,'PRAGMA table_info(owner_actions)'):[],
+      tables.includes('owner_actions')?inspect(database,mode,'PRAGMA foreign_key_list(owner_actions)'):[],
+      tables.includes('owner_actions'),
+      inspect(database,mode,'PRAGMA foreign_key_list(reservations)')
+    );
+    const indexes=inspect(database,mode,'PRAGMA index_list(reservations)');
+    const indexDetails=indexes.filter(index=>Number(index.unique)===1&&Number(index.partial)===0&&typeof index.name==='string')
+      .map(index=>({name:index.name,columns:inspect(database,mode,
+        "SELECT seqno, cid, name, \"key\" FROM pragma_index_xinfo('"+index.name.replaceAll("'","''")+"')")}));
+    structuralFailures.push(...validateIdempotencyIndex(indexes,indexDetails));
+    if(structuralFailures.length){state.unsafe=true;state.reasons.push(...structuralFailures);}
+    const schemaAfter=inspect(database,mode,'SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name');
+    const historyAfter=tracked?inspect(database,mode,historySql):[];
+    // Compare full tracker rows, not only names: id/timestamp drift is material.
+    if(JSON.stringify(schemaBefore)!==JSON.stringify(schemaAfter)||JSON.stringify(historyBefore)!==JSON.stringify(historyAfter))
+      throw Error('D1 schema or migration history changed during preflight; refusing a mixed-state recommendation.');
     const plan=migrationPlan(state,applied);
-    console.log(JSON.stringify({mode,database,...state,tracked,applied,plan},null,2));
+    if(!state.unsafe&&!plan.safe){
+      state.unsafe=true;
+      state.reasons.push('Migration history claims applied objects that are absent. Stop and reconcile from backup.');
+    }
+    // Machine-readable observation only. Even a clean read cannot authorize a
+    // migration: independent Wrangler queries are not an atomic snapshot.
+    const verdict={
+      version:1,
+      status:state.unsafe?'blocked':plan.baseline.length?'blocked':'observational_only',
+      reason:state.unsafe?'UNSAFE_SCHEMA_OR_HISTORY':plan.baseline.length?'UNRECONCILED_MIGRATION_HISTORY':
+        plan.apply.length?'PENDING_MIGRATIONS':'NO_PENDING_MIGRATIONS',
+      atomicSnapshot:false,
+      authorizesMigration:false,
+      requiresOperatorApproval:true,
+      requiresExclusiveMaintenanceWindow:true,
+      requiresVerifiedBackup:true
+    };
+    console.log(JSON.stringify({mode,database,...state,tracked,applied,plan,verdict},null,2));
     if(state.unsafe){
       console.error('BLOCKED: partial schema; inspect D1 backup before any write.');
       process.exitCode=1;
     }else if(plan.baseline.length){
-      console.error('NOTICE: these migrations are already present but not recorded by Wrangler: '+plan.baseline.join(', ')+
-        '. After a backup, record them WITHOUT re-running them, e.g.:');
-      console.error('  (cd backend && npx wrangler d1 execute '+database+' '+mode+' --command "'+baselineSql(plan.baseline)+'")');
-      console.error('Then re-run this preflight before `wrangler d1 migrations apply`.');
+      // Never emit a blind reconciliation command: the tracker may change after
+      // these independent reads, and INSERT OR IGNORE can silently hide conflicts.
+      console.error('BLOCKED: migrations are present in schema but missing from D1 history: '+plan.baseline.join(', ')+
+        '. No automatic baseline reconciliation SQL is safe.');
+      console.error('Require an exclusive maintenance window, verified backup, independent schema/history review, and explicit operator-approved conflict-detecting reconciliation. Re-run preflight afterward.');
       process.exitCode=2;
     }else if(plan.apply.length){
-      console.error('OK: after a backup, `(cd backend && npx wrangler d1 migrations apply '+database+' '+mode+')` will apply: '+plan.apply.join(', '));
+      console.error('OBSERVATION ONLY: pending migrations: '+plan.apply.join(', ')+'. This inspection does not authorize applying them. Require verified backup, exclusive maintenance window, independent review and explicit operator approval.');
     }else{
-      console.error('OK: all migrations present and recorded. Nothing to apply.');
+      console.error('OBSERVATION ONLY: all migrations appear present and recorded. Nothing to apply. This inspection does not authorize database changes; independent queries are not an atomic snapshot.');
     }
   }catch(e){
     console.error('Preflight failed closed: '+String(e?.message||e).slice(0,400));

@@ -571,3 +571,212 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Tightened fail-closed pagination validation: only absent or explicit null `links.next` is terminal; false, zero and object cursors no longer bypass the pagination guard.
 - Added offline regression inputs for these malformed cursor shapes. A non-null cursor remains untrusted and never triggers a follow-up fetch or unlock.
 - Previous exact-head `f432ae2` Quality gate #43359731037 passed before this change. New commits require exact-head CI. Real SignalWire response semantics and D1 validation remain manual release gates; no calls, routing activation, deployment or merges.
+
+## 2026-11-15 — D1 migration preflight baseline and tracking guard (draft, unmerged)
+- Read-only preflight previously treated an empty D1 database as safe and recommended additive migration 0001, which immediately fails because `reservations` is absent. It also trusted recorded migration names even when their corresponding schema objects were absent.
+- Preflight now refuses to recommend migration application unless both base tables exist, and rejects history/schema drift instead of silently skipping missing objects. Added deterministic negative tests for missing base tables and mismatched migration history; kept no-write and explicit backup/operator approval behavior.
+- This does **not** create or approve a production baseline migration. Existing databases still require manually verified schema, backups and an operator-approved bootstrap path. Cloudflare D1 execution and exact-head CI require separate verification. No calls, paid routing, carrier changes, merges or deployments.
+
+## 2026-11-15 — D1 preflight test fixture correction (PR #58 follow-up)
+- Reviewed PR #58's committed tests against its fail-closed implementation and found a guaranteed mismatch: the old `migrationPlan(classifyMigrationState([], []))` expectation still asserted `safe:true`, while the new base-table guard correctly returns `safe:false`. Other positive fixtures omitted `accounts`/`reservations` and therefore exercised the unsafe branch instead of the intended migration-plan behavior.
+- Updated the existing regression suite to expect denial on empty databases and to include both base tables for valid migration-plan fixtures. No production migration, provider setting, paid routing, or database was modified.
+- Verification: static source/test comparison completed; full local Node tests and isolated Wrangler D1 were not run. Exact-head GitHub Actions must pass before review; PR remains draft and unmerged.
+
+
+## 2026-11-15 — Reject unrecognized D1 migration history (draft PR #58)
+- Read-only migration preflight previously ignored unknown names in `d1_migrations` and duplicate rows in the supplied history, potentially reporting an apparently clean migration state despite unrecognized or inconsistent tracking. The migration plan now fails closed for unknown, malformed and duplicate entries, without issuing D1 writes.
+- Added deterministic regression cases for valid history and unknown, duplicate, empty, null, non-string and non-array history. This deliberately blocks databases with newer migration versions until the preflight inventory is explicitly updated and reviewed; it does not rewrite or discard history.
+- Previous exact-head quality gate for `5906b74` passed (run #43764000014). These new commits require their own exact-head CI. Local Wrangler D1 behavior and actual production migration history remain unverified. No merges, deployments, calls, purchases or paid routing activation.
+
+## 2026-11-15 — D1 critical schema constraints inspection (draft PR #58)
+- Extended the read-only migration preflight beyond table/column names: inspect reservation primary key and required NOT NULL fields, and when owner_actions exists inspect required columns, NOT NULL/primary-key properties and its RESTRICT foreign key to reservations. Fail closed on mismatches, including restored or manually-created lookalike tables.
+- Added deterministic regression fixtures for valid constraints, nullable account ownership, missing owner audit reason and weakened/missing foreign keys. This is a partial structural gate: unique indexes, CHECK constraints, exact column affinities and actual Wrangler D1 semantics remain unverified and require separate review. No migration applied, no carrier actions, no merge or deployment.
+
+
+## 2026-11-16 — Verify D1 reservation ownership foreign key (draft PR #58)
+- Source review found the structural preflight checked owner_actions → reservations but not reservations.account_id → accounts.id. A lookalike reservations table with no ownership foreign key could pass the prior critical-schema check, undermining the account-isolation assumptions in the data model.
+- Added read-only `PRAGMA foreign_key_list(reservations)` inspection and fail-closed verification of the expected account_id → accounts.id ON DELETE RESTRICT relation; added negative regression fixtures for missing, CASCADE and wrong-target ownership constraints, plus a baseline-only case.
+- This does not alter database schema or execute migrations. The preflight still needs unique-index, CHECK-constraint, affinity and isolated Wrangler D1 verification. Exact-head CI must pass before manual review; PR remains draft, unmerged and undeployed. No calls, carrier resources, payment processing or paid routing were enabled.
+
+## 2026-11-16 — D1 idempotency uniqueness index preflight (draft PR #58)
+- Identified a fail-open schema-integrity gap: reservation account_id and idempotency_key columns could exist without their required composite UNIQUE constraint, permitting duplicate reservation idempotency keys within one account. This is an offline schema counterexample, not proof of production exploitation.
+- Added read-only index_list/index_xinfo inspection and fail-closed exact ordered-key validation, rejecting absent, nonunique, partial, expression-based, reordered or extra-key indexes. Added deterministic negative and positive Node regression fixtures. No schema writes, provider actions, calls or routing activation.
+- Exact-head CI and isolated Wrangler D1 execution remain mandatory verification gates; changes are draft, unmerged and undeployed. Existing manual backup and approval requirements remain intact.
+
+## 2026-11-16 — D1 uniqueness regression CI repair (draft PR #58)
+- Inspected exact-head Quality gate #43798253610 for `50578f8`: secret-scan passed; checks failed with 219/220 tests passing. The new uniqueness regression used overescaped parentheses in its JavaScript regular expression and rejected the correct fail-closed error message.
+- Corrected the test assertion only, retaining the existing index validation and all negative test scenarios. Source commit `c1aa6a63b8b4504365b08f6902f6decd08ac55a2`.
+- Full exact-head CI on this follow-up commit and isolated Wrangler D1 behavior are pending verification; no local repository test execution, carrier actions, merge, or deployment.
+
+## 2026-11-16 — SQLite catalog integration regression (draft PR #58)
+- Added a repository Node test that launches Python's standard-library SQLite engine to create actual in-memory schemas and read `PRAGMA table_info`, `foreign_key_list`, `index_list`, and `index_xinfo`. This checks the production preflight validators against genuine SQLite metadata rather than hand-authored fixture objects.
+- The test expects a correctly constrained account-scoped idempotency key and ownership foreign key to pass, while a missing UNIQUE constraint or missing ownership foreign key must fail closed. No D1 writes, carrier actions, calls, payment operations, or routing activation.
+- Verification: an independent local Python SQLite PRAGMA smoke check succeeded; repository Node test and exact-head CI are not yet confirmed. This is SQLite integration coverage, **not** Cloudflare Wrangler D1 validation. Branch remains draft, unmerged and undeployed.
+
+## 2026-11-16 — Fail closed on counterfeit D1 migration tracker (draft PR #58)
+- Issue #59 identified that the preflight trusted migration history rows without checking `d1_migrations` table constraints. Added read-only tracker column and unique-index introspection before reading any tracker rows, requiring the Wrangler-style id primary key, name TEXT and unique name index, and nonnullable applied_at.
+- Added negative/positive metadata regression cases for missing/partial/expression/composite uniqueness, missing name, nullable timestamp and missing primary key. No tracker repair, D1 mutation, carrier action or paid routing enabled.
+- Verification remains subject to exact-head CI and disposable Wrangler D1 inspection of the installed Wrangler version; this change is draft, unmerged and undeployed.
+
+## 2026-11-16 — Real SQLite migration tracker regression (draft PR #58)
+- Added a Python sqlite3-backed Node regression that creates genuine tracker tables and reads PRAGMA table_info/index_list/index_xinfo. The validator must accept the documented Wrangler-style tracker and fail closed for missing uniqueness, partial/composite uniqueness, nullable timestamp, and incorrect primary key.
+- Previous exact-head `4070fe8b` GitHub Actions Quality gate #43859712790 passed; the new test commits require a fresh exact-head run. This tests SQLite catalogs, not Wrangler D1 itself; actual pinned Wrangler tracker shape and disposable D1 execution remain release blockers.
+- No database writes outside in-memory SQLite fixtures, provider calls, paid routing, secrets, merges or deployment.
+
+
+## 2026-11-16 — D1 migration preflight CLI-level fake Wrangler regression (draft PR #58)
+- Added a disposable Node CLI test harness that copies the read-only preflight into a temporary project with an isolated placeholder Wrangler config and an executable fake Wrangler. It exercises the full process boundary, not just exported schema validators.
+- Cases cover valid tracker metadata, missing tracker uniqueness, invalid JSON and a failed D1 query envelope. Assertions check nonzero failure exits, that invalid tracker history is never queried, and that every executed SQL statement begins with PRAGMA or SELECT. The harness cannot contact D1 or a carrier.
+- Wired the suite into npm test / npm run ci. This is committed test coverage, not yet verified passing at exact head; actual pinned Wrangler schema semantics and disposable D1 remain release gates. No routing activation, provider resources, calls, payments, merges or deployment.
+
+## 2026-11-16 — CLI fake-Wrangler NDJSON fixture correction (draft PR #58)
+- Exact-head Quality gate #43902400499 at `c1d302a` failed: 226/227 Node tests passed, with `test/d1-migration-cli.test.mjs:58` throwing `Unexpected non-whitespace character after JSON`. The fixture writes one JSON-encoded SQL statement per line, but the test split on a literal backslash-n instead of a newline before parsing.
+- Corrected the test log parser to split on actual newlines. No production preflight logic, carrier configuration, routing policy or database schema changed.
+- Exact-head CI for this correction and disposable Wrangler D1 verification remain pending. The branch remains draft, unmerged and undeployed; no calls, purchases, payments or routing activation.
+
+## 2026-11-16 — Reject ambiguous Wrangler JSON envelopes (draft PR #58; pending review)
+- Tightened read-only migration preflight to require exactly one Wrangler JSON result with explicit success=true and a results array; previously extra results were silently ignored and missing success was treated as success.
+- Extended fake-Wrangler CLI regression with missing-success, multiple-result and object-response fixtures, all expected to fail closed without SQL writes or migration recommendations.
+- Exact-head CI and disposable local Wrangler D1 compatibility remain unverified for this commit. No routing activation, carrier calls, purchases, payments, merges or deployments.
+
+## 2026-11-16 — CLI migration-history corruption regressions (draft PR #58)
+- Extended the fake-Wrangler CLI integration suite with unknown and duplicate `d1_migrations.name` history responses. Both must return exit 1 and never emit a migration-apply recommendation; all captured SQL remains read-only.
+- This tests existing fail-closed migrationPlan behavior end-to-end, not a new runtime safeguard. Full exact-head CI and actual pinned-Wrangler disposable D1 execution remain unverified. No carrier calls, purchases, routing activation, merges or deployments.
+
+## 2026-11-16 — CLI history-failure assertion corrected (draft PR #58)
+- Exact-head Quality gate run 43930177813 on 7761a976 failed one of 227 tests: the new unknown-history fixture asserted a diagnostic in stderr, but the preflight correctly reports migration-history reasons in structured stdout JSON and writes the generic BLOCKED notice to stderr. Secret scan passed.
+- Updated the CLI regression to assert exit 1, stderr BLOCKED, stdout `unsafe=true`, `plan.safe=false`, empty apply list and the specific history-corruption reason. Both unknown and duplicate history cases retain the read-only query checks. Production preflight logic is unchanged.
+- The correction requires new exact-head CI; actual Wrangler 4.159.0 D1 compatibility is still unverified. No routing, calls, purchases, secrets, merges or deployments.
+\n## 2026-11-16 — Read-only D1 preflight drift detection (draft PR #58)\n- Added initial/final sqlite_master schema inventory and migration-history comparisons to reject observable mid-preflight changes before recommendations; two fake-Wrangler CLI regressions simulate schema and history drift.\n- This is defense in depth, NOT a consistent transaction snapshot: changes that revert between reads or occur after the final read remain possible. No D1 writes, carrier activity, deployment or merge. Exact-head CI and disposable Wrangler verification pending.\n
+## 2026-11-16 — Repair drift guard syntax after exact-head CI failure (draft PR #58)
+- GitHub Actions run #43959804046 failed at `npm run check` because the newly added preflight drift guard contained literal escaped newline sequences inside JavaScript source. The Node parser raised `SyntaxError: Invalid or unexpected token` before tests could run; secret scan passed.
+- Replaced those literal sequences with real source line breaks in `scripts/d1-migration-preflight.mjs` without changing the intended schema/history drift comparisons. Commit `3557972005c2944bb6f0088e3db18d13fc36342d`.
+- Exact-head CI after the correction remains to be confirmed. Actual pinned Wrangler D1 compatibility remains unverified; PR stays draft, unmerged, routing off, no calls or deployment.
+
+## 2026-11-16 — Repair CLI drift fixture syntax after exact-head CI failure (PR #58, draft)
+- GitHub Actions quality gate #43969925475 at `432b492a` failed during `npm test`: 237/238 test entries passed, but `test/d1-migration-cli.test.mjs` failed module parsing at line 57 due to literal escaped newline tokens in the scenario array. The previous production-script syntax correction was insufficient; `npm run check` did not include this test file.
+- Replaced the unintended literal escaped newlines in the fake-Wrangler fixture and scenario array with actual source line breaks, preserving the intended schema-drift and migration-history-drift scenarios. No production routing, database schema, carrier settings or secrets changed.
+- Verification: diagnosis from Actions job logs; test correction committed as `c63475b`. Exact-head CI and disposable local Wrangler D1 remain required before manual review. PR stays draft and unmerged; no deployment or paid calls.
+
+## 2026-11-16 — Deterministic D1 migration-history reads (draft PR #58)
+- Corrected both preflight reads of `d1_migrations` to use `SELECT name FROM d1_migrations ORDER BY name`; SQLite does not guarantee implicit row ordering, so identical history could previously trigger a false schema/history drift rejection.
+- Updated the fake-Wrangler CLI fixture and asserted that successful and history-corruption scenarios issue only ordered history queries; genuine history drift must still fail closed. Commits `c1ae44f` and `d585f37`.
+- This fixes deterministic comparison, not atomic snapshot isolation. Local Node tests and disposable pinned-Wrangler D1 remain unexecuted at commit time; exact-head CI pending. PR remains draft and unmerged, no paid routing, carrier calls, purchases, payments or deployment.
+
+## 2026-11-16 — D1 tracker timestamp-default integrity (draft PR #58)
+- The preflight previously accepted a counterfeit `d1_migrations` table with `applied_at TIMESTAMP NOT NULL` but no default. Wrangler's migration tracker inserts normally rely on a `CURRENT_TIMESTAMP` default, so this schema could pass preflight and then fail on the first migration insert. A constant or noncanonical default could also undermine migration audit timestamps.
+- Require the tracker `applied_at` column to be NOT NULL with exactly `CURRENT_TIMESTAMP` in PRAGMA metadata. Added fake-Wrangler CLI rejection and real SQLite catalog regressions for missing and incorrect defaults, while retaining a positive canonical tracker fixture.
+- Scope is read-only migration-preflight validation, not a migration or automatic tracker repair. Actual pinned Wrangler D1 compatibility and exact-head CI remain verification gates. No paid routing, carrier activity, merges or deployment.
+
+## 2026-11-17 — Pinned Wrangler local D1 tracker contract gate (draft PR #58)
+- Added `test/d1-wrangler-local.test.mjs` to create a disposable local D1 database with a temporary Wrangler config and one harmless migration, then introspect the actual `d1_migrations` tracker using the pinned backend Wrangler 4.159.0. The test compares its columns, indexes and migration rows with `validateMigrationTracker` and verifies a corrupted timestamp-default fixture fails validation.
+- Wired the test into the GitHub Actions quality gate after installing pinned backend dependencies. This is local-only and does not use a Cloudflare account, production config, paid routing or provider resources.
+- New exact-head CI and real Wrangler execution remain pending at commit time; a passing result is required before claiming compatibility. This does not test production D1 transaction semantics or authorize a migration. PR stays draft; no merge or deployment.
+
+## 2026-11-17 — Real Wrangler D1 CLI negative integration cases (draft PR #58)
+- Added an isolated local-Wrangler integration test that invokes the actual migration-preflight CLI against a disposable empty database and then a deliberately counterfeit migration tracker. Both must exit nonzero and emit no apply recommendation. The test uses a temporary Wrangler configuration, isolated local persistence and the pinned backend Wrangler binary; no remote D1 or provider resources are accessed.
+- This complements the earlier genuine Wrangler migration-tracker contract test, but does not yet establish a full positive CLI path with a valid base schema or production D1 behavior. Exact-head CI remains required; source changes are draft and unmerged. No carrier calls, purchases, routing activation or deployment.
+
+## 2026-11-17 — Genuine Wrangler D1 baseline positive CLI regression (draft PR #58)
+- Extended disposable local Wrangler integration coverage: after rejecting an empty database, apply only the repository's `backend/schema.sql` to a temporary local D1 database, then execute the actual read-only preflight CLI. Assert exit 0, `unsafe:false`, `plan.safe:true`, empty baseline reconciliation, and exactly four pending additive migrations. The existing counterfeit tracker negative path remains afterward.
+- This verifies the full CLI's positive recommendation against real D1 schema metadata, complementing negative-path tests and the real Wrangler tracker contract. No migration application, carrier routing, remote database access, or production deployment is performed. Exact-head CI for commit `e6d695a` is pending verification at writing; manual review and production migration approval remain required.
+
+## 2026-11-17 — Applied-history full CLI local-D1 regression (draft PR #58)
+- Added an isolated pinned-Wrangler test that initializes the approved test baseline, applies real migration 0001 via Wrangler, and runs the complete read-only preflight CLI against a genuine nonempty `d1_migrations` tracker.
+- Asserts 0001 is recognized as applied, only 0002–0004 are proposed, and schema plus tracker rows remain byte-for-byte equivalent across the preflight. This is disposable local-D1 evidence only; no production schema or carrier activity.
+- Source commit `e433f81`; exact-head CI and manual review pending at commit time. Keep PR draft; no merge, deployment, routing activation or paid resources.
+
+## 2026-11-17 — D1 preflight schema-version drift guard (draft PR #58)
+- Added read-only `PRAGMA schema_version` checks before and after the preflight's multiple Wrangler queries. The CLI now fails closed when SQLite's schema generation changes even if a concurrent DDL change is reversed and the final `sqlite_master` text matches its initial snapshot.
+- Added deterministic fake-Wrangler regression for a schema-version change with identical schema catalog results. This narrows one DDL ABA window but does **not** provide an atomic snapshot, detect all data-only migration-history ABA patterns, or close the gap between preflight and manual apply. Exclusive migration window, verified backup, fresh preflight and explicit approval remain mandatory.
+- Source changes are draft and unmerged; exact-head CI and pinned local-Wrangler compatibility checks must pass before manual review. No remote D1, carrier operations, paid routing, merge or deployment.
+
+## 2026-11-17 — Investigate exact-head Wrangler CI failure (draft PR #58)
+- Checked exact-head Actions run #44093302132 for `232d91ba`: `npm run ci` and Gitleaks passed, but the pinned Wrangler local-D1 integration step failed two CLI tests. The actual preflight returned exit 1 before inspecting schema because the initial `PRAGMA schema_version` invocation failed. This is a real compatibility blocker; the previous schema-version guard is not yet validated against Wrangler.
+- Added a direct `PRAGMA schema_version` contract assertion to the previously passing disposable local-D1 tracker test so that the next CI run isolates and reports the unsupported/failed query at the transport boundary. This is diagnostic coverage, **not** a fix or proof of compatibility. Do not approve PR #58 until the exact-head CI is green and the query failure is understood.
+- No production D1 access, carrier calls, paid routing, deployment or merges.
+
+
+## 2026-11-17 — Restore Wrangler-compatible D1 preflight after SQLITE_AUTH (draft PR #58)
+- Exact-head Actions #44104097602 confirmed pinned Wrangler denies `PRAGMA schema_version` with `not authorized: SQLITE_AUTH`, blocking all disposable D1 integration scenarios. Removed only this unsupported concurrency-generation probe from the read-only CLI and its mock/real-Wrangler tests. Retained before/after `sqlite_master` catalog comparison, migration-history comparison, tracker structural checks, baseline/index/foreign-key guards and fail-closed query handling.
+- Added an offline assertion that the CLI never attempts `PRAGMA schema_version`. This restores the previously passing Wrangler-compatible inspection path but does **not** guarantee an atomic snapshot or catch schema ABA changes; an exclusive migration window, backup, operator review and manual approval remain mandatory. No live D1 changes, calls, routing activation, purchases, merges or deployment.
+- Exact-head CI for the correction pending at commit time; do not claim integration success until the new run completes.
+
+
+## 2026-11-17 — Full-row migration history drift detection (draft PR #58)
+- Reviewed the read-only preflight and confirmed it compared only migration names across separate Wrangler queries, overlooking changes to tracker row ids or applied_at timestamps when names remained unchanged.
+- Updated the preflight to compare complete ordered `id, name, applied_at` tracker rows before and after metadata inspection. Added deterministic fake-Wrangler CLI scenarios for timestamp-only and id-only changes, retaining no-write and fail-closed behavior. This narrows observable drift detection but is NOT an atomic snapshot or protection against changes reversed between reads.
+- Commits c22f646 and a8fcf65 are pending exact-head CI; no local test execution claimed. Manual exclusive maintenance window, backup and operator approval remain mandatory. Draft unmerged; no migrations, carrier calls, paid routing, purchases or deployment.
+
+## 2026-11-17 — Remove conflict-suppressing D1 baseline repair command (draft PR #58)
+- Review found that a baseline mismatch printed executable CREATE TABLE IF NOT EXISTS and INSERT OR IGNORE reconciliation SQL. A conflicting or concurrently modified tracker could silently skip inserts, misleading an operator into believing reconciliation succeeded. This is an offline code finding, not a production incident.
+- Removed the exported blind-SQL generator and executable CLI repair example. Baseline mismatch retains exit code 2, but explicitly blocks automatic reconciliation and requires an exclusive maintenance window, verified backup, independent schema/history review, explicit operator-approved conflict-detecting repair, and a new preflight.
+- Updated unit expectations and added a regression guard against reintroducing blind tracker SQL. No database writes, carrier actions, paid routing, merges or deployments. Local tests unavailable because the execution environment cannot resolve github.com; exact-head CI must be verified before review.
+
+## 2026-11-17 — Deterministic migration-history ABA limitation regression (draft PR #58)
+- Added a full-CLI fake-Wrangler scenario that simulates an external migration tracker mutation A → B → A between the two observed history reads. The mock records the transient mutation independently; the CLI sees identical snapshots and therefore cannot detect the intervening change. This is a documented negative assurance test, **not** a concurrency fix.
+- The regression explicitly preserves the successful preflight result in this ABA scenario to prevent accidental claims that before/after equality guarantees snapshot isolation. Production migration still requires an exclusive maintenance window, verified backup, and explicit operator approval; no automatic reconciliation is permitted.
+- Exact-head CI and independent review pending. No database writes, provider calls, paid routing, merge or deployment.
+
+## 2026-11-18 — Correct ABA fixture schema/history mismatch (draft PR #58)
+- Exact-head Actions #44207854303 on `c1c2e416` failed one of 241 Node tests: `history-aba` returned `BLOCKED: partial schema` instead of expected success. The mock claimed migration 0001 had been applied while its reservation schema fixture had no 0001 columns. That is correctly rejected by the preflight and was a fixture inconsistency, not evidence of a runtime regression.
+- Changed the ABA scenario's observed migration history to the empty baseline consistent with the mocked schema. The separate `A -> B -> A` trace still demonstrates a transient, reversed mutation invisible to two non-atomic observations; it is not a concurrency fix.
+- Prior run: 240/241 Node tests passed, secret-scan passed; pinned Wrangler and local MCP jobs were skipped after Node failure. New exact-head CI and local execution remain pending at commit time. No production database, carrier or routing actions performed.
+
+## 2026-11-18 — D1 preflight machine-readable non-authorization verdict (draft PR #58)
+- Added `verdict` to successful JSON inspection output with versioned `observational_only` / `blocked` status, reason, and explicit `atomicSnapshot:false`, `authorizesMigration:false`, operator-approval, maintenance-window and verified-backup requirements. This is an advisory read-only observation, not migration authorization; existing stderr and exit codes remain unchanged.
+- Added full-CLI mock-Wrangler assertions for clean and ABA observations and contradictory migration history. Existing failure exceptions still fail closed without a trusted verdict; callers must treat absent or malformed JSON as denial.
+- Pending exact-head CI, disposable Wrangler review and manual approval. No migration, carrier call, routing enablement, payment, merge or deployment.
+
+## 2026-11-18 — Observational D1 preflight must not recommend immediate application (draft PR #58)
+- Exact-head Quality gate #44230675003 passed at `20fba1a` before this change; that is not CI evidence for the new commits.
+- Found a contradictory operator-facing success message: the JSON verdict correctly says `authorizesMigration:false`, but stderr suggested a concrete `wrangler d1 migrations apply` command and said it "will apply" pending migrations. Automation or operators could mistake a non-atomic inspection for approval.
+- Replaced that recommendation with an explicitly non-authorizing observation listing pending migration filenames and requiring verified backup, exclusive maintenance window, independent review and explicit operator approval. Added source-level regression to prevent the misleading wording returning. Exit codes, D1 queries, JSON verdict and routing configuration remain unchanged.
+- New exact-head CI and local Wrangler verification pending; no migrations, carrier calls, payments, merges or deployment.
+
+## 2026-11-18 — Repair full-CLI regression after observational-only wording change (draft PR #58)
+- Exact-head GitHub Actions [#44237951775](https://github.com/premiumcentraal-boop/AgentBridge/actions/runs/44237951775) at `6839df2` failed `npm run ci`: 241/242 Node tests passed; `test/d1-migration-cli.test.mjs` still expected the removed `OK: after a backup` message in its `valid` and `history-aba` fixtures. Gitleaks passed; subsequent CI steps did not run.
+- Updated both successful CLI fixture expectations to require `OBSERVATION ONLY: pending migrations:` and the nonzero-exit negative assertion to reject that success-only message. No production logic, database writes, or routing configuration changed.
+- This is a test contract correction, not proof of D1 snapshot isolation. Exact-head CI after this commit remains to be checked. Draft/unmerged; no deployment, paid routing or carrier actions.
+
+## 2026-11-18 — Disposable Wrangler CLI assertion follow-up (draft PR #58)
+- Exact-head GitHub Actions #44244234502 on `9972c95` failed the pinned Wrangler D1 step: two positive-path integration tests still expected the removed `OK: after a backup` message, while the CLI correctly emitted `OBSERVATION ONLY`. `npm run ci` and Gitleaks passed; local MCP tests were skipped after the Wrangler failure.
+- Updated `test/d1-wrangler-local.test.mjs` to require observational-only messaging, explicit non-authorization, absence of the old migration recommendation, and `verdict.authorizesMigration === false` / `atomicSnapshot === false` for both pristine baseline and applied-0001 cases. Counterfeit-tracker denial and read-only snapshots remain tested.
+- This changes tests only, not migration authorization or SQL. New exact-head CI remains required. No database migrations, paid routing, calls, purchases, secrets, merges or deployments.
+
+## 2026-11-18 — Clean D1 preflight message remains observational (draft PR #58)
+- Reviewed draft PR #58 and its exact-head successful quality gate at `912bcd67` (Actions #44251321645); no live migration was authorized.
+- Removed the contradictory `OK: all migrations present` human-readable success message in the no-pending-migrations path. Even clean history/schema observations are non-atomic and must not be presented as authoritative approval; the CLI now says `OBSERVATION ONLY` and explicitly denies database-change authorization.
+- Added a source regression guard to `test/d1-migration-cli.test.mjs`. This change does not alter SQL, exit codes, JSON verdict fields or routing flags.
+- Exact-head CI and disposable Wrangler execution for this change are pending; no local test execution or migration occurred. Manual backup, exclusive maintenance window, independent review and operator approval remain mandatory.
+
+## 2026-11-18 — Fail-closed D1 verdict consumer contract (draft PR #58)
+- Added `scripts/d1-preflight-verdict-consumer.mjs` as a pure, read-only parser for preflight subprocess results. It rejects nonzero exit status, missing/oversized/non-JSON output, unsupported version, malformed fields, contradictory schema/plan/verdict state and any purported authorization; even accepted observations always return `authorizesMigration:false` and require manual approval.
+- Added offline Node regression tests covering clean observations, blocked observations, and malicious/malformed/contradictory reports. This helper does not invoke Wrangler or any database writer and is not an automatic migration executor.
+- Previous PR HEAD `2bc6d2f` passed GitHub Actions quality gate #44276832397; the new exact-head CI and local test execution were not yet verified when this entry was written. Draft remains unmerged, with no database migration, carrier activity, paid routing or deployment.
+
+## 2026-11-18 — Strict migration-plan member validation (draft PR #58)
+- Reviewed the successful exact-head quality gate #44285838441 for `b6991e5` and found the pure verdict consumer only checked that `plan.apply` and `plan.baseline` were arrays. Arbitrary, null, duplicate, or overlapping migration entries could be structurally accepted; no automatic migration writer exists in this helper.
+- Reused the canonical `MIGRATION_FILES` inventory to reject unknown filenames, non-string entries, duplicates within either plan array and overlaps between the two arrays. Added negative regressions plus positive multi-migration and blocked-baseline examples. Accepted observations still explicitly deny migration authorization.
+- GitHub connector commits persisted; local clone/test execution blocked by github.com DNS resolution. New exact-head CI is required before review. No migrations, calls, purchases, payments, paid routing, merges or deployment.
+
+## 2026-11-18 — Wire verdict-consumer regressions into mandatory CI (draft PR #58)
+- Discovery found `test/d1-preflight-verdict-consumer.test.mjs` existed but was omitted from root `npm test`; therefore successful `npm run ci` and GitHub quality gates did **not** execute the new fail-closed consumer regressions. The consumer source was also absent from `npm run check` syntax coverage. Exact-head Actions #44304023048 at `16567e4` completed success, but that success did not cover the omitted test.
+- Updated `package.json` to include the verdict-consumer regression file in `npm test` and its source in `npm run check`, ensuring both are exercised by the mandatory `npm run ci` quality gate. No consumer behavior, database SQL, routing policy, or carrier integration changed.
+- Independent local clone/test was blocked by github.com DNS resolution (`git ls-remote` could not resolve host); new exact-head GitHub Actions must be inspected before calling the added checks passing. Draft and unmerged; no migrations, calls, purchases, payments, paid routing, or deployment.
+
+## 2026-11-18 — Strict D1 preflight reason/status truth table (draft PR #58)
+- Reviewed the verdict consumer against the producer's four reachable states. Found that an unsafe blocked report could claim a clean pending reason, and that unsafe reports with a contradictory safe plan could be accepted. These were structural contract gaps, not a demonstrated migration execution path.
+- Replaced partial cross-field comparisons with an exact four-state mapping: unsafe blocked; unreconciled-history blocked; pending observational; and no-pending observational. Unsafe reports must have safe=false and empty apply/baseline arrays. Added table-driven positive and negative regression cases; no migration executor or write capability introduced.
+- Verification: source changes and regression cases committed on the draft PR branch. Local execution not available in the GitHub connector environment; exact-head GitHub Actions remains required. No database migrations, calls, paid routing, payments, merges or deployment.
+
+## 2026-11-18 — D1 verdict truth-table exact-head CI repair (draft PR #58)
+- GitHub Actions quality gate #44336794097 at `43066b3` failed 1/249 Node tests (`blocked reports are accepted only as blocked observations, never permission`); Gitleaks and Railway image checks passed. The fixture inherited a pending migration action from `valid()` while declaring an unsafe schema and unsafe plan, which the new truth-table consumer correctly rejects as contradictory.
+- Updated only the blocked-state fixture to set `plan.apply=[]`, matching the producer's unsafe-state invariant. The separate truth-table regression continues to assert rejection of unsafe reports with migration actions. No consumer safety checks were weakened.
+- Exact-head CI after this correction remains to be verified; no migrations, calls, carrier resources, routing activation, payments, merges or deployments.
+
+
+## 2026-11-18 — Fail closed on incomplete preflight migration inventory (draft PR #58)
+- Identified that the read-only verdict consumer validated migration names and plan status but did not require a complete canonical inventory. A report could omit a known migration from applied/apply/baseline while still claiming a clean observation.
+- Added strict validation of the producer's applied history and a full disjoint partition of MIGRATION_FILES across applied, apply and baseline for safe observations. Unsafe blocked reports retain their empty-plan semantics; no migration authorization or database writer was added.
+- Added positive and negative regressions for missing, overlapping, malformed and absent applied histories. Exact-head CI and independent local execution remain to be verified. Draft remains unmerged and undeployed; no D1 writes, carrier activity, paid routing, secrets or purchases.
