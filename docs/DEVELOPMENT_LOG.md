@@ -597,3 +597,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - A private MCP backend returning a malformed, charge-enabled or empty-instruction setup card previously still received the second authenticated `list_my_numbers` request before inspection failed. This was unnecessary token-bearing traffic to a backend already failing the preview-only contract.
 - Validate the `get_bridge_setup` preview contract immediately, including a nonblank `next_step`, before making the inventory request. Preserve existing read-only error handling and default-deny routing. Added offline regression cases asserting exactly one request for malformed, charge-enabled and blank-instruction setup cards.
 - Changes are isolated to draft PR #68 and require exact-head CI and independent review. No live carrier, purchase, routing, merge, payment or deployment action occurred.
+
+
+## 2026-11-21 — Distinguish reachable MCP backend from assigned DID match (draft PR #68, unmerged)
+- Address issue #69: read-only `owned_number` responses with empty or malformed inventory previously marked Studio Connected. The producer legitimately returns an empty array before setup, so this now reports `needs_setup` with a visible Setup needed indicator, not a protocol failure.
+- Validate bounded inventory, unique US E.164 DIDs, voice and project-match markers, disabled routing, producer state, and exact correlation to the assigned setup DID before marking Connected. Reject inconsistent nonempty inventories; a match still does NOT establish customer carrier ownership, live routing authorization or Grok Bot compatibility.
+- Added offline positive and negative regressions and updated legacy Studio test expectations. This branch is not merged or deployed. Exact-head CI, local tests where available, and independent review remain mandatory. No provider calls, purchases, payments, migrations or paid routing were enabled.
