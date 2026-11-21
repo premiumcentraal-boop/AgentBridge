@@ -94,8 +94,12 @@ export async function listMyNumbers(account,env,fetchImpl=fetch){
   // provider's full result set has been accounted for.
   // Only an absent or null continuation is terminal; malformed falsey cursors
   // must not be mistaken for evidence that the provider list is complete.
-  const next=payload.links?.next;
-  const incomplete=next!==undefined && next!==null;
+  // Require explicit terminal pagination metadata. Missing links or next,
+  // and a full requested page, cannot establish an exhaustive inventory.
+  const links=payload.links;
+  const completeLinks=links!==null && typeof links==='object' &&
+    !Array.isArray(links) && Object.hasOwn(links,'next');
+  const incomplete=!completeLinks || links.next!==null || payload.data.length>=10;
   const matching=!incomplete && payload.data.some(n=>n&&n.number===account.did &&
     Array.isArray(n.capabilities)&&n.capabilities.includes('voice'));
   return {status:200,body:{
