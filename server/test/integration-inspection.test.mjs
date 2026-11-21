@@ -167,3 +167,50 @@ test('read-only DID inventory must match the configured assigned DID before show
   const unassigned = await inspectIntegration(env, mockFetch({ get_bridge_setup: setup, list_my_numbers: match }, []));
   assert.equal(unassigned.status, 'error');
 });
+
+
+test('text-only MCP cards work when JSON is the final text block', async () => {
+  const requests = [];
+  const assigned = { ...setup, state: 'assigned_unverified', bridge_number: '+12025550123' };
+  const match = { ...owned, state: 'project_inventory_match', numbers: [
+    { number: '+12025550123', voice: true, ownership: 'matched_in_operator_project', routing_enabled: false },
+  ] };
+  const result = await inspectIntegration(env, async (_url, init) => {
+    requests.push(init);
+    const rpc = JSON.parse(init.body);
+    const card = rpc.params.name === 'get_bridge_setup' ? assigned : match;
+    return Response.json({ jsonrpc: '2.0', id: rpc.id, result: {
+      content: [{ type: 'text', text: 'Read-only preview summary' },
+        { type: 'text', text: JSON.stringify(card) }],
+    } });
+  });
+  assert.equal(result.status, 'connected');
+  assert.equal(requests.length, 2);
+  assert.match(result.message, /not verified/);
+});
+
+test('text-only MCP fallback rejects unsafe or ambiguous payloads without exposing credentials', async () => {
+  const bad = [
+    [], [{ type: 'text', text: 'Read-only summary, not JSON' }],
+    [{ type: 'text', text: '[]' }],
+    [{ type: 'text', text: 'null' }],
+    [{ type: 'text', text: JSON.stringify({ ...setup, routing_enabled: true }) }],
+    [{ type: 'image', data: 'not-a-card' }],
+    [{ type: 'text', text: JSON.stringify(setup) }, { type: 'text', text: 'trailing prose' }],
+    [{ type: 'text', text: 'x'.repeat(32001) }],
+    [{ type: 'text', text: JSON.stringify(setup) }, { type: 'text', text: JSON.stringify(setup) },
+      { type: 'text', text: JSON.stringify(setup) }],
+  ];
+  for (const content of bad) {
+    let requests = 0;
+    const result = await inspectIntegration(env, async (_url, init) => {
+      requests++;
+      return Response.json({ jsonrpc: '2.0', id: JSON.parse(init.body).id, result: { content } });
+    });
+    assert.equal(result.status, 'error', JSON.stringify(content).slice(0, 120));
+    assert.equal(requests, 1, 'invalid setup must not trigger inventory lookup');
+    assert.equal(result.setup, null);
+    assert.deepEqual(result.numbers, []);
+    assert.ok(!JSON.stringify(result).includes(env.AGENTBRIDGE_ACCOUNT_TOKEN));
+  }
+});
