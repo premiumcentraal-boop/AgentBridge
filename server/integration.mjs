@@ -44,7 +44,26 @@ export async function inspectIntegration(env, fetcher = fetch) {
     if (numbers.card_type === 'number_error') {
       return { status: 'error', message: 'Private backend responded, but assigned-number lookup failed. Check provider access and retry.', setup: null, numbers: [] };
     }
-    return { status: 'connected', message: 'Private backend returned preview-only setup. Live calling and carrier ownership are not verified.', setup, numbers, mcp_url: new URL('/mcp', base).href };
+    // Producer contract: empty inventory is a valid setup state, not a verified DID.
+    const validDid = value => typeof value === 'string' &&
+      /^\\+1[2-9]\\d{2}[2-9]\\d{6}$/.test(value);
+    if (numbers.numbers.length > 10 ||
+        !['project_inventory_match', 'incomplete_inventory', 'not_confirmed', 'operator_connection_required'].includes(numbers.state) ||
+        numbers.numbers.some(item => !item || typeof item !== 'object' || Array.isArray(item) ||
+          !validDid(item.number) || item.voice !== true ||
+          item.ownership !== 'matched_in_operator_project' || item.routing_enabled !== false) ||
+        new Set(numbers.numbers.map(item => item.number)).size !== numbers.numbers.length) {
+      throw new Error('INVALID_NUMBER_INVENTORY');
+    }
+    const matched = numbers.state === 'project_inventory_match' &&
+      numbers.numbers.length === 1 && validDid(setup.bridge_number) &&
+      numbers.numbers[0].number === setup.bridge_number &&
+      setup.state === 'assigned_unverified';
+    if (numbers.numbers.length && !matched) throw new Error('INCONSISTENT_NUMBER_INVENTORY');
+    if (!matched) {
+      return { status: 'needs_setup', message: 'Private backend is reachable, but no assigned US number was confirmed in the read-only project inventory. Complete setup and retry. Live calling remains disabled.', setup, numbers, mcp_url: new URL('/mcp', base).href };
+    }
+    return { status: 'connected', message: 'Assigned US number matched the operator project inventory. Carrier ownership, live calling and routing authorization are not verified.', setup, numbers, mcp_url: new URL('/mcp', base).href };
   } catch {
     // Never echo provider errors: they may contain a token, host, or carrier data.
     return { status: 'error', message: 'Backend could not be verified. Check the server URL, account token and backend health.', setup: null, numbers: [] };
