@@ -97,6 +97,16 @@ test('owned-number lookup never confuses missing, partial or SMS-only results wi
   assert.deepEqual(partial.body.numbers,[]);
 });
 
+test('matching DID on a partial provider page remains unconfirmed',async()=>{
+  const result=await listMyNumbers(account,base,async()=>response({
+    data:[{number:DID,capabilities:['voice']}],links:{next:'page-2'}
+  }));
+  assert.equal(result.status,200);
+  assert.equal(result.body.state,'incomplete_inventory');
+  assert.deepEqual(result.body.numbers,[]);
+  assert.equal(result.body.routing_enabled,false);
+});
+
 test('provider searches are read-only, bounded to five local voice candidates and never show prices',async()=>{
   const seen=[];
   const fake=async(url,opts)=>{
