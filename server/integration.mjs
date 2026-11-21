@@ -22,7 +22,10 @@ export async function inspectIntegration(env, fetcher = fetch) {
       const text = await readBoundedWebhookBody(response, 64_000);
       if (!response.ok || text === null) throw new Error();
       const data = JSON.parse(text);
-      if (data.error || data.result?.isError || !data.result) throw new Error();
+      // Bind each response to its request: an unrelated or malformed JSON-RPC
+      // reply must never be accepted as successful private backend inspection.
+      if (!data || data.jsonrpc !== '2.0' || data.id !== id ||
+          data.error || data.result?.isError || !data.result) throw new Error();
       return data.result.structuredContent ?? data.result;
     };
     const setup = await call('get_bridge_setup', 1);
