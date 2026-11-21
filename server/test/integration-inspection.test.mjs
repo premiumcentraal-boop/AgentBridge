@@ -122,3 +122,21 @@ test('rejects mismatched, missing and malformed JSON-RPC response identifiers', 
     assert.ok(!JSON.stringify(result).includes(env.AGENTBRIDGE_ACCOUNT_TOKEN));
   }
 });
+
+test('invalid setup prevents a second authenticated backend request', async () => {
+  for (const invalid of [
+    {}, { ...setup, routing_enabled: true }, { ...setup, purchase_enabled: true },
+    { ...setup, next_step: '' }, { ...setup, next_step: '   ' },
+    { ...setup, card_type: 'owned_number' },
+  ]) {
+    const requests = [];
+    const result = await inspectIntegration(env, mockFetch({
+      get_bridge_setup: invalid, list_my_numbers: owned,
+    }, requests));
+    assert.equal(result.status, 'error');
+    assert.equal(requests.length, 1, JSON.stringify(invalid));
+    assert.equal(JSON.parse(requests[0].body).params.name, 'get_bridge_setup');
+    assert.equal(result.setup, null);
+    assert.deepEqual(result.numbers, []);
+  }
+});
