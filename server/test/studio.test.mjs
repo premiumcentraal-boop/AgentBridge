@@ -95,7 +95,11 @@ test('integration uses only allowlisted read-only tools and does not forward pri
   const result=await inspectIntegration(env,async(url,options)=>{
     assert.equal(url.href,'https://private.example/mcp');assert.equal(options.redirect,'error');assert.equal(options.headers.Authorization,'Bearer secret-test-token');
     const body=JSON.parse(options.body);names.push(body.params.name);
-    return Response.json({jsonrpc:'2.0',id:body.id,result:{structuredContent:{status:'preview'}}});
+    const cards = {
+      get_bridge_setup: {card_type:'bridge_setup',mode:'preview',routing_enabled:false,purchase_enabled:false,next_step:'Ask an operator to assign a US DID.'},
+      list_my_numbers: {card_type:'owned_number',mode:'preview',routing_enabled:false,purchase_enabled:false,numbers:[],state:'not_confirmed'},
+    };
+    return Response.json({jsonrpc:'2.0',id:body.id,result:{structuredContent:cards[body.params.name]}});
   });
   assert.equal(result.status,'connected');assert.deepEqual(names,['get_bridge_setup','list_my_numbers']);
   for(const AGENTBRIDGE_BACKEND_URL of ['http://private.example','https://user:password@private.example','https://private.example/path'])assert.equal((await inspectIntegration({...env,AGENTBRIDGE_BACKEND_URL},()=>{throw new Error('must not fetch');})).status,'error');
