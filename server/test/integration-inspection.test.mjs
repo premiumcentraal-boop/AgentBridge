@@ -30,8 +30,8 @@ test('private MCP inspection only calls the two read-only tools and never claims
   const result = await inspectIntegration(env, mockFetch({
     get_bridge_setup: setup, list_my_numbers: owned,
   }, requests));
-  assert.equal(result.status, 'connected');
-  assert.match(result.message, /preview-only/);
+  assert.equal(result.status, 'needs_setup');
+  assert.match(result.message, /no assigned US number/);
   assert.equal(result.setup.state, 'not_assigned');
   assert.equal(requests.length, 2);
   assert.deepEqual(requests.map(r => JSON.parse(r.body).params.name),
@@ -139,4 +139,31 @@ test('invalid setup prevents a second authenticated backend request', async () =
     assert.equal(result.setup, null);
     assert.deepEqual(result.numbers, []);
   }
+});
+
+test('read-only DID inventory must match the configured assigned DID before showing connected', async () => {
+  const did = '+12025550123';
+  const assigned = { ...setup, state: 'assigned_unverified', bridge_number: did };
+  const match = { ...owned, state: 'project_inventory_match',
+    numbers: [{ number: did, voice: true, ownership: 'matched_in_operator_project', routing_enabled: false }] };
+  const good = await inspectIntegration(env, mockFetch({ get_bridge_setup: assigned, list_my_numbers: match }, []));
+  assert.equal(good.status, 'connected');
+  assert.match(good.message, /Carrier ownership.*not verified/);
+  for (const invalid of [
+    { ...match, numbers: [] },
+    { ...match, numbers: [{}] },
+    { ...match, numbers: [{ number: did }] },
+    { ...match, numbers: [{ ...match.numbers[0], number: '+12025550124' }] },
+    { ...match, numbers: [match.numbers[0], match.numbers[0]] },
+    { ...match, numbers: Array(11).fill(match.numbers[0]) },
+    { ...match, state: 'not_confirmed' },
+    { ...match, numbers: [{ ...match.numbers[0], voice: false }] },
+    { ...match, numbers: [{ ...match.numbers[0], routing_enabled: true }] },
+  ]) {
+    const result = await inspectIntegration(env, mockFetch({ get_bridge_setup: assigned, list_my_numbers: invalid }, []));
+    assert.notEqual(result.status, 'connected', JSON.stringify(invalid));
+    assert.ok(!JSON.stringify(result).includes(env.AGENTBRIDGE_ACCOUNT_TOKEN));
+  }
+  const unassigned = await inspectIntegration(env, mockFetch({ get_bridge_setup: setup, list_my_numbers: match }, []));
+  assert.equal(unassigned.status, 'error');
 });
