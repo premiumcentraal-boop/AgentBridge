@@ -609,3 +609,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Issue #71 exposed that Studio accepted only `structuredContent` despite the read-only MCP producer advertising a JSON text fallback. The Studio inspector now accepts the last text block as a JSON card only when the MCP result lacks structured content, contains one or two text blocks, has a bounded final JSON string, and parses to a non-array object. Existing JSON-RPC ID/version correlation and preview-only, disabled-routing, assigned-DID validations remain mandatory.
 - Added offline regression cases for valid text-only setup/inventory and malformed, non-JSON, charge-enabled, oversized, non-text and ambiguous content. Invalid setup must stop before a second authenticated request; errors must not disclose credentials.
 - These changes are on the existing PR #68 branch, not merged or deployed. GitHub exact-head CI and independent producer/consumer contract review remain required; synthetic tests do not establish live carrier ownership, compatibility, or chargeable routing authorization.
+
+
+## 2026-11-21 — Actual backend producer → Studio consumer contract regressions (PR #68, unmerged)
+- Added `server/test/producer-consumer-contract.test.mjs`, exercising actual `getBridgeSetup` and `listMyNumbers` implementations through Studio's `inspectIntegration` with mocked JSON-RPC transport and a synthetic SignalWire read-only GET.
+- Covers structured and text-only MCP result forms, matched voice DID, empty/mismatched/SMS-only inventories, provider HTTP 503, unassigned DID, and missing credentials. Asserts no provider write methods, no exposed credentials, and no claim of verified live routing.
+- This is an offline contract test with synthetic provider responses, not live SignalWire schema verification. Branch remains unmerged and undeployed; exact-head CI and independent review are required.
