@@ -40,6 +40,11 @@ export async function inspectIntegration(env, fetcher = fetch) {
         typeof setup.next_step !== 'string' ||
         !preview(numbers) || !['owned_number', 'number_error'].includes(numbers.card_type) ||
         !(numbers.card_type === 'number_error' || Array.isArray(numbers.numbers))) throw new Error('INVALID_READ_ONLY_CARD');
+    // A valid read-only error card proves the backend responded, but not that
+    // number inventory succeeded. Never paint the Studio as connected on this path.
+    if (numbers.card_type === 'number_error') {
+      return { status: 'error', message: 'Private backend responded, but assigned-number lookup failed. Check provider access and retry.', setup: null, numbers: [] };
+    }
     return { status: 'connected', message: 'Private backend returned preview-only setup. Live calling and carrier ownership are not verified.', setup, numbers, mcp_url: new URL('/mcp', base).href };
   } catch {
     // Never echo provider errors: they may contain a token, host, or carrier data.
