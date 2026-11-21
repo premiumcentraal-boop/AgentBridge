@@ -576,3 +576,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - The read-only `listMyNumbers` producer previously returned `project_inventory_match` when the assigned DID appeared on a provider page even if `links.next` indicated more pages. This overstated inventory completeness and could mislead Studio's downstream readiness indicator.
 - A partial page now returns `incomplete_inventory` and no confirmed number, even when the assigned voice DID appears on that page. Added a regression for the matching-DID-plus-continuation case. No provider pagination is followed, and no routing, purchases or credentials are changed.
 - Exact-head CI, independent provider-contract review and real SignalWire semantics remain unverified at commit time. This change is proposed only; no merge, calls or deployment.
+
+## 2026-11-21 — Malformed falsey DID inventory continuation guard (draft PR #70)
+- Review of the previous pagination guard found that Boolean(links.next) accepted false, zero and empty-string continuation values as terminal, allowing a matching DID to be reported as confirmed on malformed provider pagination metadata.
+- Treat any present non-null continuation value as incomplete and withhold the confirmed DID; add offline regression inputs for false, zero and empty-string cursors. This is a conservative read-only validation change, not a proof of actual SignalWire pagination semantics.
+- Exact-head CI and independent review required; no live calls, paid routing, provider changes, merges or deployments.
