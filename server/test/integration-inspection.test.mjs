@@ -95,3 +95,28 @@ test('backend failure remains generic and does not disclose credentials or remot
   assert.equal(result.setup, null);
   assert.ok(!JSON.stringify(result).includes('test-only-token-do-not-use'));
 });
+
+test('rejects mismatched, missing and malformed JSON-RPC response identifiers', async () => {
+  for (const envelope of [
+    { jsonrpc: '2.0', id: 999 },
+    { jsonrpc: '2.0', id: '1' },
+    { jsonrpc: '2.0' },
+    { jsonrpc: '1.0', id: 1 },
+    { id: 1 },
+    null,
+  ]) {
+    let requests = 0;
+    const result = await inspectIntegration(env, async (_url, init) => {
+      requests++;
+      const rpc = JSON.parse(init.body);
+      const base = envelope === null ? null : { ...envelope, result: { structuredContent: setup } };
+      return Response.json(rpc.id === 1 ? base : {
+        jsonrpc: '2.0', id: rpc.id, result: { structuredContent: owned },
+      });
+    });
+    assert.equal(result.status, 'error', JSON.stringify(envelope));
+    assert.equal(requests, 1, 'invalid first response must prevent number lookup');
+    assert.equal(result.setup, null);
+    assert.ok(!JSON.stringify(result).includes(env.AGENTBRIDGE_ACCOUNT_TOKEN));
+  }
+});
