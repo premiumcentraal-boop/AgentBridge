@@ -615,3 +615,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added `server/test/producer-consumer-contract.test.mjs`, exercising actual `getBridgeSetup` and `listMyNumbers` implementations through Studio's `inspectIntegration` with mocked JSON-RPC transport and a synthetic SignalWire read-only GET.
 - Covers structured and text-only MCP result forms, matched voice DID, empty/mismatched/SMS-only inventories, provider HTTP 503, unassigned DID, and missing credentials. Asserts no provider write methods, no exposed credentials, and no claim of verified live routing.
 - This is an offline contract test with synthetic provider responses, not live SignalWire schema verification. Branch remains unmerged and undeployed; exact-head CI and independent review are required.
+
+## 2026-11-21 — Hosted Worker MCP transport to Studio offline contract (PR #68, unmerged)
+- Added `server/test/hosted-mcp-transport-contract.test.mjs` to invoke the real Cloudflare Worker `/mcp` entrypoint from Studio's `inspectIntegration`, with synthetic account lookup and no SignalWire credentials or provider network. This closes a transport-layer test gap beyond direct producer function calls and synthetic JSON-RPC fixtures.
+- Asserts two correlated read-only `tools/call` requests for valid account setup, generic denial after invalid bearer authentication, malformed/forbidden tool rejection, and no database writes or credential echo. No provider calls, routing activation, purchases, merges or deployment.
+- This does not exercise a deployed HTTP listener, actual provider pagination or real Grok compatibility. Exact-head GitHub Actions and independent review pending at commit time; do not infer beta readiness.
