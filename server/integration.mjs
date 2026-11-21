@@ -26,7 +26,18 @@ export async function inspectIntegration(env, fetcher = fetch) {
       // reply must never be accepted as successful private backend inspection.
       if (!data || data.jsonrpc !== '2.0' || data.id !== id ||
           data.error || data.result?.isError || !data.result) throw new Error();
-      return data.result.structuredContent ?? data.result;
+      if (data.result.structuredContent !== undefined) return data.result.structuredContent;
+      // MCP tools may supply only content text. Accept exactly one JSON card,
+      // not a prose summary, arbitrary nested JSON, or an untrusted envelope.
+      // The producer emits a summary followed by a JSON text card.
+      const blocks = data.result.content;
+      if (!Array.isArray(blocks) || blocks.length < 1 || blocks.length > 2 ||
+          blocks.some(block => !block || block.type !== 'text' || typeof block.text !== 'string')) throw new Error();
+      const candidate = blocks[blocks.length - 1].text;
+      if (candidate.length > 32_000) throw new Error();
+      const card = JSON.parse(candidate);
+      if (!card || typeof card !== 'object' || Array.isArray(card)) throw new Error();
+      return card;
     };
     // Validate setup before sending another authenticated request to the backend.
     // An invalid first card must fail closed without attempting number discovery.
