@@ -89,9 +89,12 @@ export async function listMyNumbers(account,env,fetchImpl=fetch){
   try{
     payload=await readOnlyProvider('',{filter_number:account.did,page_size:10},env,fetchImpl);
   }catch{return unavailable();}
-  const matching=payload.data.some(n=>n&&n.number===account.did &&
-    Array.isArray(n.capabilities)&&n.capabilities.includes('voice'));
+  // A matching entry on a partial provider page is not complete evidence.
+  // Never present it as a confirmed project inventory match until the
+  // provider's full result set has been accounted for.
   const incomplete=Boolean(payload.links?.next);
+  const matching=!incomplete && payload.data.some(n=>n&&n.number===account.did &&
+    Array.isArray(n.capabilities)&&n.capabilities.includes('voice'));
   return {status:200,body:{
     card_type:'owned_number',mode:'preview',provider:'SignalWire',
     state:matching?'project_inventory_match':incomplete?'incomplete_inventory':'not_confirmed',
