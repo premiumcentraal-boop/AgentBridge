@@ -571,3 +571,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Tightened fail-closed pagination validation: only absent or explicit null `links.next` is terminal; false, zero and object cursors no longer bypass the pagination guard.
 - Added offline regression inputs for these malformed cursor shapes. A non-null cursor remains untrusted and never triggers a follow-up fetch or unlock.
 - Previous exact-head `f432ae2` Quality gate #43359731037 passed before this change. New commits require exact-head CI. Real SignalWire response semantics and D1 validation remain manual release gates; no calls, routing activation, deployment or merges.
+
+## 2026-11-21 — Partial SignalWire inventory cannot confirm assigned DID (unmerged PR)
+- The read-only `listMyNumbers` producer previously returned `project_inventory_match` when the assigned DID appeared on a provider page even if `links.next` indicated more pages. This overstated inventory completeness and could mislead Studio's downstream readiness indicator.
+- A partial page now returns `incomplete_inventory` and no confirmed number, even when the assigned voice DID appears on that page. Added a regression for the matching-DID-plus-continuation case. No provider pagination is followed, and no routing, purchases or credentials are changed.
+- Exact-head CI, independent provider-contract review and real SignalWire semantics remain unverified at commit time. This change is proposed only; no merge, calls or deployment.
