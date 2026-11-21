@@ -28,18 +28,17 @@ export async function inspectIntegration(env, fetcher = fetch) {
           data.error || data.result?.isError || !data.result) throw new Error();
       return data.result.structuredContent ?? data.result;
     };
-    const setup = await call('get_bridge_setup', 1);
-    const numbers = await call('list_my_numbers', 2);
-    // A successful JSON-RPC envelope alone does not prove that the remote
-    // backend returned the expected read-only cards. Reject incompatible or
-    // unexpected responses rather than displaying them as a verified setup.
+    // Validate setup before sending another authenticated request to the backend.
+    // An invalid first card must fail closed without attempting number discovery.
     const preview = value => value && typeof value === 'object' && !Array.isArray(value) &&
       value.mode === 'preview' && value.routing_enabled === false &&
       value.purchase_enabled === false;
+    const setup = await call('get_bridge_setup', 1);
     if (!preview(setup) || setup.card_type !== 'bridge_setup' ||
-        typeof setup.next_step !== 'string' ||
-        !preview(numbers) || !['owned_number', 'number_error'].includes(numbers.card_type) ||
-        !(numbers.card_type === 'number_error' || Array.isArray(numbers.numbers))) throw new Error('INVALID_READ_ONLY_CARD');
+        typeof setup.next_step !== 'string' || !setup.next_step.trim()) throw new Error('INVALID_SETUP_CARD');
+    const numbers = await call('list_my_numbers', 2);
+    if (!preview(numbers) || !['owned_number', 'number_error'].includes(numbers.card_type) ||
+        !(numbers.card_type === 'number_error' || Array.isArray(numbers.numbers))) throw new Error('INVALID_NUMBER_CARD');
     // A valid read-only error card proves the backend responded, but not that
     // number inventory succeeded. Never paint the Studio as connected on this path.
     if (numbers.card_type === 'number_error') {
