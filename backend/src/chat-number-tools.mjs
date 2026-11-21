@@ -89,9 +89,19 @@ export async function listMyNumbers(account,env,fetchImpl=fetch){
   try{
     payload=await readOnlyProvider('',{filter_number:account.did,page_size:10},env,fetchImpl);
   }catch{return unavailable();}
-  const matching=payload.data.some(n=>n&&n.number===account.did &&
+  // A matching entry on a partial provider page is not complete evidence.
+  // Never present it as a confirmed project inventory match until the
+  // provider's full result set has been accounted for.
+  // Only an absent or null continuation is terminal; malformed falsey cursors
+  // must not be mistaken for evidence that the provider list is complete.
+  // Require explicit terminal pagination metadata. Missing links or next,
+  // and a full requested page, cannot establish an exhaustive inventory.
+  const links=payload.links;
+  const completeLinks=links!==null && typeof links==='object' &&
+    !Array.isArray(links) && Object.hasOwn(links,'next');
+  const incomplete=!completeLinks || links.next!==null || payload.data.length>=10;
+  const matching=!incomplete && payload.data.some(n=>n&&n.number===account.did &&
     Array.isArray(n.capabilities)&&n.capabilities.includes('voice'));
-  const incomplete=Boolean(payload.links?.next);
   return {status:200,body:{
     card_type:'owned_number',mode:'preview',provider:'SignalWire',
     state:matching?'project_inventory_match':incomplete?'incomplete_inventory':'not_confirmed',
