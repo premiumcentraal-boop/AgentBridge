@@ -67,15 +67,17 @@ test('rejects unexpected, malformed or charge-enabled MCP cards instead of repor
     assert.ok(!JSON.stringify(result).includes(env.AGENTBRIDGE_ACCOUNT_TOKEN));
   }
 });
-test('read-only provider error card is not mistaken for an active route', async () => {
+test('read-only provider error card never marks Studio connected', async () => {
   const result = await inspectIntegration(env, mockFetch({
     get_bridge_setup: setup,
     list_my_numbers: { card_type: 'number_error', mode: 'preview',
       purchase_enabled: false, routing_enabled: false, code: 'PROVIDER_LOOKUP_UNAVAILABLE' },
   }, []));
-  assert.equal(result.status, 'connected');
-  assert.equal(result.numbers.code, 'PROVIDER_LOOKUP_UNAVAILABLE');
-  assert.match(result.message, /not verified/);
+  assert.equal(result.status, 'error');
+  assert.equal(result.setup, null);
+  assert.deepEqual(result.numbers, []);
+  assert.match(result.message, /number lookup failed/);
+  assert.ok(!JSON.stringify(result).includes(env.AGENTBRIDGE_ACCOUNT_TOKEN));
 });
 test('rejects untrusted origins before sending a bearer token', async () => {
   for (const url of ['http://private.example/', 'https://user@private.example/',
