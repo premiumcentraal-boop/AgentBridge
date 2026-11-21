@@ -46,7 +46,7 @@ export async function inspectIntegration(env, fetcher = fetch) {
     }
     // Producer contract: empty inventory is a valid setup state, not a verified DID.
     const validDid = value => typeof value === 'string' &&
-      /^\\+1[2-9]\\d{2}[2-9]\\d{6}$/.test(value);
+      /^\+1[2-9]\d{2}[2-9]\d{6}$/.test(value);
     if (numbers.numbers.length > 10 ||
         !['project_inventory_match', 'incomplete_inventory', 'not_confirmed', 'operator_connection_required'].includes(numbers.state) ||
         numbers.numbers.some(item => !item || typeof item !== 'object' || Array.isArray(item) ||
