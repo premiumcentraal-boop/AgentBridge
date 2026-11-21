@@ -92,7 +92,10 @@ export async function listMyNumbers(account,env,fetchImpl=fetch){
   // A matching entry on a partial provider page is not complete evidence.
   // Never present it as a confirmed project inventory match until the
   // provider's full result set has been accounted for.
-  const incomplete=Boolean(payload.links?.next);
+  // Only an absent or null continuation is terminal; malformed falsey cursors
+  // must not be mistaken for evidence that the provider list is complete.
+  const next=payload.links?.next;
+  const incomplete=next!==undefined && next!==null;
   const matching=!incomplete && payload.data.some(n=>n&&n.number===account.did &&
     Array.isArray(n.capabilities)&&n.capabilities.includes('voice'));
   return {status:200,body:{
