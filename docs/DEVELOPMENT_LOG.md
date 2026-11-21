@@ -571,3 +571,41 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Tightened fail-closed pagination validation: only absent or explicit null `links.next` is terminal; false, zero and object cursors no longer bypass the pagination guard.
 - Added offline regression inputs for these malformed cursor shapes. A non-null cursor remains untrusted and never triggers a follow-up fetch or unlock.
 - Previous exact-head `f432ae2` Quality gate #43359731037 passed before this change. New commits require exact-head CI. Real SignalWire response semantics and D1 validation remain manual release gates; no calls, routing activation, deployment or merges.
+
+## 2026-11-20 — Fail closed on malformed private MCP inspection cards (isolated PR, unmerged)
+- Reviewed the separate Node Studio read-only private backend inspection path in `server/integration.mjs`. Previously any JSON-RPC success with an arbitrary `result` could be reported as `connected`, even when the backend returned unexpected, charge-enabled or non-preview data. This was a misleading integration readiness signal, not proof of a chargeable operation.
+- Validate both returned MCP cards against their preview-only contracts before reporting backend connectivity: bridge setup must have a preview state and next step; number discovery must be an owned-number or provider-error card; both must explicitly disable purchase and routing. Retain generic error handling and never expose account tokens or remote error bodies.
+- Added offline Node regression tests for valid read-only discovery, invalid/charge-enabled cards, provider lookup errors, strict HTTPS origin handling and token-safe failures. The tests use only synthetic HTTP responses and never contact a provider.
+- This is an isolated branch, not merged or deployed. Exact-head GitHub CI and independent review required; a private backend response does not verify actual DID ownership, native Grok Bot compatibility or a live call. No paid routing, calls, purchases, migrations, secrets or deployments were changed.
+
+## 2026-11-20 — Repair legacy Studio integration fixture after preview-only contract hardening (draft PR #68)
+- Exact-head Quality gate run 44837154797 failed one of 233 tests: `server/test/studio.test.mjs` expected `connected` from a generic `{status:'preview'}` JSON-RPC payload. The new fail-closed card validator correctly returned `error`; the legacy success fixture was incompatible with the documented read-only card contract.
+- Updated only the synthetic success fixture to return `bridge_setup` and `owned_number` cards with explicit `mode:'preview'`, `routing_enabled:false`, `purchase_enabled:false`, required next step and numbers array. Existing dedicated negative regressions remain intact; no relaxation of validation or paid-routing policy.
+- GitHub CI must pass on this exact updated branch head before review or merge. No live provider validation, carrier calls, purchases, deployments, payments or merges were performed.
+
+## 2026-11-20 — Bind private MCP inspection responses to request IDs (draft PR #68, unmerged)
+- Independent review found `server/integration.mjs` accepted any JSON-RPC response carrying a valid preview card, even if the envelope lacked `jsonrpc:'2.0'` or its `id` did not match the requested tool call. A mismatched or stale reply could therefore be presented as successful private backend inspection.
+- Require exact JSON-RPC version and per-call ID correlation before accepting the setup or number-discovery response. A malformed first response prevents the second request. Added synthetic regression cases for wrong, string, missing IDs, incorrect/missing protocol version and null replies. No provider calls, routing, purchases or secrets used.
+- Tests are committed but require exact-head GitHub CI and independent review; this is not proof of real backend compatibility or a deployed change. Paid routing remains default-deny.
+
+## 2026-11-20 — Do not mark Studio connected when read-only inventory reports provider failure (draft PR #68)
+- Reviewed the private MCP inspector against its Studio UI. The valid preview-only `number_error` card from `list_my_numbers` previously returned overall `status:'connected'`, painting a green Connected indicator even though the number inventory lookup failed. This is misleading onboarding readiness, not proof of routing authorization.
+- Keep the preview-card and JSON-RPC guards, but return an actionable, generic error status for `number_error` so the Studio displays Check failed rather than Connected; suppress provider error details and any account token. Updated the offline regression to assert error, no exposed setup/inventory, and no token leakage. Successful `owned_number` remains connected and still makes no live-route claim.
+- Changes are isolated to draft PR #68; exact-head CI, independent review, and live provider compatibility checks remain pending. No calls, purchases, paid routing, merges, or deployments.
+
+## 2026-11-20 — Short-circuit untrusted MCP setup before number discovery (draft PR #68)
+- A private MCP backend returning a malformed, charge-enabled or empty-instruction setup card previously still received the second authenticated `list_my_numbers` request before inspection failed. This was unnecessary token-bearing traffic to a backend already failing the preview-only contract.
+- Validate the `get_bridge_setup` preview contract immediately, including a nonblank `next_step`, before making the inventory request. Preserve existing read-only error handling and default-deny routing. Added offline regression cases asserting exactly one request for malformed, charge-enabled and blank-instruction setup cards.
+- Changes are isolated to draft PR #68 and require exact-head CI and independent review. No live carrier, purchase, routing, merge, payment or deployment action occurred.
+
+
+## 2026-11-21 — Distinguish reachable MCP backend from assigned DID match (draft PR #68, unmerged)
+- Address issue #69: read-only `owned_number` responses with empty or malformed inventory previously marked Studio Connected. The producer legitimately returns an empty array before setup, so this now reports `needs_setup` with a visible Setup needed indicator, not a protocol failure.
+- Validate bounded inventory, unique US E.164 DIDs, voice and project-match markers, disabled routing, producer state, and exact correlation to the assigned setup DID before marking Connected. Reject inconsistent nonempty inventories; a match still does NOT establish customer carrier ownership, live routing authorization or Grok Bot compatibility.
+- Added offline positive and negative regressions and updated legacy Studio test expectations. This branch is not merged or deployed. Exact-head CI, local tests where available, and independent review remain mandatory. No provider calls, purchases, payments, migrations or paid routing were enabled.
+
+
+## 2026-11-21 — Strict MCP text-only card fallback for private Studio inspection (PR #68, unmerged)
+- Issue #71 exposed that Studio accepted only `structuredContent` despite the read-only MCP producer advertising a JSON text fallback. The Studio inspector now accepts the last text block as a JSON card only when the MCP result lacks structured content, contains one or two text blocks, has a bounded final JSON string, and parses to a non-array object. Existing JSON-RPC ID/version correlation and preview-only, disabled-routing, assigned-DID validations remain mandatory.
+- Added offline regression cases for valid text-only setup/inventory and malformed, non-JSON, charge-enabled, oversized, non-text and ambiguous content. Invalid setup must stop before a second authenticated request; errors must not disclose credentials.
+- These changes are on the existing PR #68 branch, not merged or deployed. GitHub exact-head CI and independent producer/consumer contract review remain required; synthetic tests do not establish live carrier ownership, compatibility, or chargeable routing authorization.

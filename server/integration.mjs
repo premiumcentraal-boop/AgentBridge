@@ -22,12 +22,59 @@ export async function inspectIntegration(env, fetcher = fetch) {
       const text = await readBoundedWebhookBody(response, 64_000);
       if (!response.ok || text === null) throw new Error();
       const data = JSON.parse(text);
-      if (data.error || data.result?.isError || !data.result) throw new Error();
-      return data.result.structuredContent ?? data.result;
+      // Bind each response to its request: an unrelated or malformed JSON-RPC
+      // reply must never be accepted as successful private backend inspection.
+      if (!data || data.jsonrpc !== '2.0' || data.id !== id ||
+          data.error || data.result?.isError || !data.result) throw new Error();
+      if (data.result.structuredContent !== undefined) return data.result.structuredContent;
+      // MCP tools may supply only content text. Accept exactly one JSON card,
+      // not a prose summary, arbitrary nested JSON, or an untrusted envelope.
+      // The producer emits a summary followed by a JSON text card.
+      const blocks = data.result.content;
+      if (!Array.isArray(blocks) || blocks.length < 1 || blocks.length > 2 ||
+          blocks.some(block => !block || block.type !== 'text' || typeof block.text !== 'string')) throw new Error();
+      const candidate = blocks[blocks.length - 1].text;
+      if (candidate.length > 32_000) throw new Error();
+      const card = JSON.parse(candidate);
+      if (!card || typeof card !== 'object' || Array.isArray(card)) throw new Error();
+      return card;
     };
+    // Validate setup before sending another authenticated request to the backend.
+    // An invalid first card must fail closed without attempting number discovery.
+    const preview = value => value && typeof value === 'object' && !Array.isArray(value) &&
+      value.mode === 'preview' && value.routing_enabled === false &&
+      value.purchase_enabled === false;
     const setup = await call('get_bridge_setup', 1);
+    if (!preview(setup) || setup.card_type !== 'bridge_setup' ||
+        typeof setup.next_step !== 'string' || !setup.next_step.trim()) throw new Error('INVALID_SETUP_CARD');
     const numbers = await call('list_my_numbers', 2);
-    return { status: 'connected', message: 'Private backend responded. Number discovery is read-only; live calling is not enabled by this studio.', setup, numbers, mcp_url: new URL('/mcp', base).href };
+    if (!preview(numbers) || !['owned_number', 'number_error'].includes(numbers.card_type) ||
+        !(numbers.card_type === 'number_error' || Array.isArray(numbers.numbers))) throw new Error('INVALID_NUMBER_CARD');
+    // A valid read-only error card proves the backend responded, but not that
+    // number inventory succeeded. Never paint the Studio as connected on this path.
+    if (numbers.card_type === 'number_error') {
+      return { status: 'error', message: 'Private backend responded, but assigned-number lookup failed. Check provider access and retry.', setup: null, numbers: [] };
+    }
+    // Producer contract: empty inventory is a valid setup state, not a verified DID.
+    const validDid = value => typeof value === 'string' &&
+      /^\+1[2-9]\d{2}[2-9]\d{6}$/.test(value);
+    if (numbers.numbers.length > 10 ||
+        !['project_inventory_match', 'incomplete_inventory', 'not_confirmed', 'operator_connection_required'].includes(numbers.state) ||
+        numbers.numbers.some(item => !item || typeof item !== 'object' || Array.isArray(item) ||
+          !validDid(item.number) || item.voice !== true ||
+          item.ownership !== 'matched_in_operator_project' || item.routing_enabled !== false) ||
+        new Set(numbers.numbers.map(item => item.number)).size !== numbers.numbers.length) {
+      throw new Error('INVALID_NUMBER_INVENTORY');
+    }
+    const matched = numbers.state === 'project_inventory_match' &&
+      numbers.numbers.length === 1 && validDid(setup.bridge_number) &&
+      numbers.numbers[0].number === setup.bridge_number &&
+      setup.state === 'assigned_unverified';
+    if (numbers.numbers.length && !matched) throw new Error('INCONSISTENT_NUMBER_INVENTORY');
+    if (!matched) {
+      return { status: 'needs_setup', message: 'Private backend is reachable, but no assigned US number was confirmed in the read-only project inventory. Complete setup and retry. Live calling remains disabled.', setup, numbers, mcp_url: new URL('/mcp', base).href };
+    }
+    return { status: 'connected', message: 'Assigned US number matched the operator project inventory. Carrier ownership, live calling and routing authorization are not verified.', setup, numbers, mcp_url: new URL('/mcp', base).href };
   } catch {
     // Never echo provider errors: they may contain a token, host, or carrier data.
     return { status: 'error', message: 'Backend could not be verified. Check the server URL, account token and backend health.', setup: null, numbers: [] };
