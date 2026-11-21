@@ -581,3 +581,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Review of the previous pagination guard found that Boolean(links.next) accepted false, zero and empty-string continuation values as terminal, allowing a matching DID to be reported as confirmed on malformed provider pagination metadata.
 - Treat any present non-null continuation value as incomplete and withhold the confirmed DID; add offline regression inputs for false, zero and empty-string cursors. This is a conservative read-only validation change, not a proof of actual SignalWire pagination semantics.
 - Exact-head CI and independent review required; no live calls, paid routing, provider changes, merges or deployments.
+
+## 2026-11-21 — Ambiguous SignalWire number pagination (draft PR #70)
+- Read-only `listMyNumbers` now withholds `project_inventory_match` when `links` or its explicit `next` field is missing, or when the response fills the requested 10-entry page. Explicit `next:null` with fewer than 10 entries remains the offline terminal fixture.
+- Added negative offline cases for absent/null/partial metadata and full-page truncation, plus a positive explicit-terminal control. No provider calls, paid routing, purchases or deployment.
+- Provider pagination semantics and exact-head CI still require independent verification; a matching inventory record does not prove carrier ownership. This PR remains unmerged pending human review.
