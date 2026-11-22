@@ -581,3 +581,7 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Extended the Worker+D1 lifecycle regression to reject a forged SignalWire signature before owner approval and assert reservation state and leg count remain unchanged.
 - Installed a test-scoped global fetch trap so unexpected external carrier/network requests fail the synthetic scenario instead of escaping the harness.
 - These assertions are committed but not yet proven passing in local Node or exact-head GitHub Actions. They do not establish production D1 concurrency, real carrier finality or live Grok Bot compatibility. Paid routing remains default-deny; no calls, merges or deployments.
+
+## 2026-11-22 — Offline carrier-finality lifecycle increment (draft PR #75)
+- Extended the cross-stage Worker/D1-stand-in test with owner-only read-only Voice Logs reconciliation after a synthetic connecting claim: provider 503 and contradictory duplicate outbound children must retain the lock and reject new reservations; exact terminal inbound/outbound evidence can finalize once, persist synthetic charge, and reject repeat finalization.
+- All network calls are intercepted by a synthetic SignalWire-only GET mock; no real provider resources or credentials are used. This is a committed regression, not a claim of successful tests or production D1/provider semantics. Exact-head CI required; no calls, payments, routing activation, merges or deployment.
