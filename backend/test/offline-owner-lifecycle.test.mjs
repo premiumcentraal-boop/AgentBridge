@@ -166,12 +166,21 @@ test('two account tokens cannot inspect, cancel or consume each others active re
   const create=async (e,token,key)=>worker.fetch(api('/v1/reservations','POST',{
     destination:DEST,idempotency_key:key
   },token),e);
-  const firstResponse=await create(env,TOKEN,'tenant-first-001');
-  const secondResponse=await create(secondEnv,secondToken,'tenant-second-001');
+  const firstResponse=await create(env,TOKEN,'tenant-shared-key-001');
+  const secondResponse=await create(secondEnv,secondToken,'tenant-shared-key-001');
   assert.equal(firstResponse.status,201);
   assert.equal(secondResponse.status,201);
   const first=await firstResponse.json(),second=await secondResponse.json();
-  assert.notEqual(first.id,second.id);
+  assert.notEqual(first.id,second.id,'identical idempotency keys must be scoped to account');
+  assert.equal(DB.raw.prepare('SELECT account_id FROM reservations WHERE id=?').get(first.id).account_id,'acct');
+  assert.equal(DB.raw.prepare('SELECT account_id FROM reservations WHERE id=?').get(second.id).account_id,'acct-second');
+  const firstRetry=await create(env,TOKEN,'tenant-shared-key-001');
+  const secondRetry=await create(secondEnv,secondToken,'tenant-shared-key-001');
+  assert.equal(firstRetry.status,200,'first tenant retry must resolve only its own reservation');
+  assert.equal(secondRetry.status,200,'second tenant retry must resolve only its own reservation');
+  assert.equal((await firstRetry.json()).id,first.id);
+  assert.equal((await secondRetry.json()).id,second.id);
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservations').get().n,2);
   assert.equal(state(DB,first.id),'ready');
   assert.equal(state(DB,second.id),'ready');
   for(const [token,e,foreign,own] of [
