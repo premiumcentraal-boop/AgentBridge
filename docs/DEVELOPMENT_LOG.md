@@ -571,3 +571,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Tightened fail-closed pagination validation: only absent or explicit null `links.next` is terminal; false, zero and object cursors no longer bypass the pagination guard.
 - Added offline regression inputs for these malformed cursor shapes. A non-null cursor remains untrusted and never triggers a follow-up fetch or unlock.
 - Previous exact-head `f432ae2` Quality gate #43359731037 passed before this change. New commits require exact-head CI. Real SignalWire response semantics and D1 validation remain manual release gates; no calls, routing activation, deployment or merges.
+
+## 2026-11-22 — Cross-stage offline approval and ambiguous claim regression (draft PR #75)
+- Added a Worker+D1-stand-in regression combining independent owner approval, denied inbound, signed PIN challenge, wrong PIN, committed-but-response-lost claim, replay and new-inbound denial in one scenario (issue #74).
+- Asserted the connecting lock and single durable carrier-leg claim after the simulated D1 response failure. This is synthetic test coverage, not proof of production D1 semantics, carrier reconciliation, or real Grok compatibility.
+- Targeted test, full npm CI and exact-head GitHub Actions verification pending at commit time. No paid routing enabled, calls placed, carrier credentials used, merges or deployments.
