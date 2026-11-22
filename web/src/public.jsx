@@ -66,7 +66,7 @@ export function PublicShell({ children, mode, setMode }) {
             onClick={() => setMode(mode === "dark" ? "light" : "dark")}
           />
           <A to="/studio/" className="header-studio-link">
-            Open Studio <Icon name="arrow" size={15} />
+            <Icon name="overview" size={16} /> Open Studio
           </A>
           <IconBtn
             className="mobile-nav-toggle"
@@ -91,12 +91,13 @@ export function PublicShell({ children, mode, setMode }) {
           <A to="/how-it-works/">How it works</A>
           <A to="/connect/">Get connected</A>
           <A to="/pricing/">Pricing</A>
+          <A to="/docs/">Developers</A>
           <a
             href="https://github.com/premiumcentraal-boop/AgentBridge"
             target="_blank"
             rel="noreferrer"
           >
-            GitHub ↗
+            GitHub
           </a>
           {offline && <A to="/studio/demo/">Sample Studio</A>}
         </nav>
@@ -104,7 +105,7 @@ export function PublicShell({ children, mode, setMode }) {
           <span>© 2026 AgentBridge</span>
           <span>Independent of Grok / xAI.</span>
           <a href="https://victor.ceo" target="_top">
-            Victor.ceo ↗
+            Victor.ceo
           </a>
         </div>
       </footer>
@@ -129,19 +130,19 @@ const steps = [
   [
     "number",
     "Your number",
-    "Start with a number you own.",
+    "Choose your routing number",
     "Connect your SignalWire project in Studio. Import a voice number you already own, or search for a new one and confirm the purchase.",
   ],
   [
     "destination",
     "Destination",
-    "Give the number a destination.",
+    "Save the destination",
     "Save the person or business, their international phone number and a note. You can use the same contact again.",
   ],
   [
     "callback",
     "Callback",
-    "Answer your phone first.",
+    "Answer your phone first",
     "Choose Test callback. Review your callback phone and the destination. When you answer, SignalWire dials the second phone. Both legs use your project.",
   ],
 ];
@@ -155,7 +156,7 @@ export function HowItWorks() {
         Pair your routing number with a contact, then decide how the call
         reaches them.
       </Intro>
-      <section className="frame interactive-flow guide-flow">
+      <section className="frame interactive-flow guide-flow exchange-guide-flow">
         <SegmentedControl
           label="Explore the connection flow"
           value={stage}
@@ -166,7 +167,7 @@ export function HowItWorks() {
             <SegmentedControlItem key={value} value={value} label={label} />
           ))}
         </SegmentedControl>
-        <div className="route-diagram">
+        <div className="route-diagram" aria-label="Parts of a call connection">
           {[
             ["number", "numbers", "Studio line"],
             ["destination", "connection", "London studio"],
@@ -192,7 +193,7 @@ export function HowItWorks() {
           </p>
         </div>
         <A to="/connect/" className="product-button quiet">
-          Set up a connection <Icon name="arrow" />
+          Set up a connection
         </A>
       </section>
     </main>
@@ -282,13 +283,13 @@ export function Connect() {
       </section>
       <section className="product-close frame">
         <div>
-          <h2>Set up your first connection.</h2>
+          <h2>Set up your first connection</h2>
           <p>Already have an account? Open Connections in Studio.</p>
         </div>
         <div className="product-actions">
           <PublicEntry />
           <A to="/studio/connections/" className="product-text-action">
-            Open Connections <Icon name="arrow" />
+            Open Connections
           </A>
         </div>
       </section>
@@ -297,13 +298,13 @@ export function Connect() {
 }
 export function Pricing() {
   return (
-    <main id="main" tabIndex={-1} className="public-guide">
+    <main id="main" tabIndex={-1} className="public-guide billing-guide">
       <Intro title="How calling is billed">
         Bring your own provider account. Your costs depend on the numbers you
         own, the destinations you call and the capture options you choose.
       </Intro>
       <div className="frame guide-columns">
-        <div className="guide-example">
+        <div className="guide-example billing-example">
           <Icon name="calls" size={30} />
           <h2>A test callback</h2>
           <dl>
@@ -348,14 +349,45 @@ export function Pricing() {
         />
       </div>
       <section className="product-close frame">
-        <h2>See which phone rings first.</h2>
+        <h2>See which phone rings first</h2>
         <A to="/how-it-works/" className="product-button quiet">
-          How it works <Icon name="arrow" />
+          How it works
         </A>
       </section>
     </main>
   );
 }
+function ConnectorAddress() {
+  const endpoint = "https://agentbridge.victor.ceo/mcp";
+  const address = React.useRef(null);
+  const [state, setState] = useState("");
+  async function copyAddress() {
+    try {
+      await navigator.clipboard.writeText(endpoint);
+      setState("Copied");
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents(address.current);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      setState("Address selected. Use your device’s copy command.");
+    }
+  }
+  return (
+    <>
+      <code ref={address}>{endpoint}</code>
+      <button type="button" className="copy-endpoint" onClick={copyAddress}>
+        <Icon name="copy" size={16} />
+        Copy address
+      </button>
+      <span className="copy-status" role="status">
+        {state}
+      </span>
+    </>
+  );
+}
+
 export function Docs() {
   return (
     <main id="main" tabIndex={-1} className="public-guide">
@@ -370,13 +402,13 @@ export function Docs() {
           <dl>
             <dt>Connector URL</dt>
             <dd>
-              <code>https://agentbridge.victor.ceo/mcp</code>
+              <ConnectorAddress />
             </dd>
             <dt>Authentication</dt>
             <dd>OAuth with your Studio account</dd>
           </dl>
           <A to="/studio/agents/" className="product-text-action">
-            Open Agents <Icon name="arrow" />
+            Open Agents
           </A>
         </div>
         <GuideRows

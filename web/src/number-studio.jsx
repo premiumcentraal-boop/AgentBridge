@@ -5,6 +5,7 @@ import { Btn, DirectionArrow, Icon } from "./ui.jsx";
 import { ActiveCallCard } from "./studio-navigation.jsx";
 import { CALL_COUNTRIES } from "../../shared/call-plans.mjs";
 import { displayPhone } from "../../shared/phone.mjs";
+import { ConnectionPath } from "./connection-path.jsx";
 import {
   validateNumberConnection,
   validateNumberOrder,
@@ -431,21 +432,12 @@ export function NumberWorkspace({
                     <span className="number-saved-state">Saved</span>
                   )}
                 </div>
-                <div className="connection-number-pair">
-                  <div>
-                    <small>Routing number</small>
-                    <strong>
-                      {displayPhone(number?.e164) || "Number unavailable"}
-                    </strong>
-                    <span>{providerName(number?.provider)}</span>
-                  </div>
-                  <Icon name="arrow" size={18} />
-                  <div>
-                    <small>Destination number</small>
-                    <strong>{displayPhone(link.destination)}</strong>
-                    <span>{countryName(link.country)}</span>
-                  </div>
-                </div>
+                <ConnectionPath
+                  routing={number?.e164}
+                  routingNote={number && providerName(number.provider)}
+                  destination={link.destination}
+                  destinationNote={countryName(link.country)}
+                />
                 <div className="connection-record-actions">
                   {onStartCall && (
                     <Btn

@@ -30,3 +30,29 @@ test('the actual Worker artifact uses the DB binding for one verified tester and
 test('the Worker bundle contains no Node imports, operator key configuration or client-side registration mock',async()=>{
  const source=await readFile(file,'utf8');assert.doesNotMatch(source,/from[\s]*["']node:/);assert.doesNotMatch(source,/STUDIO_ACCESS_KEY_SHA256/);assert.doesNotMatch(source,/no account has been created/i);
 });
+
+test('the private Site renders the homepage and guides before JavaScript and supports seeking the sample', async () => {
+  const home = await (await worker.fetch(new Request(origin), {})).text();
+  assert.match(home, /Connect agents[^<]*<span>worldwide<\/span>/);
+  const path = home.match(/src="([^"]+\.mp3)"/)[1];
+  const url = new URL(path, origin);
+  const fetchAsset = (range, method = "GET") => worker.fetch(new Request(url, { method, headers: range ? { range } : {} }), {});
+  const full = await fetchAsset(null, "HEAD");
+  const length = Number(full.headers.get("content-length"));
+  assert.equal(full.headers.get("content-type"), "audio/mpeg");
+  assert.equal(full.headers.get("accept-ranges"), "bytes");
+  assert.ok(length > 1000);
+  const part = await fetchAsset("bytes=0-1");
+  assert.equal(part.status, 206);
+  assert.equal(part.headers.get("content-range"), "bytes 0-1/" + length);
+  assert.equal((await part.arrayBuffer()).byteLength, 2);
+  const tail = await fetchAsset("bytes=-3");
+  assert.equal(tail.headers.get("content-range"), `bytes ${length-3}-${length-1}/${length}`);
+  assert.equal((await tail.arrayBuffer()).byteLength, 3);
+  assert.equal((await fetchAsset("bytes=" + length + "-")).status, 416);
+  const guide = await (await worker.fetch(new Request(origin + "/docs/"), {})).text();
+  assert.match(guide, /<h1>Connect your agent<\/h1>/);
+  assert.doesNotMatch(guide, /exchange-hero/);
+  const studio = await (await worker.fetch(new Request(origin + "/studio/"), {})).text();
+  assert.match(studio, /data-theme="dark"/);
+});

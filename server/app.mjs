@@ -1,3 +1,4 @@
+import { sampleAudioResponse } from "../shared/sample-audio.mjs";
 import http from 'node:http';
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
@@ -21,7 +22,7 @@ import { RELEASE_VERSION } from '../shared/release.mjs';
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const STUDIO_CSP = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 const PUBLIC_CSP = STUDIO_CSP.replace("connect-src 'self'", "connect-src 'none'").replace("frame-ancestors 'none'", "frame-ancestors 'self' https://victor.ceo https://www.victor.ceo");
-const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.png': 'image/png', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml' };
 const digest = text => createHash('sha256').update(text).digest();
 
 export function createApp({ env = process.env, store = openStore(env.STUDIO_DATABASE_PATH || resolve(ROOT, 'data/studio.sqlite')), fetcher, accountDatabase, captionConnect } = {}) {
@@ -200,6 +201,11 @@ export function createApp({ env = process.env, store = openStore(env.STUDIO_DATA
           content = Buffer.from(content.toString('utf8').replace('id="foundation-root"', attributes.join(' ')));
         }
         if (roomPage && extname(file) === '.html') content = Buffer.from(content.toString('utf8').replace("connect-src 'self'", roomConnect));
+        if (type === 'audio/mpeg') {
+          const audio = sampleAudioResponse(content, req.method === 'GET' ? req.headers.range : null);
+          res.writeHead(audio.status, { ...audio.headers, 'Cache-Control': 'public, max-age=3600' });
+          return res.end(req.method === 'HEAD' ? undefined : audio.body);
+        }
         res.writeHead(200, { 'Content-Type': type, 'Content-Length': content.length, 'Cache-Control': privatePath ? 'no-store' : extname(file) === '.html' ? 'no-cache' : 'public, max-age=3600' });
         res.end(req.method === 'HEAD' ? undefined : content);
       } catch { return fail(404, 'NOT_FOUND', 'Page not found.'); }

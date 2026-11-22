@@ -1,9 +1,11 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { A, useRoute } from "./context.jsx";
 import { BotFace } from "./grok-ui.jsx";
-import { Icon, Wave } from "./ui.jsx";
+import { Icon } from "./ui.jsx";
 import { WorldNetwork } from "./world-network.jsx";
+import { CallStory } from "./sample-story.jsx";
 import sample from "./samples/sample-call.json";
+import waveform from "./samples/sample-waveform.json";
 import audioFile from "./samples/sample-call.mp3";
 
 export function PublicEntry({
@@ -14,74 +16,100 @@ export function PublicEntry({
     <>
       <A className="product-button signup-open" to="/signup/">
         {children}
-        <Icon name="arrow" />
       </A>
       <A className="product-button signup-closed" to="/call-memory/">
         {fallback}
-        <Icon name="arrow" />
       </A>
     </>
   );
 }
 
-const minutes = (seconds) =>
+const sampleClock = (seconds) =>
   "0:" + String(Math.floor(seconds)).padStart(2, "0");
 
 export function ProductHome() {
-  const audio = useRef(null);
-  const transcript = useRef(null);
-  const [playing, setPlaying] = useState(false),
-    [position, setPosition] = useState(0);
-  const [error, setError] = useState(false);
   const { href } = useRoute();
-  const label = playing
+  const audio = useRef(null);
+  const pendingSeek = useRef(null);
+  const transcript = useRef(null);
+  const [playing, setPlaying] = useState(false);
+  const [playingFromTranscript, setPlayingFromTranscript] = useState(false);
+  const [position, setPosition] = useState(0);
+  const [error, setError] = useState(false);
+  const playLabel = playing
     ? "Pause sample"
     : position >= sample.duration - 0.1
       ? "Replay sample call"
       : position > 0
         ? "Resume sample"
         : "Play sample call";
-  async function toggle(event) {
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
-      return;
-    event.preventDefault();
+
+  useEffect(() => {
+    const player = audio.current;
+    return () => {
+      if (player && !player.paused) player.pause();
+    };
+  }, []);
+
+  function seek(seconds) {
     const player = audio.current;
     if (!player) return;
-    if (!player.paused) {
-      player.pause();
-      return;
+    setPosition(seconds);
+    if (player.readyState) {
+      player.currentTime = seconds;
+    } else {
+      const firstSeek = pendingSeek.current === null;
+      pendingSeek.current = seconds;
+      if (firstSeek) player.load();
     }
+  }
+
+  async function play(fromSecond) {
+    const player = audio.current;
+    if (!player) return;
     setError(false);
+    setPlayingFromTranscript(typeof fromSecond === "number");
     try {
-      if (player.ended) player.currentTime = 0;
+      if (typeof fromSecond === "number") seek(fromSecond);
+      else if (player.ended) seek(0);
       await player.play();
     } catch {
       setError(true);
-      transcript.current.open = true;
+      if (transcript.current) transcript.current.open = true;
     }
   }
-  const lines = sample.transcript.filter((line) => line.start <= position);
-  const agent = lines.findLast((line) => line.speaker === "Agent");
-  const recipient =
-    lines.findLast((line) => line.speaker === "Recipient") ||
+
+  function toggle(event) {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+      return;
+    event.preventDefault();
+    if (audio.current && !audio.current.paused) audio.current.pause();
+    else void play();
+  }
+
+  const recent = sample.transcript.filter((line) => line.start <= position);
+  const agent =
+    recent.findLast((line) => line.speaker === "Agent") || sample.transcript[0];
+  const reception =
+    recent.findLast((line) => line.speaker === "Recipient") ||
     sample.transcript[1];
-  const speaking =
-    playing && agent && position < agent.end && position >= agent.start;
+  const speaking = playing && position >= agent.start && position < agent.end;
+  const answering =
+    playing && position >= reception.start && position < reception.end;
   return (
     <main id="main" tabIndex={-1} className="product-redesign">
-      <section className="product-hero frame" aria-label="AgentBridge calling">
-        <div className="product-hero-copy">
+      <section className="exchange-hero frame" aria-label="AgentBridge calling">
+        <div className="exchange-intro">
           <h1>
-            Connect agents
-            <br /> worldwide
+            Connect agents <span>worldwide</span>
           </h1>
           <p>
-            Connect a phone number, follow the conversation and join when you’re
-            needed.
+            Give your agent a phone number. Follow the conversation and join
+            whenever you’re needed.
           </p>
           <div className="gb-hero-actions product-actions">
             <A to="/signup/" className="product-button signup-open">
-              Sign me up <Icon name="arrow" />
+              Sign me up
             </A>
             <a
               className="product-button signup-closed"
@@ -90,165 +118,141 @@ export function ProductHome() {
               aria-controls="hero-audio"
             >
               <Icon name={playing ? "pause" : "play"} />
-              {label}
+              {playLabel}
             </a>
+            <A to="/studio/" className="product-text-action">
+              Open Studio
+            </A>
           </div>
         </div>
-        <div className="call-specimen">
-          <WorldNetwork />
-          <div className="specimen-content">
-            <div className="specimen-heading">
-              <div>
-                <h2>London studio viewing</h2>
-                <small>Sample call · Synthetic voices</small>
-              </div>
-              <div className="specimen-time">
-                <Wave animated={playing} muted={!playing} />
-                <time>{minutes(position)} / 0:34</time>
-              </div>
-            </div>
-            <div className="specimen-line">
-              <span className="specimen-speaker">
-                <BotFace size={26} state={speaking ? "working" : "idle"} />
-                <b>Your agent</b>
-              </span>
-              <p>
-                {position > 0
-                  ? agent?.text
-                  : "Could we arrange a studio viewing for Tuesday morning?"}
-              </p>
-            </div>
-            <div className="specimen-line">
-              <span className="specimen-speaker">
-                <span className="reception-avatar" aria-hidden="true">
-                  R
-                </span>
-                <b>Reception</b>
-              </span>
-              <p>{recipient.text}</p>
-            </div>
-            <div className="specimen-progress" aria-hidden="true">
-              <i
-                style={{
-                  width:
-                    Math.min(100, (position / sample.duration) * 100) + "%",
-                }}
-              />
-            </div>
-            <a
-              className="product-text-action signup-open"
-              href={href("/call-memory/")}
-              onClick={toggle}
-              aria-controls="hero-audio"
-            >
-              <Icon name={playing ? "pause" : "play"} />
-              {label}
-            </a>
-            <details ref={transcript} className="specimen-transcript">
-              <summary>Read transcript</summary>
-              <ol>
-                {sample.transcript.map((line) => (
-                  <li key={line.id}>
-                    <small>
-                      {minutes(line.start)} ·{" "}
-                      {line.speaker === "Agent" ? "Your agent" : "Reception"}
-                    </small>
-                    <p>{line.text}</p>
-                  </li>
-                ))}
-              </ol>
-            </details>
-            {error && (
-              <p role="status">
-                Audio couldn’t play here. The full transcript is open.
-              </p>
-            )}
-            <audio
-              ref={audio}
-              id="hero-audio"
-              src={audioFile}
-              preload="none"
-              onTimeUpdate={(e) => setPosition(e.currentTarget.currentTime)}
-              onPlay={() => setPlaying(true)}
-              onPause={() => setPlaying(false)}
-              onEnded={() => setPlaying(false)}
-            />
-          </div>
-        </div>
+        <WorldNetwork />
       </section>
-      <section className="product-story frame" aria-labelledby="story-heading">
-        <header>
-          <h2 id="story-heading">One call, from start to finish.</h2>
-        </header>
-        <div className="story-grid">
-          <article>
-            <div className="story-art contact-art">
-              <div className="sample-contact">
-                <span className="contact-monogram">L</span>
-                <div>
-                  <strong>London studio</strong>
-                  <small>Saved contact</small>
+
+      <section className="sample-desk frame" aria-labelledby="sample-name">
+        <div className="sample-player">
+          <div className="sample-cover" aria-hidden="true" />
+          <div className="sample-controller">
+            <h2 id="sample-name">London studio viewing</h2>
+            <p>Sample call · Synthetic voices</p>
+            <div className="sample-transport">
+              <button
+                type="button"
+                className="transport-toggle"
+                aria-label={playLabel}
+                aria-controls="hero-audio"
+                onClick={toggle}
+              >
+                <Icon name={playing ? "pause" : "play"} size={20} />
+              </button>
+              <div className="sample-track">
+                <div className="sample-bars" aria-hidden="true">
+                  {waveform.map((level, i) => (
+                    <i
+                      key={i}
+                      style={{ "--level": level + "%" }}
+                      data-heard={
+                        i / waveform.length < position / sample.duration
+                      }
+                    />
+                  ))}
                 </div>
+                <input
+                  type="range"
+                  min="0"
+                  max={sample.duration}
+                  step="0.1"
+                  value={position}
+                  aria-label="Seek sample call"
+                  aria-valuetext={
+                    sampleClock(position) +
+                    " of " +
+                    sampleClock(sample.duration)
+                  }
+                  onChange={(event) => seek(Number(event.target.value))}
+                />
               </div>
-              <p>Next time, ask for reception.</p>
+              <time>
+                {sampleClock(position)} / {sampleClock(sample.duration)}
+              </time>
             </div>
-            <h3>Remember the contact.</h3>
-            <p>
-              Save the number and a note. Your agent can check the last
-              conversation before the next call.
-            </p>
-            <A to="/connect/" className="product-text-action">
-              Connect a destination <Icon name="arrow" />
-            </A>
-          </article>
-          <article>
-            <div className="story-art time-art">
-              <Icon name="transcript" size={26} />
-              <div>
-                <small>0:11 · Your agent</small>
-                <p>Ten thirty London time works.</p>
-              </div>
-            </div>
-            <h3>Keep the details.</h3>
-            <p>
-              Record with permission, read a saved transcript and find the
-              moment you want to revisit.
-            </p>
-            <A to="/call-memory/" className="product-text-action">
-              Explore call history <Icon name="arrow" />
-            </A>
-          </article>
-          <article>
-            <div className="story-art join-art">
-              <BotFace size={42} />
-              <div>
-                <strong>You joined the call</strong>
-                <small>
-                  <Icon name="muted" size={14} /> Your microphone is off
-                </small>
-              </div>
-            </div>
-            <h3>Join when it matters.</h3>
-            <p>
-              See who’s on the line. Listen first, then turn on your microphone
-              when you want to speak.
-            </p>
-            <A to="/join-call/" className="product-text-action">
-              See the call room <Icon name="arrow" />
-            </A>
-          </article>
+          </div>
         </div>
+        <div className="sample-exchange">
+          <div className="sample-voice" data-speaking={speaking}>
+            <span>
+              <BotFace size={26} state={speaking ? "working" : "idle"} />
+              Your agent
+            </span>
+            <p>
+              {position > 0
+                ? agent.text
+                : "Could we arrange a studio viewing for Tuesday morning?"}
+            </p>
+          </div>
+          <div className="sample-voice" data-speaking={answering}>
+            <span>
+              <i className="voice-icon">
+                <Icon name="phone" size={14} />
+              </i>
+              Reception
+            </span>
+            <p>{reception.text}</p>
+          </div>
+          <details ref={transcript} className="specimen-transcript">
+            <summary>
+              Read transcript <Icon name="chevron" size={14} />
+            </summary>
+            <ol>
+              {sample.transcript.map((line) => (
+                <li key={line.id}>
+                  <small>
+                    {sampleClock(line.start)} ·{" "}
+                    {line.speaker === "Agent" ? "Your agent" : "Reception"}
+                  </small>
+                  <p>{line.text}</p>
+                </li>
+              ))}
+            </ol>
+          </details>
+          {error && (
+            <p role="status">
+              Audio couldn’t play here. The full transcript is open.
+            </p>
+          )}
+        </div>
+        <audio
+          ref={audio}
+          id="hero-audio"
+          src={audioFile}
+          preload="none"
+          onLoadedMetadata={(event) => {
+            if (pendingSeek.current !== null) {
+              event.currentTarget.currentTime = pendingSeek.current;
+              pendingSeek.current = null;
+            }
+          }}
+          onTimeUpdate={(event) => setPosition(event.currentTarget.currentTime)}
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          onEnded={() => setPlaying(false)}
+        />
       </section>
-      <section className="product-close frame">
+
+      <CallStory
+        hearingMoment={playing && playingFromTranscript}
+        onHearMoment={() => void play(sample.transcript[2].start)}
+        onPause={() => audio.current?.pause()}
+      />
+      <section className="reach-invitation frame">
         <div>
-          <h2>Same agent. Bigger reach.</h2>
+          <h2>Same agent, bigger reach</h2>
           <p>
-            See how country availability, forwarding and outbound callbacks work
-            with your own number.
+            Check the destination, see which phone rings first and review the
+            two call legs before you dial.
           </p>
         </div>
         <A to="/international-calling/" className="product-button quiet">
-          Explore international calling <Icon name="arrow" />
+          Explore international calling
         </A>
       </section>
     </main>

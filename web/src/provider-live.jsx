@@ -18,6 +18,7 @@ import {
   isActiveCarrierCall as active,
 } from "./studio-navigation.jsx";
 import { displayPhone } from "../../shared/phone.mjs";
+import { ConnectionPath } from "./connection-path.jsx";
 import { contactNotes } from "../../shared/conversations.mjs";
 import { LiveRoom } from "./live-room.jsx";
 import {
@@ -1041,19 +1042,12 @@ export function LiveWorkspace({
                 : "Needs review"}
           </span>
         </div>
-        <div className="live-number-pair">
-          <div>
-            <small>Your routing number</small>
-            <strong>{displayPhone(number?.e164) || "Unavailable"}</strong>
-            <small>{number?.label}</small>
-          </div>
-          <Icon name="arrow" />
-          <div>
-            <small>Destination</small>
-            <strong>{displayPhone(c.destination)}</strong>
-            <small>{c.country}</small>
-          </div>
-        </div>
+        <ConnectionPath
+          routing={number?.e164}
+          routingNote={number?.label}
+          destination={c.destination}
+          destinationNote={c.country}
+        />
         {notes && <p className="contact-note">{notes}</p>}
         <div className="provider-actions">
           <Btn

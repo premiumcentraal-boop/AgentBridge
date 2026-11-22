@@ -305,7 +305,7 @@ export function AccountAuth({ signup = false, embedded = false }) {
       <p className="signup-form-note">
         {session?.provider_live_enabled
           ? "Live testing · Your SignalWire project is billed for provider actions."
-          : "Start in demo mode. Connect your own provider in Settings for live testing."}
+          : "Start in demo mode. Add your SignalWire project in Calling setup when you’re ready to make calls."}
       </p>
     </>
   );

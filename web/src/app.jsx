@@ -17,18 +17,28 @@ import { Signup, Signin } from "./signup.jsx";
 import { AccountEmail } from "./account-auth.jsx";
 function Pages() {
   const { path, offline, accountDemo } = useRoute();
-  const [mode, setMode] = useState("dark");
+  const studio = path.startsWith("/studio/") || path.startsWith("/app/");
+  const [preference, setPreference] = useState(null);
+  const mode = preference || (studio ? "dark" : "light");
   useEffect(() => {
     try {
       const saved = localStorage.getItem("agentbridge-theme");
-      if (saved === "light" || saved === "dark") setMode(saved);
+      if (saved === "light" || saved === "dark") setPreference(saved);
     } catch {}
   }, []);
   const changeTheme = (next) => {
-    setMode(next);
-    try { localStorage.setItem("agentbridge-theme", next); } catch {}
+    setPreference(next);
+    try {
+      localStorage.setItem("agentbridge-theme", next);
+    } catch {}
   };
-  const studio = path.startsWith("/studio/") || path.startsWith("/app/");
+  useEffect(() => {
+    document.documentElement.dataset.theme = mode;
+    document.documentElement.style.colorScheme = mode;
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute("content", mode === "dark" ? "#111319" : "#f8f9fc");
+  }, [mode]);
   const localDemo =
     offline ||
     (!accountDemo &&

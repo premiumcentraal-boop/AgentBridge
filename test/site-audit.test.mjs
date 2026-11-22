@@ -56,5 +56,13 @@ test('the marketing entry reflects public email signup readiness without loading
     assert.equal(html.includes('data-public-signup="true"'), mailReady);
     assert.match(html, /data-callback-countries="US,GB"/);
     assert.match(page.headers.get('content-security-policy'), /connect-src 'none'/);
+    if (mailReady) {
+      const samplePath = html.match(/src="([^"]+\.mp3)"/)[1];
+      const audio = await fetch(origin + samplePath, {headers:{Range:'bytes=0-1'}});
+      assert.equal(audio.status, 206);
+      assert.equal(audio.headers.get('content-type'), 'audio/mpeg');
+      assert.match(audio.headers.get('content-range'), /^bytes 0-1\/\d+$/);
+      assert.equal((await audio.arrayBuffer()).byteLength, 2);
+    }
   }
 });

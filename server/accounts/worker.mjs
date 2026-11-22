@@ -1,6 +1,7 @@
+import { sampleAudioResponse } from "../../shared/sample-audio.mjs";
 import { createAccountService } from './service.mjs';
 import { d1Database } from './database.mjs';
-import { assets, page, paths } from 'agentbridge:assets';
+import { assets, pages } from 'agentbridge:assets';
 import { vaultAvailable } from './credential-vault.mjs';
 
 const policy = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
@@ -24,10 +25,15 @@ export default {
       if (path === '/app' || path === '/app/') return Response.redirect(url.origin+'/studio/',302);
       if (assets[path]) {
         const asset = assets[path], bytes = Uint8Array.from(atob(asset.data), char => char.charCodeAt(0));
+        if (asset.type === 'audio/mpeg') {
+          const audio = sampleAudioResponse(bytes, request.method === 'GET' ? request.headers.get('range') : null);
+          return new Response(request.method === 'HEAD' ? null : audio.body, {status: audio.status, headers: {...baseHeaders, ...audio.headers, 'Cache-Control': 'private, max-age=3600'}});
+        }
         return new Response(request.method === 'HEAD' ? null : bytes,{headers:{...baseHeaders,'Content-Type':asset.type,'Cache-Control':'private, max-age=3600'}});
       }
       const normalized = path.endsWith('/') ? path : path + '/';
-      if (!paths.includes(normalized)) return new Response('Page not found',{status:404,headers:baseHeaders});
+      const page = pages[normalized];
+      if (!page) return new Response('Page not found',{status:404,headers:baseHeaders});
       return new Response(request.method === 'HEAD' ? null : page,{headers:{...baseHeaders,'Content-Type':'text/html; charset=utf-8'}});
     } catch {
       return new Response(JSON.stringify({error:{code:'SERVICE_UNAVAILABLE',message:'The account service is temporarily unavailable.'}}),{status:503,headers:{...baseHeaders,'Content-Type':'application/json'}});
