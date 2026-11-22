@@ -634,3 +634,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Issue #73: a terminal inventory response with duplicate or unrelated DID records could be reported as a positive project match. The read-only producer now requires exactly one record matching the assigned DID with voice capability; ambiguous results return no numbers and an incomplete-inventory state.
 - Updated the existing positive producer fixture to use a single exact match, added duplicate/mixed/unrelated regression cases and two actual Worker MCP → Studio scenarios. No provider writes, routing, purchases, calls or deployment.
 - These changes remain on the dependent integration draft, not merged. Exact-head CI and provider API schema verification remain required; synthetic fixtures do not prove live carrier behavior.
+
+## 2026-11-22 — Local MCP fail-closed inventory contract reconciliation (draft PR #72)
+- Exact-head GitHub Actions run #44989833043 found `npm run ci` green but the separate `npm --prefix local-mcp test` step failing: its legacy fixture returned three project DIDs while expecting `list_my_numbers` to confirm one assigned DID. This expectation conflicts with issue #73's intentional exact-filter fail-closed behavior.
+- Updated the local stdio MCP regression to require `incomplete_inventory`, empty number list and routing disabled for ambiguous mixed-DID responses; preserved the broader read-only `list_project_numbers` inventory assertions.
+- This is a test-contract correction, not a relaxation of the provider guard. Fresh exact-head CI is required; no provider calls, routing activation, merge or deployment occurred.
