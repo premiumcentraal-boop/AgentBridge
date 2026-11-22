@@ -599,3 +599,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added a shared-SQLite/D1-stand-in regression creating two active accounts with distinct API tokens and assigned US DIDs. Each account is verified unable to read or cancel the other account's active reservation; independent owner approval of the first leaves the second ready and neither emits a carrier leg.
 - The test uses synthetic configuration and rejects unexpected external fetch calls. This covers REST account-token isolation, **not** account-scoped owner credentials, cross-isolate D1 concurrency, real carrier callbacks, or Grok Bot compatibility.
 - Exact-head GitHub Actions and targeted test execution are required before acceptance. No paid routing, real calls, merge, or deployment authorized.
+
+
+## 2026-11-22 — Shared-key cross-account idempotency isolation (draft PR #75)
+- Strengthened the two-account Worker/D1-stand-in regression so both accounts deliberately submit the *same* idempotency key. Asserted distinct account-owned reservations, independent same-key retries returning the correct original reservation, exactly two durable rows, and existing cross-account read/cancel denial.
+- This is a committed offline regression, not proof of passing execution or production D1 concurrency. Owner approval remains a global operator-token boundary in this prototype; per-customer owner authorization is not established. Exact-head Node tests and CI required. No carrier actions, purchases, routing activation, merges or deployments.
