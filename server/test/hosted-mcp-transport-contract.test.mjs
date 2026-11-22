@@ -100,6 +100,8 @@ test('combined Worker MCP and Studio fail closed on ambiguous SignalWire paginat
   const originalFetch = globalThis.fetch;
   const cases = [
     { name: 'terminal match', data: [{ number: DID, capabilities: ['voice'] }], links: { next: null }, expected: 'connected' },
+    { name: 'duplicate matching DID', data: [{ number: DID, capabilities: ['voice'] }, { number: DID, capabilities: ['voice'] }], links: { next: null }, expected: 'needs_setup' },
+    { name: 'matching and unrelated DID', data: [{ number: DID, capabilities: ['voice'] }, { number: '+12025550124', capabilities: ['voice'] }], links: { next: null }, expected: 'needs_setup' },
     { name: 'matching DID with continuation', data: [{ number: DID, capabilities: ['voice'] }], links: { next: 'page-two' }, expected: 'needs_setup' },
     { name: 'missing links', data: [{ number: DID, capabilities: ['voice'] }], expected: 'needs_setup' },
     { name: 'missing next', data: [{ number: DID, capabilities: ['voice'] }], links: {}, expected: 'needs_setup' },
