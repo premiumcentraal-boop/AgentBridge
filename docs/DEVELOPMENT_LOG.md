@@ -625,3 +625,7 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added an offline Worker `/mcp` → Studio inspector regression using synthetic credential-configured SignalWire GET responses: terminal matching DID, continuation cursor, missing/malformed pagination metadata, full page and upstream 503.
 - The test asserts read-only provider access, fail-closed Studio status, no credentials or provider error leakage, and no database writes. No carrier requests or paid routing authorized.
 - This integration-only branch stages PR #68 and PR #70; it must not be merged as an independent feature. Test execution and exact-head CI verification are pending; provider schema and real Grok Bot compatibility remain unverified.
+
+## 2026-11-21 — Preserve provider-side pagination regressions in cross-PR integration draft
+- Restored three provider-level fail-closed test cases from PR #70 to the integration draft: matching DID on a partial page, falsey continuation cursors, and missing/ambiguous pagination metadata. The earlier integration draft copied the production guard but omitted these direct backend tests; the new test file now matches PR #70's test blob.
+- Combined Worker → Studio transport scenarios remain separate. This is a non-merged integration staging branch; do not treat this as independent approval for paid routing or production compatibility. CI must be rerun against the new exact head.
