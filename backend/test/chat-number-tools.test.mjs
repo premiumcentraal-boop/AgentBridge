@@ -57,9 +57,7 @@ test('owned-number lookup requests only the assigned DID, returns no other proje
   const fake=async(url,opts)=>{
     seen.push({url,opts});
     return response({data:[
-      {number:DID,capabilities:['voice','sms']},
-      {number:'+12025550124',capabilities:['voice']},
-      {number:DID,capabilities:['sms']}
+      {number:DID,capabilities:['voice','sms']}
     ],links:{next:null}});
   };
   const result=await listMyNumbers(account,base,fake);
@@ -82,6 +80,23 @@ test('owned-number lookup requests only the assigned DID, returns no other proje
   assert.equal(seen[0].opts.redirect,'error');
   assert.equal(seen[0].opts.cache,'no-store');
   assert.equal(seen[0].opts.headers.authorization,'Basic '+btoa(PROJECT+':'+SECRET));
+});
+
+test('owned-number lookup rejects duplicate or unrelated filtered records',async()=>{
+  const scenarios=[
+    [{number:DID,capabilities:['voice']},{number:DID,capabilities:['voice']}],
+    [{number:DID,capabilities:['voice']},{number:'+12025550124',capabilities:['voice']}],
+    [{number:'+12025550124',capabilities:['voice']}],
+    [{number:DID,capabilities:['sms']},{number:DID,capabilities:['voice']}]
+  ];
+  for(const data of scenarios){
+    const result=await listMyNumbers(account,base,async()=>response({data,links:{next:null}}));
+    assert.equal(result.body.state,'incomplete_inventory');
+    assert.deepEqual(result.body.numbers,[]);
+    assert.equal(result.body.routing_enabled,false);
+    assert.ok(!JSON.stringify(result).includes(SECRET));
+    assert.ok(!JSON.stringify(result).includes('+12025550124'));
+  }
 });
 
 test('owned-number lookup never confuses missing, partial or SMS-only results with verification',async()=>{
