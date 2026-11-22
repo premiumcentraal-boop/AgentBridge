@@ -620,3 +620,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added `server/test/hosted-mcp-transport-contract.test.mjs` to invoke the real Cloudflare Worker `/mcp` entrypoint from Studio's `inspectIntegration`, with synthetic account lookup and no SignalWire credentials or provider network. This closes a transport-layer test gap beyond direct producer function calls and synthetic JSON-RPC fixtures.
 - Asserts two correlated read-only `tools/call` requests for valid account setup, generic denial after invalid bearer authentication, malformed/forbidden tool rejection, and no database writes or credential echo. No provider calls, routing activation, purchases, merges or deployment.
 - This does not exercise a deployed HTTP listener, actual provider pagination or real Grok compatibility. Exact-head GitHub Actions and independent review pending at commit time; do not infer beta readiness.
+
+## 2026-11-21 — Cross-PR hosted MCP / SignalWire pagination contract (draft PR #72)
+- Added an offline Worker `/mcp` → Studio inspector regression using synthetic credential-configured SignalWire GET responses: terminal matching DID, continuation cursor, missing/malformed pagination metadata, full page and upstream 503.
+- The test asserts read-only provider access, fail-closed Studio status, no credentials or provider error leakage, and no database writes. No carrier requests or paid routing authorized.
+- This integration-only branch stages PR #68 and PR #70; it must not be merged as an independent feature. Test execution and exact-head CI verification are pending; provider schema and real Grok Bot compatibility remain unverified.
