@@ -629,3 +629,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 ## 2026-11-21 — Preserve provider-side pagination regressions in cross-PR integration draft
 - Restored three provider-level fail-closed test cases from PR #70 to the integration draft: matching DID on a partial page, falsey continuation cursors, and missing/ambiguous pagination metadata. The earlier integration draft copied the production guard but omitted these direct backend tests; the new test file now matches PR #70's test blob.
 - Combined Worker → Studio transport scenarios remain separate. This is a non-merged integration staging branch; do not treat this as independent approval for paid routing or production compatibility. CI must be rerun against the new exact head.
+
+## 2026-11-22 — Reject ambiguous exact-filter SignalWire inventory (draft PR #72, pending)
+- Issue #73: a terminal inventory response with duplicate or unrelated DID records could be reported as a positive project match. The read-only producer now requires exactly one record matching the assigned DID with voice capability; ambiguous results return no numbers and an incomplete-inventory state.
+- Updated the existing positive producer fixture to use a single exact match, added duplicate/mixed/unrelated regression cases and two actual Worker MCP → Studio scenarios. No provider writes, routing, purchases, calls or deployment.
+- These changes remain on the dependent integration draft, not merged. Exact-head CI and provider API schema verification remain required; synthetic fixtures do not prove live carrier behavior.
