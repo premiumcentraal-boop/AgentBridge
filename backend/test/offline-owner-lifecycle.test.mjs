@@ -14,6 +14,9 @@ const state=(DB,id)=>DB.raw.prepare('SELECT status FROM reservations WHERE id=?'
 
 test('owner denial through ambiguous committed PIN response never produces a second leg',async t=>{
   const {env,DB}=await routingSetup(t,{...FLAGS,CALLER_PROOF_MODE:'dtmf_pin'});
+  // Any unexpected real carrier/network request is a hard test failure.
+  // The Worker is invoked in-process; all provider evidence here is synthetic.
+  t.mock.method(globalThis,'fetch',async()=>{throw Error('unexpected external HTTP in offline lifecycle test');});
   const reservationResponse=await worker.fetch(api('/v1/reservations','POST',{
     destination:DEST,idempotency_key:'offline-lifecycle-001'
   }),env);
@@ -30,6 +33,11 @@ test('owner denial through ambiguous committed PIN response never produces a sec
   assert.equal(unapproved.status,200);
   assert.ok(hangup(await unapproved.json()),'no challenge without owner consent');
   assert.equal(legCount(DB,reservation.id),0);
+
+  const forged=await worker.fetch(swml({call:call({call_id:cid(905)})},undefined,{key:'incorrect-synthetic-signing-key'}),env);
+  assert.notEqual(forged.status,200,'forged SignalWire webhook must fail signature verification');
+  assert.equal(legCount(DB,reservation.id),0);
+  assert.equal(state(DB,reservation.id),'ready');
 
   const approved=await approveReservation(env,reservation.id);
   assert.equal(approved.status,200);
