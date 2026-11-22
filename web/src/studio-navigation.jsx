@@ -3,6 +3,7 @@ import { BotFace, StateTag } from "./grok-ui.jsx";
 import { Btn, DirectionArrow, Icon, Wave } from "./ui.jsx";
 import { CallCaptureControls } from "./conversations.jsx";
 import { displayPhone } from "../../shared/phone.mjs";
+import { ConnectionPath } from "./connection-path.jsx";
 
 export const callDuration = (seconds) =>
   `${Math.floor((seconds || 0) / 60)
@@ -78,6 +79,8 @@ export function ActiveCallCard({
     )
     .slice(-3);
   const connected = !call.carrier || carrierConnected(call);
+  const destination = call.destination || (call.carrier ? "" : "+442079460123");
+  const routing = call.routing_number || (call.carrier ? "" : "+12025550110");
   const body = (
     <>
       {call.carrier ? (
@@ -88,9 +91,12 @@ export function ActiveCallCard({
         <BotFace size={navigation ? 36 : 56} tone="neutral" state="working" />
       )}
       <div className="active-call-identity">
-        <strong>{call.label || "London studio"}</strong>
+        {!navigation && (
+          <small className="active-call-label">{connected ? "Live call" : "Outgoing call"}</small>
+        )}
+        <strong>{call.label || (call.carrier ? "Phone call" : "London studio")}</strong>
         {!compact && (
-          <span>{displayPhone(call.destination || "+442079460123")}</span>
+          <span>{displayPhone(destination) || "Destination unavailable"}</span>
         )}
       </div>
       {!compact && (
@@ -114,6 +120,7 @@ export function ActiveCallCard({
         (compact ? "compact-call-card " : "") +
         (expandable ? "expandable-call-card" : "")
       }
+      data-connected={connected}
       aria-label="Active call"
     >
       {expandable || onOpen ? (
@@ -143,17 +150,11 @@ export function ActiveCallCard({
             className="active-call-details"
             hidden={expandable && !expanded}
           >
-            <div className="active-call-numbers">
-              <span>
-                <small>Routing number</small>
-                <b>{call.routing_number || "+12025550110"}</b>
-              </span>
-              <Icon name="arrow" size={14} />
-              <span>
-                <small>Destination</small>
-                <b>{call.destination || "+442079460123"}</b>
-              </span>
-            </div>
+            <ConnectionPath
+              className="active-call-numbers"
+              routing={routing}
+              destination={destination}
+            />
             {expandable && !call.carrier && (
               <div className="active-call-transcript">
                 <div className="active-call-transcript-heading">

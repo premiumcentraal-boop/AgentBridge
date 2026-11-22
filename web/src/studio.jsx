@@ -1083,7 +1083,9 @@ export function Studio({ mode, setMode, isDemo }) {
       <div className="studio-nav-brand">
         <A to="/" aria-label="AgentBridge home">
           <Mark />
-          {(!compact || mobile) && <span>AgentBridge</span>}
+          {(!compact || mobile) && (
+            <span>AgentBridge <small className="studio-brand-label">Studio</small></span>
+          )}
         </A>
         <IconBtn
           label={
@@ -1199,8 +1201,6 @@ export function Studio({ mode, setMode, isDemo }) {
               name="menu"
               onClick={() => setMobileOpen(true)}
             />
-            <span>Workspace</span>
-            <i>/</i>
             <strong>
               {page === "call"
                 ? "Call workspace"
@@ -1208,9 +1208,6 @@ export function Studio({ mode, setMode, isDemo }) {
             </strong>
           </div>
           <div className="workspace-top-actions">
-            <A to="/" className="text-action">
-              Product page <Icon name="diagonal" size={13} />
-            </A>
             {(persistentDemo || liveMode) && (
               <span className="account-demo-badge">
                 {liveMode ? "Live testing" : "Demo"}

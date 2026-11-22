@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { A } from "./context.jsx";
-import { Card, Icon, Mark, Wave } from "./ui.jsx";
+import { Icon, Mark, Wave } from "./ui.jsx";
 import { SampleRecording } from "./call-tools.jsx";
 import { BotFace } from "./grok-ui.jsx";
 export const EXTENSIONS = [
@@ -9,7 +9,7 @@ export const EXTENSIONS = [
     path: "/international-calling/",
     icon: "globe",
     eyebrow: "INTERNATIONAL CALLING",
-    title: "Call across borders.",
+    title: "Call across borders",
     description:
       "Prepare an international destination and a clear brief. Your original agent stays with the conversation.",
     action: "Explore international calling",
@@ -19,7 +19,7 @@ export const EXTENSIONS = [
     path: "/call-memory/",
     icon: "record",
     eyebrow: "OPTIONAL RECORDING & TRANSCRIPTION",
-    title: "Recordings and transcripts.",
+    title: "Recordings and transcripts",
     description:
       "Return to the audio, search the words and find the result. Recording and transcription are separate choices.",
     action: "Explore call memory",
@@ -29,7 +29,7 @@ export const EXTENSIONS = [
     path: "/join-call/",
     icon: "join",
     eyebrow: "CALL ROOMS",
-    title: "Join the call.",
+    title: "Join the call",
     description:
       "Step in alongside your agent when a personal explanation or decision needs you. Then leave the agent to continue.",
     action: "Explore joining a call",
@@ -156,45 +156,42 @@ function FeatureArt({ type, interactive = false }) {
     </div>
   );
 }
-export function FeatureCards({ standalone = false }) {
+export function FeatureCards() {
   return (
-    <section
-      className={"extension-section frame " + (standalone ? "standalone" : "")}
-      aria-label="AgentBridge calling extensions"
-    >
-      <div className="extension-grid">
-        {EXTENSIONS.map((feature) => (
-          <Card key={feature.key} className="extension-card" padding={0}>
-            <FeatureArt type={feature.key} />
-            <div>
-              <span className="eyebrow">{feature.eyebrow}</span>
-              <h3>{feature.title}</h3>
-              <p>{feature.description}</p>
-              <A to={feature.path} className="text-action">
-                {feature.action}
-                <Icon name="diagonal" size={14} />
-              </A>
-            </div>
-          </Card>
-        ))}
-      </div>
-    </section>
+    <nav className="feature-directory frame" aria-label="Calling tools">
+      {EXTENSIONS.map((feature) => (
+        <A
+          key={feature.key}
+          to={feature.path}
+          className="feature-directory-link"
+        >
+          <span className="directory-symbol">
+            <Icon name={feature.icon} size={28} />
+          </span>
+          <div>
+            <h2>{feature.title}</h2>
+            <p>{feature.description}</p>
+          </div>
+          <Icon name="chevron" />
+        </A>
+      ))}
+    </nav>
   );
 }
 export function Features() {
   return (
-    <main id="main" tabIndex={-1}>
+    <main id="main" tabIndex={-1} className="public-guide">
       <header className="guide-intro frame">
         <h1>Calling tools</h1>
         <p>Connect a destination, keep a record and join a call from Studio.</p>
       </header>
-      <FeatureCards standalone />
+      <FeatureCards />
     </main>
   );
 }
 const COPY = {
   international: {
-    title: "Call across borders.",
+    title: "Call across borders",
     description:
       "Save a contact with its country code. Availability depends on the calling method, your workspace and your carrier.",
     steps: [
@@ -223,7 +220,7 @@ const COPY = {
     ],
   },
   memory: {
-    title: "Keep the details you choose.",
+    title: "Keep the details you choose",
     description:
       "Record with everyone’s permission, listen back and find a line in the transcript. Hear how it works in this 34-second sample.",
     steps: [
@@ -252,7 +249,7 @@ const COPY = {
     ],
   },
   join: {
-    title: "Join the conversation.",
+    title: "Join the conversation",
     description:
       "Open a live Studio call room, see the participants and start listening with your microphone off.",
     steps: [

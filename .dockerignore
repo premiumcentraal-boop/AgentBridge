@@ -18,6 +18,7 @@ shared/**
 !shared/numbers.mjs
 !shared/conversations.mjs
 !shared/phone.mjs
+!shared/sample-audio.mjs
 !shared/release.mjs
 !shared/return-path.mjs
 !web/

@@ -348,8 +348,8 @@ test("working preview navigates real pages and keeps call state in the floating 
       ?.textContent.includes("New York office"),
   );
   assert.match(
-    document.querySelector("main .active-call-card").textContent,
-    /\+442079460123/,
+    document.querySelector("main .active-call-card .connection-path > div:last-child dd").textContent,
+    /\+44 20 7946 0123/,
   );
   await endFixtureCall(document);
   await waitFor(() => document.querySelector(".nav-call-empty"));
@@ -670,7 +670,7 @@ test("mobile navigation is a dismissible left drawer with all destinations and a
   named(drawer, "Open call and transcript").click();
   await waitFor(() => !drawer.open);
   await waitFor(() => document.querySelector(".gb-call-layout"));
-  assert.match(document.querySelector("main").textContent, /Routing number/);
+  assert.match(document.querySelector("main .connection-path dt").textContent, /Your routing number/);
   assert.ok(named(document.querySelector("main"), "Join call"));
   trigger.click();
   await waitFor(() => drawer.open);
@@ -1330,7 +1330,7 @@ test("home live call expands and minimizes in place while its action opens the f
   assert.equal(card.querySelector(".active-call-details").hidden, true);
   named(card, "Expand live call").click();
   await waitFor(() => !card.querySelector(".active-call-details").hidden);
-  assert.match(card.textContent, /Routing number/);
+  assert.equal(card.querySelector(".connection-path dt").textContent, "Your routing number");
   assert.match(card.textContent, /Turn on the transcript here/);
   named(card, "Minimize live call").click();
   await waitFor(() => card.querySelector(".active-call-details").hidden);
@@ -1986,4 +1986,39 @@ test("canceling a pending join cannot interrupt a later successful join or creat
     errors.map((e) => e.message),
     [],
   );
+});
+
+test("the homepage sample plays the chosen transcript moment and the example room starts with the mic off", async (t) => {
+  const { dom, window, document, errors, requests } = setup();
+  t.after(() => dom.window.close());
+  await waitFor(() => document.title.includes("Connect agents worldwide"));
+  const story = document.querySelector(".call-story");
+  const audio = document.querySelector("#hero-audio");
+  let loads = 0;
+  audio.load = () => { loads++; };
+  assert.ok(document.querySelectorAll(".route-key .route-stop").length >= 2);
+  assert.equal(document.querySelector(".sample-bars").children.length, 72);
+
+  named(story, "Follow the words").click();
+  await waitFor(() => story.querySelector("blockquote"));
+  named(story, "Listen from 0:11").click();
+  await waitFor(() => document.querySelector('.transport-toggle[aria-label="Pause sample"]'));
+  assert.equal(loads, 1);
+  audio.dispatchEvent(new window.Event("loadedmetadata"));
+  assert.equal(audio.currentTime, 11.36);
+  audio.dispatchEvent(new window.Event("timeupdate"));
+  await waitFor(() => document.querySelector(".sample-voice").dataset.speaking === "true");
+  assert.match(document.querySelector(".sample-exchange").textContent, /Ten thirty London time works/);
+
+  named(story, "Join the conversation").click();
+  await waitFor(() => story.querySelector(".room-example"));
+  named(story, "Join example room").click();
+  await waitFor(() => story.querySelector(".story-people").children.length === 3);
+  assert.equal(named(story, "Mic off").getAttribute("aria-pressed"), "false");
+  named(story, "Mic off").click();
+  await waitFor(() => story.querySelector('[aria-pressed="true"].story-action'));
+  named(story, "Leave example room").click();
+  await waitFor(() => story.querySelector(".story-people").children.length === 2);
+  assert.deepEqual(requests, []);
+  assert.deepEqual(errors, []);
 });
