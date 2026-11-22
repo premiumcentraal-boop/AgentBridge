@@ -576,3 +576,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added a Worker+D1-stand-in regression combining independent owner approval, denied inbound, signed PIN challenge, wrong PIN, committed-but-response-lost claim, replay and new-inbound denial in one scenario (issue #74).
 - Asserted the connecting lock and single durable carrier-leg claim after the simulated D1 response failure. This is synthetic test coverage, not proof of production D1 semantics, carrier reconciliation, or real Grok compatibility.
 - Targeted test, full npm CI and exact-head GitHub Actions verification pending at commit time. No paid routing enabled, calls placed, carrier credentials used, merges or deployments.
+
+## 2026-11-22 — Offline lifecycle network isolation and forged-callback guard (draft PR #75)
+- Extended the Worker+D1 lifecycle regression to reject a forged SignalWire signature before owner approval and assert reservation state and leg count remain unchanged.
+- Installed a test-scoped global fetch trap so unexpected external carrier/network requests fail the synthetic scenario instead of escaping the harness.
+- These assertions are committed but not yet proven passing in local Node or exact-head GitHub Actions. They do not establish production D1 concurrency, real carrier finality or live Grok Bot compatibility. Paid routing remains default-deny; no calls, merges or deployments.
