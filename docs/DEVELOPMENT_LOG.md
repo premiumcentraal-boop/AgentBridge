@@ -585,3 +585,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 ## 2026-11-22 — Offline carrier-finality lifecycle increment (draft PR #75)
 - Extended the cross-stage Worker/D1-stand-in test with owner-only read-only Voice Logs reconciliation after a synthetic connecting claim: provider 503 and contradictory duplicate outbound children must retain the lock and reject new reservations; exact terminal inbound/outbound evidence can finalize once, persist synthetic charge, and reject repeat finalization.
 - All network calls are intercepted by a synthetic SignalWire-only GET mock; no real provider resources or credentials are used. This is a committed regression, not a claim of successful tests or production D1/provider semantics. Exact-head CI required; no calls, payments, routing activation, merges or deployment.
+
+## 2026-11-22 — Offline carrier reconciliation negative-path expansion (draft PR #75)
+- Expanded the synthetic owner force-unlock lifecycle regression to cover provider HTTP 401, HTTP 429 with Retry-After, and a successful carrier response missing the outbound child leg, alongside existing 503 and contradictory duplicate-child evidence.
+- Each negative case must retain `connecting`, preserve exactly one carrier-leg claim, avoid owner-action finality writes, and reject a new reservation. The verified terminal-evidence case still requires one completion and idempotent denial of a second finalization.
+- Commit is pending exact-head CI; no local Node tests were executed in this run. This is mocked GET-only provider evidence, not production provider-contract or D1-concurrency validation. Paid routing stays default-deny; no calls, merges or deployments.
