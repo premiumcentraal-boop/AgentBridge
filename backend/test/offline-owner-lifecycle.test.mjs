@@ -152,3 +152,46 @@ test('carrier finality is denied on missing or contradictory evidence, then rele
   assert.ok(seen.length>=4);
   assert.deepEqual([...new Set(seen.map(x=>x.method))],['GET']);
 });
+
+test('two account tokens cannot inspect, cancel or consume each others active reservation',async t=>{
+  const {env,DB}=await routingSetup(t,{...FLAGS});
+  t.mock.method(globalThis,'fetch',async()=>{throw Error('unexpected external HTTP in tenant isolation test');});
+  const {sha256}=await import('../src/index.mjs');
+  const {DID,BASE,TOKEN}=await import('./helpers/routing-env.mjs');
+  const secondDid='+12025550124';
+  const secondToken='ab_'+'z'.repeat(48);
+  DB.raw.prepare("INSERT INTO accounts (id,api_key_sha256,did,status) VALUES (?,?,?,'active')")
+    .run('acct-second',await sha256(secondToken),secondDid);
+  const secondEnv={...env,US_BRIDGE_DID:secondDid};
+  const create=async (e,token,key)=>worker.fetch(api('/v1/reservations','POST',{
+    destination:DEST,idempotency_key:key
+  },token),e);
+  const firstResponse=await create(env,TOKEN,'tenant-first-001');
+  const secondResponse=await create(secondEnv,secondToken,'tenant-second-001');
+  assert.equal(firstResponse.status,201);
+  assert.equal(secondResponse.status,201);
+  const first=await firstResponse.json(),second=await secondResponse.json();
+  assert.notEqual(first.id,second.id);
+  assert.equal(state(DB,first.id),'ready');
+  assert.equal(state(DB,second.id),'ready');
+  for(const [token,e,foreign,own] of [
+    [TOKEN,env,second,first],[secondToken,secondEnv,first,second]
+  ]){
+    const read=await worker.fetch(api('/v1/reservations/'+foreign.id,'GET',undefined,token),e);
+    assert.equal(read.status,404,'foreign reservation must not be disclosed');
+    const cancel=await worker.fetch(api('/v1/reservations/'+foreign.id+'/cancel','POST',undefined,token),e);
+    assert.equal(cancel.status,409,'foreign reservation must not be cancelled');
+    assert.equal(state(DB,foreign.id),'ready');
+    assert.equal(state(DB,own.id),'ready');
+    assert.equal(legCount(DB,foreign.id),0);
+    assert.equal(legCount(DB,own.id),0);
+  }
+  assert.equal((await approveReservation(env,first.id)).status,200);
+  assert.equal(state(DB,second.id),'ready','first account approval must not consume second reservation');
+  assert.equal(legCount(DB,second.id),0);
+  const firstOwn=await worker.fetch(api('/v1/reservations/'+first.id,'GET',undefined,TOKEN),env);
+  const secondOwn=await worker.fetch(api('/v1/reservations/'+second.id,'GET',undefined,secondToken),secondEnv);
+  assert.equal(firstOwn.status,200);
+  assert.equal(secondOwn.status,200);
+  assert.equal(DB.raw.prepare("SELECT COUNT(*) AS n FROM reservations WHERE status='ready'").get().n,2);
+});
