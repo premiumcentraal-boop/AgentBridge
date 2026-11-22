@@ -80,3 +80,61 @@ test('owner denial through ambiguous committed PIN response never produces a sec
   assert.equal(state(DB,reservation.id),'connecting');
   assert.equal(DB.raw.prepare("SELECT COUNT(*) AS n FROM provider_events WHERE provider_call_id=? AND event_type='swml_pin'").get(goodId).n,1);
 });
+
+
+test('carrier finality is denied on missing or contradictory evidence, then releases only on exact logs',async t=>{
+  const {env,DB}=await routingSetup(t,{
+    ...FLAGS,SIGNALWIRE_SPACE:'example-space',SIGNALWIRE_VOICE_API_TOKEN:'synthetic-read-only-token'
+  });
+  const created=await worker.fetch(api('/v1/reservations','POST',{
+    destination:DEST,idempotency_key:'offline-finality-001'
+  }),env);
+  assert.equal(created.status,201);
+  const {id}=await created.json();
+  assert.equal((await approveReservation(env,id)).status,200);
+  const inbound=cid(951),segment='4'+inbound.slice(1),child=cid(952);
+  DB.raw.prepare("UPDATE reservations SET status='connecting',provider='signalwire',provider_call_id=?,claimed_at=?,max_cost_cents=50 WHERE id=?")
+    .run(inbound,1800000000,id);
+  DB.raw.prepare('INSERT INTO reservation_carrier_legs (reservation_id,provider_segment_id,claimed_at) VALUES (?,?,?)')
+    .run(id,segment,1800000000);
+  const {BASE,OWNER,DID}=await import('./helpers/routing-env.mjs');
+  const review=()=>new Request(BASE+'/v1/owner/reservations/'+id+'/force-unlock',{
+    method:'POST',headers:{authorization:'Bearer '+OWNER,'content-type':'application/json'},
+    body:JSON.stringify({})
+  });
+  const inboundLog={id:segment,parent_id:null,direction:'inbound',status:'completed',to:DID,charge:0.01};
+  const childLog={id:child,parent_id:segment,direction:'outbound',status:'completed',from:DID,to:DEST,charge:0.02};
+  let mode='unavailable',seen=[];
+  t.mock.method(globalThis,'fetch',async(url,options)=>{
+    seen.push({url:String(url),method:options?.method});
+    assert.match(String(url),/^https:\/\/example-space\.signalwire\.com\/api\/voice\/logs/);
+    assert.equal(options?.method,'GET','carrier reconciliation must never issue a paid command');
+    if(mode==='unavailable')return new Response('provider unavailable',{status:503});
+    const data=String(url).endsWith('/'+segment)?inboundLog:{
+      data:mode==='contradictory'?[childLog,{...childLog,id:cid(953)}]:[childLog],
+      links:{self:'synthetic-self',first:'synthetic-first'}
+    };
+    return new Response(JSON.stringify(data),{headers:{'content-type':'application/json'}});
+  });
+  for(const failure of ['unavailable','contradictory']){
+    mode=failure;
+    const result=await worker.fetch(review(),env);
+    assert.equal(result.status,409,failure+' must retain unresolved reservation');
+    assert.equal(state(DB,id),'connecting');
+    assert.equal(legCount(DB,id),1);
+    assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,0);
+    assert.equal((await worker.fetch(api('/v1/reservations','POST',{
+      destination:DEST,idempotency_key:'offline-finality-'+failure
+    }),env)).status,409,'unresolved carrier evidence blocks next reservation');
+  }
+  mode='verified';
+  const verified=await worker.fetch(review(),env);
+  assert.equal(verified.status,200);
+  assert.equal((await verified.json()).carrier_confirmed,true);
+  assert.equal(state(DB,id),'completed');
+  assert.equal(legCount(DB,id),1);
+  assert.equal(DB.raw.prepare('SELECT actual_cost_cents FROM reservation_carrier_legs WHERE reservation_id=?').get(id).actual_cost_cents,3);
+  assert.equal((await worker.fetch(review(),env)).status,409,'terminal reservation cannot reconcile twice');
+  assert.ok(seen.length>=4);
+  assert.deepEqual([...new Set(seen.map(x=>x.method))],['GET']);
+});
