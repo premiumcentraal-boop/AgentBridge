@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.mjs';
-import {routingSetup,api,owner,approveReservation,swml,call,DEST,DID,PIN_URL} from './helpers/routing-env.mjs';
+import {routingSetup,api,approveReservation,swml,call,DEST,PIN_URL} from './helpers/routing-env.mjs';
 
 const FLAGS={PRIVATE_TEST_OUTBOUND_ENABLED:'true',SIGNALWIRE_CONNECT_ENABLED:'true'};
 const cid=n=>'38313c74-b321-4c08-a3ea-'+String(n).padStart(12,'0');
@@ -39,7 +39,8 @@ test('owner denial through ambiguous committed PIN response never produces a sec
   const prompt=await challenge.json();
   assert.ok(prompt.sections.main.some(section=>section.prompt),'signed inbound creates a PIN challenge');
   assert.equal(legCount(DB,reservation.id),0);
-  const badPin=await worker.fetch(swml({call:call({call_id:challengeId}),params:{digits:'00000000'},vars:{prompt_value:'00000000'}},PIN_URL),env);
+  const wrong=reservation.dtmf_pin==='00000000'?'11111111':'00000000';
+  const badPin=await worker.fetch(swml({call:call({call_id:challengeId}),params:{digits:wrong},vars:{prompt_value:wrong}},PIN_URL),env);
   assert.equal(badPin.status,200);
   assert.ok(hangup(await badPin.json()),'bad PIN fails closed');
   assert.equal(legCount(DB,reservation.id),0);
