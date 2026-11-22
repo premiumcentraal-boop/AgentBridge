@@ -100,16 +100,21 @@ export async function listMyNumbers(account,env,fetchImpl=fetch){
   const completeLinks=links!==null && typeof links==='object' &&
     !Array.isArray(links) && Object.hasOwn(links,'next');
   const incomplete=!completeLinks || links.next!==null || payload.data.length>=10;
-  const matching=!incomplete && payload.data.some(n=>n&&n.number===account.did &&
-    Array.isArray(n.capabilities)&&n.capabilities.includes('voice'));
+  // An exact filtered lookup must return one unambiguous record. A duplicate
+  // or unrelated DID is not proof of the account's assigned number.
+  const ambiguous=!incomplete && (payload.data.length>1 ||
+    (payload.data.length===1 && payload.data[0]?.number!==account.did));
+  const matching=!incomplete && !ambiguous && payload.data.length===1 &&
+    Array.isArray(payload.data[0]?.capabilities) &&
+    payload.data[0].capabilities.includes('voice');
   return {status:200,body:{
     card_type:'owned_number',mode:'preview',provider:'SignalWire',
-    state:matching?'project_inventory_match':incomplete?'incomplete_inventory':'not_confirmed',
+    state:matching?'project_inventory_match':incomplete||ambiguous?'incomplete_inventory':'not_confirmed',
     numbers:matching?[{number:account.did,voice:true,
       ownership:'matched_in_operator_project',routing_enabled:false}]:[],
     purchase_enabled:false,routing_enabled:false,price_verified:false,
     next_step:matching?'The operator must separately verify the customer/provider relationship and secure inbound routing.':
-      incomplete?'The provider returned more results; ownership remains unconfirmed.':
+      incomplete||ambiguous?'The provider inventory could not be verified as complete and unambiguous.':
         'Check the assigned number and the provider project; no ownership was established.',
     warning:'A matching provider Project inventory entry does not authenticate a Grok Bot call or activate forwarding.'
   }};
