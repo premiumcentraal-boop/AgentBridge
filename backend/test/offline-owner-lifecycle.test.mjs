@@ -118,6 +118,18 @@ test('carrier finality is denied on missing or contradictory evidence, then rele
     };
     return new Response(JSON.stringify(data),{headers:{'content-type':'application/json'}});
   });
+  // A caller with no owner authority must never trigger carrier-log reads or unlock.
+  const unauthorizedReview=new Request(BASE+'/v1/owner/reservations/'+id+'/force-unlock',{
+    method:'POST',headers:{authorization:'Bearer invalid-owner-token','content-type':'application/json'},
+    body:JSON.stringify({})
+  });
+  const unauthorizedResult=await worker.fetch(unauthorizedReview,env);
+  assert.notEqual(unauthorizedResult.status,200,'unauthorized finality must be rejected');
+  assert.equal(seen.length,0,'invalid owner token must not access carrier logs');
+  assert.equal(state(DB,id),'connecting');
+  assert.equal(legCount(DB,id),1);
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,0);
+
   for(const failure of ['unavailable','unauthorized','rate-limited','missing-child','contradictory']){
     mode=failure;
     const result=await worker.fetch(review(),env);
