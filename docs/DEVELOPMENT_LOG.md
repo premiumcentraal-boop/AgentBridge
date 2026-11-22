@@ -571,3 +571,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Tightened fail-closed pagination validation: only absent or explicit null `links.next` is terminal; false, zero and object cursors no longer bypass the pagination guard.
 - Added offline regression inputs for these malformed cursor shapes. A non-null cursor remains untrusted and never triggers a follow-up fetch or unlock.
 - Previous exact-head `f432ae2` Quality gate #43359731037 passed before this change. New commits require exact-head CI. Real SignalWire response semantics and D1 validation remain manual release gates; no calls, routing activation, deployment or merges.
+
+## 2026-11-22 — Hourly quality gate dependency installation repair (PR pending)
+- Investigated main commit `c0c8674` hourly quality run #45061747998: the `audit` job failed 13/173 tests because the workflow installed `web/` dependencies but omitted root `npm ci`; Node could not resolve root dependencies `express`, `ws`, `libphonenumber-js`, and `@modelcontextprotocol/sdk`. Static-site build consequently failed and `dist/signup/index.html` was absent.
+- Updated `.github/workflows/hourly-quality.yml` to run root `npm ci --ignore-scripts --no-audit --no-fund` before the existing web install and full `npm run ci`. No application logic, routing, provider configuration or secrets changed.
+- Verification pending: exact-head GitHub Actions rerun or manually dispatched hourly workflow on this branch; no local clone/test execution performed. Do not interpret this dependency fix as verification of production calling or D1 behavior.
