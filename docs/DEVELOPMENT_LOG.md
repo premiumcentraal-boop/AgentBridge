@@ -594,3 +594,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 ## 2026-11-22 — Owner authorization before carrier reconciliation (draft PR #75, unmerged)
 - Added an offline cross-stage assertion that a forged owner token cannot invoke the force-unlock reconciliation endpoint, cannot read SignalWire Voice Logs, cannot record an owner finalization and cannot release the connecting reservation. This closes an explicit authorization-test gap in the existing synthetic carrier-finality fixture; no routing behavior or production settings changed.
 - Prior commit `9cd7716` passed GitHub Actions Quality gate run 45033183963. This new assertion requires fresh exact-head CI and does not establish production D1 isolation, provider contract fidelity or actual carrier authorization. No calls, purchases, payments, routing activation, merge or deployment.
+
+## 2026-11-22 — Offline two-account reservation isolation (draft PR #75)
+- Added a shared-SQLite/D1-stand-in regression creating two active accounts with distinct API tokens and assigned US DIDs. Each account is verified unable to read or cancel the other account's active reservation; independent owner approval of the first leaves the second ready and neither emits a carrier leg.
+- The test uses synthetic configuration and rejects unexpected external fetch calls. This covers REST account-token isolation, **not** account-scoped owner credentials, cross-isolate D1 concurrency, real carrier callbacks, or Grok Bot compatibility.
+- Exact-head GitHub Actions and targeted test execution are required before acceptance. No paid routing, real calls, merge, or deployment authorized.
