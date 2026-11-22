@@ -33,6 +33,7 @@ export function ProductHome() {
   const pendingSeek = useRef(null);
   const transcript = useRef(null);
   const [playing, setPlaying] = useState(false);
+  const [playingFromTranscript, setPlayingFromTranscript] = useState(false);
   const [position, setPosition] = useState(0);
   const [error, setError] = useState(false);
   const playLabel = playing
@@ -67,6 +68,7 @@ export function ProductHome() {
     const player = audio.current;
     if (!player) return;
     setError(false);
+    setPlayingFromTranscript(typeof fromSecond === "number");
     try {
       if (typeof fromSecond === "number") seek(fromSecond);
       else if (player.ended) seek(0);
@@ -236,7 +238,11 @@ export function ProductHome() {
         />
       </section>
 
-      <CallStory onHearMoment={() => void play(sample.transcript[2].start)} />
+      <CallStory
+        hearingMoment={playing && playingFromTranscript}
+        onHearMoment={() => void play(sample.transcript[2].start)}
+        onPause={() => audio.current?.pause()}
+      />
       <section className="reach-invitation frame">
         <div>
           <h2>Same agent, bigger reach</h2>

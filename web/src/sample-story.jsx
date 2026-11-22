@@ -28,7 +28,7 @@ const chapters = [
   },
 ];
 
-export function CallStory({ onHearMoment }) {
+export function CallStory({ hearingMoment, onHearMoment, onPause }) {
   const [selected, setSelected] = useState(chapters[0]);
   const [joined, setJoined] = useState(false);
   const [micOn, setMicOn] = useState(false);
@@ -90,10 +90,11 @@ export function CallStory({ onHearMoment }) {
             <button
               type="button"
               className="story-action"
-              onClick={onHearMoment}
+              aria-controls="hero-audio"
+              onClick={hearingMoment ? onPause : onHearMoment}
             >
-              <Icon name="headphones" />
-              Listen from 0:11
+              <Icon name={hearingMoment ? "pause" : "headphones"} />
+              {hearingMoment ? "Pause sample" : "Listen from 0:11"}
             </button>
           </div>
         ) : (

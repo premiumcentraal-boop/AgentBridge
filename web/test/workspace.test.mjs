@@ -2009,6 +2009,8 @@ test("the homepage sample plays the chosen transcript moment and the example roo
   audio.dispatchEvent(new window.Event("timeupdate"));
   await waitFor(() => document.querySelector(".sample-voice").dataset.speaking === "true");
   assert.match(document.querySelector(".sample-exchange").textContent, /Ten thirty London time works/);
+  named(story, "Pause sample").click();
+  await waitFor(() => document.querySelector('.transport-toggle[aria-label="Resume sample"]'));
 
   named(story, "Join the conversation").click();
   await waitFor(() => story.querySelector(".room-example"));

@@ -430,7 +430,11 @@ export function WorldNetwork() {
               <span className="route-stop" key={arm.id}>
                 <i style={{ backgroundColor: arm.colour }} />
                 <span className="route-country-name">{arm.country.name}</span>
-                <abbr className="route-country-code" title={arm.country.name}>
+                <abbr
+                  className="route-country-code"
+                  title={arm.country.name}
+                  aria-hidden="true"
+                >
                   {arm.country.code}
                 </abbr>
               </span>
