@@ -110,13 +110,15 @@ test('carrier finality is denied on missing or contradictory evidence, then rele
     assert.match(String(url),/^https:\/\/example-space\.signalwire\.com\/api\/voice\/logs/);
     assert.equal(options?.method,'GET','carrier reconciliation must never issue a paid command');
     if(mode==='unavailable')return new Response('provider unavailable',{status:503});
+    if(mode==='unauthorized')return new Response('invalid provider token',{status:401});
+    if(mode==='rate-limited')return new Response('slow down',{status:429,headers:{'retry-after':'60'}});
     const data=String(url).endsWith('/'+segment)?inboundLog:{
-      data:mode==='contradictory'?[childLog,{...childLog,id:cid(953)}]:[childLog],
+      data:mode==='contradictory'?[childLog,{...childLog,id:cid(953)}]:mode==='missing-child'?[]:[childLog],
       links:{self:'synthetic-self',first:'synthetic-first'}
     };
     return new Response(JSON.stringify(data),{headers:{'content-type':'application/json'}});
   });
-  for(const failure of ['unavailable','contradictory']){
+  for(const failure of ['unavailable','unauthorized','rate-limited','missing-child','contradictory']){
     mode=failure;
     const result=await worker.fetch(review(),env);
     assert.equal(result.status,409,failure+' must retain unresolved reservation');
