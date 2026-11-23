@@ -195,17 +195,52 @@ async function ownerRoute(request,url,env){
     try{return json({calls:await recentInboundCalls(env,Number(url.searchParams.get('limit')||20))});}
     catch{return error('NOT_CONFIGURED','Apply migration 0004 (inbound_call_log)',503);}
   }
-  const m=url.pathname.match(/^\/v1\/owner\/reservations\/([a-f0-9-]{36})\/(review|approve|mark-ended|force-unlock)$/i);
+  const m=url.pathname.match(/^\/v1\/owner\/reservations\/([a-f0-9-]{36})\/(review|approve|mark-ended|force-unlock|recovery-status)$/i);
   if(!m)return error('NOT_FOUND','Route not found',404);
   const action=m[2];
-  if(request.method!==(action==='review'?'GET':'POST'))
-    return error('METHOD_NOT_ALLOWED',action==='review'?'GET required':'POST required',405);
+  if(request.method!==((action==='review'||action==='recovery-status')?'GET':'POST'))
+    return error('METHOD_NOT_ALLOWED',(action==='review'||action==='recovery-status')?'GET required':'POST required',405);
   const auth=request.headers.get('authorization')||'';
   const token=auth.startsWith('Bearer ')?auth.slice(7).trim():'';
   if(token.length<32||token.length>256||
      !safeEqual(await sha256(token),env.OWNER_APPROVAL_TOKEN_SHA256))
     return error('UNAUTHORIZED','Owner approval token required',401);
   const now=Math.floor(Date.now()/1000);
+  if(action==='recovery-status'){
+    // Read-only operator diagnosis. Never consult the carrier or infer recovery
+    // from a terminal reservation status without its matching durable evidence.
+    try{
+      const row=await env.DB.prepare('SELECT id,status,completed_at FROM reservations WHERE id=?')
+        .bind(m[1]).first();
+      if(!row)return error('NOT_FOUND','Reservation not found',404);
+      const audits=await env.DB.prepare("SELECT id,action,prior_status,carrier_code,created_at FROM owner_actions WHERE reservation_id=? ORDER BY created_at DESC,id DESC LIMIT 2")
+        .bind(row.id).all();
+      const entries=audits?.results;
+      if(!Array.isArray(entries))return error('RECOVERY_EVIDENCE_UNAVAILABLE','Recovery evidence cannot be verified',503);
+      let recovery='none',audit=null;
+      if(row.status==='failed'){
+        if(entries.length===1&&entries[0].action==='force_unlock'&&
+           entries[0].prior_status==='connecting'&&
+           Number.isInteger(row.completed_at)&&Number.isInteger(entries[0].created_at)&&
+           entries[0].created_at===row.completed_at){
+          recovery='verified_force_unlock';
+          audit={action_id:entries[0].id,created_at:entries[0].created_at,carrier_code:entries[0].carrier_code};
+        }else recovery='ambiguous';
+      }else if(row.status==='completed'){
+        // A completed state alone does not prove carrier billing finality.
+        const legs=await env.DB.prepare('SELECT reconciled_at,actual_cost_cents FROM reservation_carrier_legs WHERE reservation_id=? LIMIT 2')
+          .bind(row.id).all();
+        const evidence=legs?.results;
+        recovery=entries.length===0&&Array.isArray(evidence)&&evidence.length===1&&
+          Number.isInteger(evidence[0].reconciled_at)&&evidence[0].reconciled_at>0&&
+          Number.isInteger(evidence[0].actual_cost_cents)&&evidence[0].actual_cost_cents>=0
+          ?'verified_carrier_completion':'ambiguous';
+      }else if(entries.length)recovery='ambiguous';
+      return json({reservation_id:row.id,status:row.status,completed_at:row.completed_at??null,recovery,...(audit?{audit}:{})});
+    }catch{
+      return error('RECOVERY_EVIDENCE_UNAVAILABLE','Recovery evidence cannot be verified',503);
+    }
+  }
   if(action==='mark-ended'){
     // Carrier Voice Logs identify SWML segment IDs (not the stable call_id).
     // Never unlock a connecting reservation based only on an operator click.
