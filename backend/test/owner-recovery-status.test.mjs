@@ -101,3 +101,48 @@ test('failed state without an owner audit never claims verified unlock',async t=
   assert.equal((await response.json()).recovery,'ambiguous');
   assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,0);
 });
+
+
+test('real owner force-unlock path remains diagnosable after a committed batch loses response metadata',async t=>{
+  const {env,DB,id}=await reservation(t);
+  const segment='48313c74-b321-4c08-a3ea-7123449130ab';
+  DB.raw.prepare("UPDATE reservations SET status='connecting',provider='signalwire',provider_call_id=?,claimed_at=?,max_cost_cents=6 WHERE id=?")
+    .run('38313c74-b321-4c08-a3ea-7123449130ab',T0,id);
+  DB.raw.prepare('INSERT INTO reservation_carrier_legs (reservation_id,provider_segment_id,claimed_at) VALUES (?,?,?)')
+    .run(id,segment,T0);
+  let carrierReads=0;
+  t.mock.method(globalThis,'fetch',async()=>{
+    carrierReads++;
+    return new Response('synthetic carrier unavailable',{status:503});
+  });
+  const originalBatch=env.DB.batch.bind(env.DB);
+  env.DB.batch=async statements=>{
+    const committed=await originalBatch(statements);
+    assert.ok(committed.length>0);
+    // Storage committed all statements, but its response metadata was lost.
+    return committed.map(()=>({meta:{}}));
+  };
+  const endpoint=BASE+'/v1/owner/reservations/'+id+'/force-unlock';
+  const unlockRequest=()=>new Request(endpoint,{
+    method:'POST',
+    headers:{authorization:'Bearer '+OWNER,'content-type':'application/json'},
+    body:JSON.stringify({force:true,reason:'Confirmed call termination in provider dashboard'})
+  });
+  const response=await worker.fetch(unlockRequest(),env);
+  assert.equal(response.status,503);
+  assert.equal((await response.json()).error.code,'AUDIT_STORAGE_UNAVAILABLE');
+  assert.equal(DB.raw.prepare('SELECT status FROM reservations WHERE id=?').get(id).status,'failed');
+  assert.equal(DB.raw.prepare("SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=? AND action='force_unlock'").get(id).n,1);
+  const observed=await read(env,id);
+  assert.equal(observed.status,200);
+  const body=await observed.json();
+  assert.equal(body.recovery,'verified_force_unlock');
+  assert.equal(body.status,'failed');
+  assert.equal(body.audit.action_id,DB.raw.prepare("SELECT id FROM owner_actions WHERE reservation_id=?").get(id).id);
+  assert.ok(!JSON.stringify(body).includes(DEST));
+  const again=await read(env,id);
+  assert.equal((await again.json()).recovery,'verified_force_unlock');
+  assert.equal((await worker.fetch(unlockRequest(),env)).status,409);
+  assert.equal(DB.raw.prepare("SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?").get(id).n,1);
+  assert.equal(carrierReads,1,'diagnosis and rejected retry must not contact the carrier');
+});
