@@ -13,6 +13,7 @@ import "./call-room.css";
 import "./product-studio.css";
 import "./exchange-system.css";
 import "./public-experience.css";
+import "./product-tour.css";
 import "./studio-experience.css";
 const root = document.getElementById("foundation-root");
 const offline = root.dataset.offline === "true";

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { openAccountDatabase } from '../server/accounts/node-database.mjs';
+import { marketingSections } from '../shared/marketing-routes.mjs';
 const file=new URL('../web/.cache/account-site/dist/server/index.js',import.meta.url);
 const worker=(await import(file)).default;
 function binding(database){
@@ -33,6 +34,12 @@ test('the Worker bundle contains no Node imports, operator key configuration or 
 
 test('the private Site renders the homepage and guides before JavaScript and supports seeking the sample', async () => {
   const home = await (await worker.fetch(new Request(origin), {})).text();
+  for (const [path, id] of Object.entries(marketingSections)) {
+    assert.ok(home.includes('id="' + id + '"'));
+    const redirect = await worker.fetch(new Request(origin + path + '?ref=guide'), {});
+    assert.equal(redirect.status, 301);
+    assert.equal(redirect.headers.get('location'), '/?ref=guide#' + id);
+  }
   assert.match(home, /Connect agents[^<]*<span>worldwide<\/span>/);
   const path = home.match(/src="([^"]+\.mp3)"/)[1];
   const url = new URL(path, origin);

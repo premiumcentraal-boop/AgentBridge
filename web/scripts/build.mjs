@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile, readdir } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
+import { marketingSection } from "../../shared/marketing-routes.mjs";
 const web = resolve(dirname(fileURLToPath(import.meta.url)), ".."),
   root = resolve(web, ".."),
   dist = resolve(root, "dist");
@@ -58,6 +59,26 @@ const revision = createHash("sha256")
 const defaultCsp =
   "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; upgrade-insecure-requests";
 for (const path of WEB_PAGES) {
+  const file = resolve(dist, path === "/" ? "index.html" : path.slice(1) + "index.html");
+  await mkdir(dirname(file), { recursive: true });
+  const chapter = marketingSection(path);
+  if (chapter) {
+    // Static hosts without server redirects also retain a working bookmark.
+    const target = base + "/#" + chapter;
+    const title = TITLES[path];
+    const fallback = `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="${defaultCsp}"><meta name="referrer" content="no-referrer">
+<meta name="description" content="This guide is now part of the AgentBridge product tour.">
+<link rel="canonical" href="https://agentbridge.victor.ceo/"><meta http-equiv="refresh" content="0;url=${target}">
+<title>${title}</title></head><body>
+<a href="#main">Skip to content</a><main id="main"><h1>${title.split(" | ")[0]}</h1>
+<p><a href="${target}">Continue to this section on the AgentBridge homepage</a></p></main>
+</body></html>`;
+    await writeFile(file, fallback);
+    continue;
+  }
   const studioPage = path.startsWith("/studio/") || path.startsWith("/app/");
   const initialTheme = studioPage ? "dark" : "light";
   const privatePage =
@@ -79,11 +100,6 @@ for (const path of WEB_PAGES) {
       ? "Your workspace | AgentBridge"
       : "Private Studio | AgentBridge");
   const html = `<!doctype html><html lang="en" data-theme="${initialTheme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="${policy}"><meta name="referrer" content="no-referrer"><meta name="theme-color" content="${studioPage ? "#111319" : "#f8f9fc"}"><meta name="description" content="Connect a phone number to your agent. Follow a call, join the conversation and keep the details you choose in AgentBridge Studio.">${privatePage ? '<meta name="robots" content="noindex,nofollow">' : `<link rel="canonical" href="https://agentbridge.victor.ceo${path}">`}<title>${title}</title><link rel="icon" href="${base}/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="${base}/assets/foundation/main.css?v=${revision}"><script type="module" src="${base}/assets/foundation/main.js?v=${revision}"></script></head><body><div id="foundation-root" data-base="${base}">${content}</div><noscript><p class="no-script-note">Public pages and links remain readable. Enable JavaScript for studio forms and call-preview interactions.</p></noscript></body></html>`;
-  const file = resolve(
-    dist,
-    path === "/" ? "index.html" : path.slice(1) + "index.html",
-  );
-  await mkdir(dirname(file), { recursive: true });
   await writeFile(file, html);
 }
 const lock = JSON.parse(

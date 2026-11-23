@@ -104,22 +104,20 @@ work before JavaScript starts. The original `/design/` gallery remains available
 - `/` — Product overview
 - `/signup/`, `/signin/` — Server-backed signup and account sessions when configured
 - `/verify-email/`, `/forgot-password/`, `/reset-password/` — Public email verification and recovery
-- `/features/` — Calling extensions overview
-- `/international-calling/` — International call planning walkthrough
-- `/call-memory/` — Optional recording/transcription and playable sample
-- `/join-call/` — Let me join walkthrough and interactive participant illustration
-- `/how-it-works/` — Interactive three-step walkthrough
-- `/pricing/` — Preview and self-hosting options
-- `/connect/` — Studio access and private backend setup
-- `/docs/` — Developer and deployment notes
+- `/#call-tour` — Continuous walkthrough of contacts, transcripts and joining a call
+- `/#how-it-works`, `/#coverage`, `/#pricing` — Setup, callback countries and provider costs
+- `/#developers` and `/docs/` — MCP introduction and the full connector reference
+- Former marketing guide URLs redirect to the corresponding homepage sections.
 - `/studio/` — Protected operator workspace
 - `/studio/demo/` — Sample workspace with persistent in-tab floating call preview
 - `/studio/{numbers,connections,routes,calls,memory,connection,activity,settings,call,design}/` — Direct studio pages
 - `/studio/demo/{numbers,connections,routes,calls,memory,connection,activity,settings,call,design}/` — Matching demo pages
 - `/app/` — Compatibility link to the sample studio
 
-The main hero says **Connect agents worldwide**, with a signup-first action, secondary studio entry and an interactive sample-agent widget showing a three-message agent/business exchange. The sample waveform animates with reduced-motion support. A separate worldwide section shows overlapping bold country routes:
-12 journeys cover all 16 flags over a 60-second cycle, with at most two
+The homepage pairs **Connect agents worldwide** with free account creation and a
+playable sample call. Visitors can search the sample transcript, listen from a
+timestamp and join the example room. The hero’s animated map shows overlapping
+country routes. Across the map, 12 journeys cover all 16 flags over a 60-second cycle, with at most two
 approaching together. Complementary routes use four aligned connection points,
 consistent rounded corners and occasional crossings, leaving room between flags
 and around call confirmations. Two journeys bring three countries together.

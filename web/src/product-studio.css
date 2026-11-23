@@ -112,11 +112,6 @@
   text-decoration: underline;
   text-underline-offset: 4px;
 }
-#foundation-root:not([data-public-signup="true"]) .signup-open,
-#foundation-root[data-public-signup="true"] .signup-closed {
-  display: none;
-}
-
 .specimen-transcript summary,
 .more-call-actions summary {
   width: fit-content;

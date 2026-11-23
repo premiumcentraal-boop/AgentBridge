@@ -18,6 +18,7 @@ import { validateNumberConnection, validateNumberOrder } from '../shared/numbers
 import { createAgentHTTP, isAgentHTTPPath } from './agents/http.mjs';
 import { createCallMedia } from './media/service.mjs';
 import { RELEASE_VERSION } from '../shared/release.mjs';
+import { marketingSection } from '../shared/marketing-routes.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const STUDIO_CSP = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
@@ -183,6 +184,13 @@ export function createApp({ env = process.env, store = openStore(env.STUDIO_DATA
         return fail(404, 'NOT_FOUND', 'Endpoint not found.');
       }
       if (!['GET','HEAD'].includes(req.method)) return fail(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.');
+      const chapter = marketingSection(pathname);
+      if (chapter) {
+        const search = new URL(req.url, 'http://local').search;
+        res.writeHead(301, { Location: '/' + search + '#' + chapter });
+        res.end();
+        return;
+      }
       if (pathname === '/app' || pathname === '/app/') { res.writeHead(302, { Location: '/studio/?demo=1' }); res.end(); return; }
       const dist = resolve(ROOT, 'dist');
       const file = resolve(dist, '.' + (pathname.endsWith('/') ? pathname + 'index.html' : pathname));

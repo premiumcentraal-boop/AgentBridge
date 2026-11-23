@@ -286,13 +286,9 @@ test("working preview navigates real pages and keeps call state in the floating 
     document.querySelector(".world-network").dataset.paused,
     "false",
   );
-  await navigate(document, "/how-it-works/");
-  named(document, "Callback").click();
-  await pause(20);
-  assert.match(
-    document.querySelector(".flow-detail").textContent,
-    /SignalWire dials the second phone/,
-  );
+  await navigate(document, "/#how-it-works");
+  assert.match(document.querySelector("#how-it-works").textContent, /SignalWire dials your contact/);
+  assert.equal(document.activeElement.id, "how-it-works");
   await navigate(document, "/studio/demo/");
   await waitFor(() => document.querySelector(".floating-rail"));
   assert.equal(document.querySelectorAll(".number-connection-card").length, 3);
@@ -509,15 +505,20 @@ test("public navigation keeps a native top-level studio link across the CSP boun
     "studio entry must retain a full document navigation",
   );
   assert.equal(window.location.pathname, "/");
-  document.querySelector('a[href="/how-it-works/"]').click();
-  assert.equal(
-    prevented,
-    true,
-    "same-policy public links may use the client router",
-  );
-  assert.equal(window.location.pathname, "/how-it-works/");
-  await waitFor(() => document.querySelector(".interactive-flow"));
+  const chapterLink = document.querySelector('.public-header a[href="#how-it-works"]');
+  chapterLink.click();
+  assert.equal(prevented, false, "a same-document section link retains native browser navigation");
   document.removeEventListener("click", cancelDefault);
+  named(document, "Open menu").click();
+  await waitFor(() => document.querySelector(".public-nav.is-open"));
+  chapterLink.click();
+  await waitFor(() => window.location.hash === "#how-it-works" && document.activeElement.id === "how-it-works");
+  assert.equal(document.querySelector(".public-nav.is-open"), null);
+  assert.equal(window.location.pathname, "/");
+  for (const signup of document.querySelectorAll("main a.free-signup")) {
+    assert.equal(signup.getAttribute("href"), "/signup/");
+    assert.equal(signup.target, "_top");
+  }
   assert.deepEqual(requests, []);
   assert.deepEqual(
     errors.map((e) => e.message),
@@ -1100,45 +1101,47 @@ test("sample call joins and leaves without ending, requires capture permission a
     [],
   );
 });
-test("feature pages link into international planning, call memory and joining through real routes", async (t) => {
-  const { dom, document, errors, requests } = setup();
+test("the call tour is a continuous document with working bookmarks and account entry points", async (t) => {
+  const { dom, document, window, errors, requests } = setup("file:///AgentBridge-Working-Website.html#/join-call/");
   t.after(() => dom.window.close());
-  await waitFor(() => document.title.includes("Connect agents worldwide"));
-  await navigate(document, "/features/");
-  assert.match(
-    document.querySelector("main h1").textContent,
-    /Calling tools/,
-  );
-  await navigate(document, "/international-calling/");
-  assert.match(
-    document.querySelector("main h1").textContent,
-    /Call across borders/,
-  );
-  assert.ok(document.querySelector('main a[href="#/connect/"]'));
-  await navigate(document, "/call-memory/");
-  assert.ok(document.querySelector("audio"));
-  assert.match(
-    document.querySelector("main").textContent,
-    /synthetic demonstration voices/i,
-  );
-  await navigate(document, "/join-call/");
-  named(document, "Join sample room").click();
-  await waitFor(() =>
-    document.querySelector(".feature-people").textContent.includes("You’re in"),
-  );
-  named(document, "Leave illustration").click();
-  await waitFor(
-    () =>
-      !document
-        .querySelector(".feature-people")
-        .textContent.includes("You’re in"),
-  );
-  assert.ok(document.querySelector('main a[href="#/how-it-works/"]'));
+  await waitFor(() => window.location.hash === "#/#call-room" && document.activeElement.id === "call-room");
+  const nav = document.querySelector(".chapter-nav");
+  const chapters = ["contacts", "transcript", "call-room"];
+  for (const id of chapters) {
+    assert.ok(document.getElementById(id).querySelector("h3"));
+    assert.ok(nav.querySelector('a[href="#/#' + id + '"]'));
+  }
+  const initial = document.querySelector(".world-network-svg");
+  await navigate(document, "/#transcript");
+  assert.equal(document.activeElement.id, "transcript");
+  assert.equal(nav.querySelector('[aria-current="location"]').textContent, "Transcript");
+  await navigate(document, "/#contacts");
+  window.history.back();
+  await waitFor(() => document.activeElement.id === "transcript");
+  window.history.forward();
+  await waitFor(() => document.activeElement.id === "contacts");
+  assert.equal(document.querySelector(".world-network-svg"), initial);
+  // A manual scroll updates the compact navigation without adding a history entry.
+  const match = window.matchMedia;
+  window.matchMedia = (media) => ({ ...match(media), matches: media === "(max-width: 760px)" });
+  nav.getBoundingClientRect = () => ({top:70, bottom:134, height:64});
+  chapters.forEach((id, index) => {
+    document.getElementById(id).getBoundingClientRect = () => ({
+      top: 145 + (index - 1) * 380, height:360
+    });
+  });
+  window.dispatchEvent(new window.Event("scroll"));
+  await waitFor(() => nav.querySelector('[aria-current="location"]').textContent === "Transcript");
+  assert.equal(window.location.hash, "#/#contacts");
+  const entries = [...document.querySelectorAll("main .free-signup")];
+  assert.equal(entries.length, 3);
+  assert.ok(entries.every(link => link.textContent === "Create a free account" && link.getAttribute("href") === "#/signup/"));
+  assert.ok(document.querySelector("#pricing").textContent.includes("SignalWire"));
+  assert.ok(document.querySelector("#developers").textContent.includes("MCP"));
+  entries.at(-1).click();
+  await waitFor(() => document.querySelector("h1").textContent === "Create your account");
+  assert.deepEqual(errors, []);
   assert.deepEqual(requests, []);
-  assert.deepEqual(
-    errors.map((e) => e.message),
-    [],
-  );
 });
 
 test("studio search groups live calls, connections, numbers, countries and settings, then opens the selected part", async (t) => {
@@ -2002,8 +2005,13 @@ test("the homepage sample plays the chosen transcript moment and the example roo
   audio.load = () => { loads++; };
   assert.equal(document.querySelector(".sample-bars").children.length, 72);
 
-  named(story, "Follow the words").click();
-  await waitFor(() => story.querySelector("blockquote"));
+  named(document, "Read transcript", "a").click();
+  await waitFor(() => document.activeElement.id === "transcript");
+  assert.equal(story.querySelector(".tour-transcript").open, true);
+  const search = document.getElementById("tour-transcript-search");
+  change(window, search, "works");
+  await waitFor(() => story.querySelectorAll(".tour-transcript li").length === 1);
+  assert.match(story.querySelector(".tour-transcript li").textContent, /Ten thirty London time works/);
   named(story, "Listen from 0:11").click();
   await waitFor(() => document.querySelector('.transport-toggle[aria-label="Pause sample"]'));
   assert.equal(loads, 1);
@@ -2015,7 +2023,7 @@ test("the homepage sample plays the chosen transcript moment and the example roo
   named(story, "Pause sample").click();
   await waitFor(() => document.querySelector('.transport-toggle[aria-label="Resume sample"]'));
 
-  named(story, "Join the conversation").click();
+  await navigate(document, "/#call-room");
   await waitFor(() => story.querySelector(".room-example"));
   named(story, "Join example room").click();
   await waitFor(() => story.querySelector(".story-people").children.length === 3);

@@ -2,16 +2,8 @@ import React, { useEffect, useState } from "react";
 import { Theme } from "@astryxdesign/core/theme";
 import { neutralTheme } from "@astryxdesign/theme-neutral/built";
 import { RouterProvider, useRoute } from "./context.jsx";
-import {
-  PublicShell,
-  Home,
-  HowItWorks,
-  Connect,
-  Pricing,
-  Docs,
-} from "./public.jsx";
+import { PublicShell, Home, Docs } from "./public.jsx";
 import { Studio } from "./studio.jsx";
-import { Features, FeaturePage } from "./features.jsx";
 import { TITLES } from "./data.js";
 import { Signup, Signin } from "./signup.jsx";
 import { AccountEmail } from "./account-auth.jsx";
@@ -57,20 +49,6 @@ function Pages() {
       <AccountEmail key="forgot" mode="forgot" />
     ) : path === "/reset-password/" ? (
       <AccountEmail key="reset" mode="reset" />
-    ) : path === "/features/" ? (
-      <Features />
-    ) : path === "/international-calling/" ? (
-      <FeaturePage type="international" />
-    ) : path === "/call-memory/" ? (
-      <FeaturePage type="memory" />
-    ) : path === "/join-call/" ? (
-      <FeaturePage type="join" />
-    ) : path === "/how-it-works/" ? (
-      <HowItWorks />
-    ) : path === "/connect/" ? (
-      <Connect />
-    ) : path === "/pricing/" ? (
-      <Pricing />
     ) : path === "/docs/" ? (
       <Docs />
     ) : (
