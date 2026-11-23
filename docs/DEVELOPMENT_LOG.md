@@ -799,3 +799,8 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Verified PR #79 head `0f01d3c` had a successful GitHub Quality gate (run 45112113195); this does not validate the later test-only commits.
 - Added tests for incomplete carrier reconciliation, zero-cost completed reconciliation, and failed reservation without owner audit. Confirmed schema constraints: `reservation_carrier_legs.reservation_id` is PRIMARY KEY, `actual_cost_cents` has a nonnegative CHECK, and `owner_actions.action` only permits `force_unlock`. Corrected initial test assertions to respect those constraints before reporting verification.
 - Exact-head CI for this extension remains pending. No routing changes, provider calls, merge or deployment.
+
+## 2026-11-23 — Recovery status carrier-finality fail-closed correction (PR #79 pending)
+- Identified a misleading verified_carrier_completion result: the recovery-status GET treated a persisted reconciled leg as final despite the owner mark-ended path explicitly rejecting the same evidence as insufficient to exclude later billable legs.
+- Changed completed reservations to report ambiguous until a separately reviewed carrier-finality contract is implemented; retained authenticated, read-only force-unlock audit verification and default-deny routing.
+- Updated offline regression expectations for completed reservations with reconciled, zero-cost, and missing carrier evidence. GitHub exact-head CI and isolated Wrangler D1 verification remain required; no carrier calls, merges, or deployments.
