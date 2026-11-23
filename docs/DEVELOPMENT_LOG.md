@@ -789,3 +789,30 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added a deterministic AFTER INSERT trigger regression that mutates the audit action and reason; the required behavior is HTTP 503, rollback to connecting, zero owner audit rows and continued denial of a new reservation.
 - Independent Python sqlite3 check of the equivalent SQL passed: normal transaction committed with one matching audit; mutated audit raised OperationalError (integer overflow) and rolled back with connecting status and zero audits. Full Node repository tests unavailable locally because GitHub DNS resolution failed; exact-head GitHub CI and real Wrangler D1 semantics still require verification.
 - No provider calls, purchases, secrets, paid routing, merge or deployment. PR remains draft and manual approval gates remain intact.
+
+## 2026-11-23 — Read-only owner recovery evidence (stacked draft, not merged)
+- Added authenticated GET `/v1/owner/reservations/:id/recovery-status` on a follow-up branch based on draft PR #56. The endpoint performs only D1 reads, returns no phone numbers or audit reason, and never contacts a carrier. Terminal failed reservations require one matching force-unlock audit row; completed reservations require persisted reconciliation evidence. Missing, duplicate or inconsistent evidence is ambiguous, and unavailable audit schema returns 503.
+- Added offline regressions for owner/agent authorization, method and cache policy, stable repeat reads, matching/missing/duplicate audit, missing audit table, and carrier completion evidence. Local execution and exact-head CI have not yet been performed; Cloudflare D1 transactional semantics and tenant-scoped owner authorization remain release blockers.
+- This is a read-only diagnostic aid, not proof of real carrier billing finality or a fix for PR #56's atomicity requirements. No paid routing, calls, purchases, merges or deployment.
+
+## 2026-11-23 — Recovery-status edge-case regression extension (draft PR #79)
+- Verified PR #79 head `0f01d3c` had a successful GitHub Quality gate (run 45112113195); this does not validate the later test-only commits.
+- Added tests for incomplete carrier reconciliation, zero-cost completed reconciliation, and failed reservation without owner audit. Confirmed schema constraints: `reservation_carrier_legs.reservation_id` is PRIMARY KEY, `actual_cost_cents` has a nonnegative CHECK, and `owner_actions.action` only permits `force_unlock`. Corrected initial test assertions to respect those constraints before reporting verification.
+- Exact-head CI for this extension remains pending. No routing changes, provider calls, merge or deployment.
+
+## 2026-11-23 — Recovery status carrier-finality fail-closed correction (PR #79 pending)
+- Identified a misleading verified_carrier_completion result: the recovery-status GET treated a persisted reconciled leg as final despite the owner mark-ended path explicitly rejecting the same evidence as insufficient to exclude later billable legs.
+- Changed completed reservations to report ambiguous until a separately reviewed carrier-finality contract is implemented; retained authenticated, read-only force-unlock audit verification and default-deny routing.
+- Updated offline regression expectations for completed reservations with reconciled, zero-cost, and missing carrier evidence. GitHub exact-head CI and isolated Wrangler D1 verification remain required; no carrier calls, merges, or deployments.
+
+
+## 2026-11-23 — Cross-endpoint post-commit recovery regression (draft PR #79)
+- Added an offline Worker-to-SQLite/D1-stand-in test that invokes the actual authenticated owner force-unlock endpoint, commits its transactional batch, deliberately strips the returned batch metadata, and verifies the resulting HTTP 503 against the durable failed reservation and exactly one audit row.
+- The test then reads the authenticated recovery-status endpoint twice and checks verified force-unlock evidence, no destination leakage, no carrier calls during diagnosis, and no second audit or carrier read on a rejected retry.
+- This is an **offline simulated post-commit response-loss test**, not independent Cloudflare Wrangler D1 transaction verification. Actual D1 rollback, concurrent isolation and consistent-snapshot behavior remain blocked pending an isolated Wrangler execution. No carrier calls, deployment, paid routing or merge.
+
+
+## 2026-11-23 — PR #79 post-commit regression CI correction (unmerged)
+- Exact-head Quality gate #45156687282 on e0a79da failed 1/227 tests: the new post-commit regression expected one carrier fetch but the owner force-unlock offline path made zero. The persisted failed reservation and one matching audit record assertions passed; the mismatch was only the final fetch-count assertion.
+- Updated the regression to require zero carrier reads throughout the offline force-unlock, recovery-status reads and rejected retry. This is stricter than the erroneous expectation and aligns with the intended no-carrier diagnostic path.
+- CI must rerun on the new head; isolated Wrangler D1 transaction rollback and response-loss semantics remain unverified. No paid routing, calls, purchases, merges or deployment.
