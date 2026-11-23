@@ -810,3 +810,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added an offline Worker-to-SQLite/D1-stand-in test that invokes the actual authenticated owner force-unlock endpoint, commits its transactional batch, deliberately strips the returned batch metadata, and verifies the resulting HTTP 503 against the durable failed reservation and exactly one audit row.
 - The test then reads the authenticated recovery-status endpoint twice and checks verified force-unlock evidence, no destination leakage, no carrier calls during diagnosis, and no second audit or carrier read on a rejected retry.
 - This is an **offline simulated post-commit response-loss test**, not independent Cloudflare Wrangler D1 transaction verification. Actual D1 rollback, concurrent isolation and consistent-snapshot behavior remain blocked pending an isolated Wrangler execution. No carrier calls, deployment, paid routing or merge.
+
+
+## 2026-11-23 — PR #79 post-commit regression CI correction (unmerged)
+- Exact-head Quality gate #45156687282 on e0a79da failed 1/227 tests: the new post-commit regression expected one carrier fetch but the owner force-unlock offline path made zero. The persisted failed reservation and one matching audit record assertions passed; the mismatch was only the final fetch-count assertion.
+- Updated the regression to require zero carrier reads throughout the offline force-unlock, recovery-status reads and rejected retry. This is stricter than the erroneous expectation and aligns with the intended no-carrier diagnostic path.
+- CI must rerun on the new head; isolated Wrangler D1 transaction rollback and response-loss semantics remain unverified. No paid routing, calls, purchases, merges or deployment.
