@@ -804,3 +804,9 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Identified a misleading verified_carrier_completion result: the recovery-status GET treated a persisted reconciled leg as final despite the owner mark-ended path explicitly rejecting the same evidence as insufficient to exclude later billable legs.
 - Changed completed reservations to report ambiguous until a separately reviewed carrier-finality contract is implemented; retained authenticated, read-only force-unlock audit verification and default-deny routing.
 - Updated offline regression expectations for completed reservations with reconciled, zero-cost, and missing carrier evidence. GitHub exact-head CI and isolated Wrangler D1 verification remain required; no carrier calls, merges, or deployments.
+
+
+## 2026-11-23 — Cross-endpoint post-commit recovery regression (draft PR #79)
+- Added an offline Worker-to-SQLite/D1-stand-in test that invokes the actual authenticated owner force-unlock endpoint, commits its transactional batch, deliberately strips the returned batch metadata, and verifies the resulting HTTP 503 against the durable failed reservation and exactly one audit row.
+- The test then reads the authenticated recovery-status endpoint twice and checks verified force-unlock evidence, no destination leakage, no carrier calls during diagnosis, and no second audit or carrier read on a rejected retry.
+- This is an **offline simulated post-commit response-loss test**, not independent Cloudflare Wrangler D1 transaction verification. Actual D1 rollback, concurrent isolation and consistent-snapshot behavior remain blocked pending an isolated Wrangler execution. No carrier calls, deployment, paid routing or merge.
