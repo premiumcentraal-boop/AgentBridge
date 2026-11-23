@@ -1,3 +1,4 @@
+import { marketingSections } from "../../shared/marketing-routes.mjs";
 export const NAV = [
   ["overview", "Home"],
   ["connections", "Connections"],
@@ -16,13 +17,7 @@ export const PUBLIC_PAGES = [
   "/verify-email/",
   "/forgot-password/",
   "/reset-password/",
-  "/features/",
-  "/international-calling/",
-  "/call-memory/",
-  "/join-call/",
-  "/how-it-works/",
-  "/pricing/",
-  "/connect/",
+  ...Object.keys(marketingSections),
   "/docs/",
 ];
 export const WEB_PAGES = [

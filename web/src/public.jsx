@@ -1,18 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { A, useRoute } from "./context.jsx";
-import { ProductHome, PublicEntry } from "./product-home.jsx";
-import {
-  SegmentedControl,
-  SegmentedControlItem,
-  IconBtn,
-  Icon,
-  Mark,
-} from "./ui.jsx";
+import { ProductHome } from "./product-home.jsx";
+import { ConnectorAddress } from "./connector-address.jsx";
+import { IconBtn, Icon, Mark } from "./ui.jsx";
 
 const publicNav = [
-  ["/how-it-works/", "How it works"],
-  ["/pricing/", "Pricing"],
-  ["/docs/", "Developers"],
+  ["/#call-tour", "Call tour"],
+  ["/#how-it-works", "How it works"],
+  ["/#pricing", "Pricing"],
+  ["/#developers", "Developers"],
 ];
 export function PublicShell({ children, mode, setMode }) {
   const [menu, setMenu] = useState(false);
@@ -29,7 +25,7 @@ export function PublicShell({ children, mode, setMode }) {
     return () => window.removeEventListener("keydown", close);
   }, [menu]);
   return (
-    <div className="public-site">
+    <div className={path === "/" ? "public-site public-home" : "public-site"}>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
@@ -42,9 +38,12 @@ export function PublicShell({ children, mode, setMode }) {
           id="product-navigation"
           className={"public-nav " + (menu ? "is-open" : "")}
           aria-label="Main navigation"
+          onClick={(event) => {
+            if (event.target.closest("a")) setMenu(false);
+          }}
         >
           {publicNav.map(([to, label]) => (
-            <A key={to} to={to} aria-current={path === to ? "page" : undefined}>
+            <A key={to} to={to}>
               {label}
             </A>
           ))}
@@ -87,11 +86,12 @@ export function PublicShell({ children, mode, setMode }) {
           </A>
         </div>
         <nav aria-label="Footer navigation">
-          <A to="/features/">Features</A>
-          <A to="/how-it-works/">How it works</A>
-          <A to="/connect/">Get connected</A>
-          <A to="/pricing/">Pricing</A>
-          <A to="/docs/">Developers</A>
+          {publicNav.map(([to, label]) => (
+            <A key={to} to={to}>
+              {label}
+            </A>
+          ))}
+          <A to="/docs/">Connector reference</A>
           <a
             href="https://github.com/premiumcentraal-boop/AgentBridge"
             target="_blank"
@@ -126,80 +126,6 @@ function Intro({ title, children }) {
   );
 }
 
-const steps = [
-  [
-    "number",
-    "Your number",
-    "Choose your routing number",
-    "Connect your SignalWire project in Studio. Import a voice number you already own, or search for a new one and confirm the purchase.",
-  ],
-  [
-    "destination",
-    "Destination",
-    "Save the destination",
-    "Save the person or business, their international phone number and a note. You can use the same contact again.",
-  ],
-  [
-    "callback",
-    "Callback",
-    "Answer your phone first",
-    "Choose Test callback. Review your callback phone and the destination. When you answer, SignalWire dials the second phone. Both legs use your project.",
-  ],
-];
-
-export function HowItWorks() {
-  const [stage, setStage] = useState("number");
-  const selected = steps.find((step) => step[0] === stage);
-  return (
-    <main id="main" tabIndex={-1} className="public-guide">
-      <Intro title="How an AgentBridge call works">
-        Pair your routing number with a contact, then decide how the call
-        reaches them.
-      </Intro>
-      <section className="frame interactive-flow guide-flow exchange-guide-flow">
-        <SegmentedControl
-          label="Explore the connection flow"
-          value={stage}
-          onChange={setStage}
-          className="ab-segments"
-        >
-          {steps.map(([value, label]) => (
-            <SegmentedControlItem key={value} value={value} label={label} />
-          ))}
-        </SegmentedControl>
-        <div className="route-diagram" aria-label="Parts of a call connection">
-          {[
-            ["number", "numbers", "Studio line"],
-            ["destination", "connection", "London studio"],
-            ["callback", "calls", "Callback phone"],
-          ].map(([id, icon, label]) => (
-            <div key={id} data-current={stage === id}>
-              <Icon name={icon} size={27} />
-              <strong>{label}</strong>
-            </div>
-          ))}
-        </div>
-        <div className="flow-detail">
-          <h2>{selected[2]}</h2>
-          <p>{selected[3]}</p>
-        </div>
-      </section>
-      <section className="product-close frame">
-        <div>
-          <h2>Expecting incoming calls?</h2>
-          <p>
-            Activate forwarding on a saved connection. Calls to that routing
-            number will reach the destination until you turn forwarding off.
-          </p>
-        </div>
-        <A to="/connect/" className="product-button quiet">
-          Set up a connection
-        </A>
-      </section>
-    </main>
-  );
-}
-
 function GuideRows({ items }) {
   return (
     <div className="guide-rows">
@@ -210,181 +136,6 @@ function GuideRows({ items }) {
         </section>
       ))}
     </div>
-  );
-}
-
-export function Connect() {
-  const briefs = {
-    Concierge: "Ask reception to arrange the Tuesday viewing.",
-    Travel: "Confirm the address and arrival time for the visitor.",
-    Reception: "Check who will meet the visitor at the front desk.",
-  };
-  const [role, setRole] = useState("Concierge");
-  return (
-    <main id="main" tabIndex={-1} className="public-guide">
-      <Intro title="Connect a phone number">
-        Give your agent a contact it can find again. You choose which number
-        routes the call and which phone receives it.
-      </Intro>
-      <section className="frame guide-columns">
-        <div className="guide-example">
-          <Icon name="connection" size={30} />
-          <h2>London studio</h2>
-          <dl>
-            <dt>Your routing number</dt>
-            <dd>Studio line</dd>
-            <dt>Destination</dt>
-            <dd>London reception</dd>
-            <dt>Saved note</dt>
-            <dd>Ask for reception about the viewing.</dd>
-          </dl>
-          <label className="example-agent" htmlFor="example-agent-role">
-            Example agent
-            <select
-              id="example-agent-role"
-              value={role}
-              onChange={(event) => setRole(event.target.value)}
-            >
-              {Object.keys(briefs).map((name) => (
-                <option key={name}>{name}</option>
-              ))}
-            </select>
-          </label>
-          <p aria-live="polite">{briefs[role]}</p>
-        </div>
-        <GuideRows
-          items={[
-            [
-              "Add a routing number",
-              <p>
-                In Calling setup, connect your SignalWire project. In Numbers,
-                choose an owned voice number or buy an available number. You’ll
-                review any charge before confirming.
-              </p>,
-            ],
-            [
-              "Save a destination",
-              <p>
-                Choose Connect a destination. Select the routing number, enter a
-                name and phone number, and save. You can add contact notes for
-                future conversations.
-              </p>,
-            ],
-            [
-              "Choose how to call",
-              <p>
-                Test callback rings your phone first. Activate forwarding sends
-                future incoming calls on your routing number to the saved
-                destination. Each action has a separate confirmation.
-              </p>,
-            ],
-          ]}
-        />
-      </section>
-      <section className="product-close frame">
-        <div>
-          <h2>Set up your first connection</h2>
-          <p>Already have an account? Open Connections in Studio.</p>
-        </div>
-        <div className="product-actions">
-          <PublicEntry />
-          <A to="/studio/connections/" className="product-text-action">
-            Open Connections
-          </A>
-        </div>
-      </section>
-    </main>
-  );
-}
-export function Pricing() {
-  return (
-    <main id="main" tabIndex={-1} className="public-guide billing-guide">
-      <Intro title="How calling is billed">
-        Bring your own provider account. Your costs depend on the numbers you
-        own, the destinations you call and the capture options you choose.
-      </Intro>
-      <div className="frame guide-columns">
-        <div className="guide-example billing-example">
-          <Icon name="calls" size={30} />
-          <h2>A test callback</h2>
-          <dl>
-            <dt>First phone leg</dt>
-            <dd>Your callback phone rings.</dd>
-            <dt>Second phone leg</dt>
-            <dd>The destination rings after you answer.</dd>
-          </dl>
-          <p>SignalWire bills both legs at your project’s rates.</p>
-        </div>
-        <GuideRows
-          items={[
-            [
-              "Phone numbers",
-              <p>
-                SignalWire bills rental for purchased numbers. Import a number
-                already on your project or review the provider’s terms before
-                buying another.{" "}
-                <a href="https://signalwire.com/pricing/voice">
-                  SignalWire voice pricing ↗
-                </a>
-              </p>,
-            ],
-            [
-              "Calls and forwarding",
-              <p>
-                Usage varies by destination and duration. Forwarding can incur
-                incoming and outgoing charges while active. Check your project’s
-                destination permissions and rates before enabling a route.
-              </p>,
-            ],
-            [
-              "Recording and transcription",
-              <p>
-                Recording and storage can incur SignalWire charges. If you
-                enable live captions or transcribe a completed recording with
-                xAI, your xAI project pays for the transcription.{" "}
-                <a href="https://docs.x.ai/developers/models">xAI pricing ↗</a>
-              </p>,
-            ],
-          ]}
-        />
-      </div>
-      <section className="product-close frame">
-        <h2>See which phone rings first</h2>
-        <A to="/how-it-works/" className="product-button quiet">
-          How it works
-        </A>
-      </section>
-    </main>
-  );
-}
-function ConnectorAddress() {
-  const endpoint = "https://agentbridge.victor.ceo/mcp";
-  const address = React.useRef(null);
-  const [state, setState] = useState("");
-  async function copyAddress() {
-    try {
-      await navigator.clipboard.writeText(endpoint);
-      setState("Copied");
-    } catch {
-      const range = document.createRange();
-      range.selectNodeContents(address.current);
-      const selection = window.getSelection();
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-      setState("Address selected. Use your device’s copy command.");
-    }
-  }
-  return (
-    <>
-      <code ref={address}>{endpoint}</code>
-      <button type="button" className="copy-endpoint" onClick={copyAddress}>
-        <Icon name="copy" size={16} />
-        Copy address
-      </button>
-      <span className="copy-status" role="status">
-        {state}
-      </span>
-    </>
   );
 }
 

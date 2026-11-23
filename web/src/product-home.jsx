@@ -1,34 +1,18 @@
 import React, { useEffect, useRef, useState } from "react";
-import { A, useRoute } from "./context.jsx";
+import { A } from "./context.jsx";
 import { BotFace } from "./grok-ui.jsx";
 import { Icon } from "./ui.jsx";
 import { WorldNetwork } from "./world-network.jsx";
 import { CallStory } from "./sample-story.jsx";
+import { ProductDetails, SignupLink } from "./product-details.jsx";
 import sample from "./samples/sample-call.json";
 import waveform from "./samples/sample-waveform.json";
 import audioFile from "./samples/sample-call.mp3";
-
-export function PublicEntry({
-  children = "Sign me up",
-  fallback = "Hear a sample call",
-}) {
-  return (
-    <>
-      <A className="product-button signup-open" to="/signup/">
-        {children}
-      </A>
-      <A className="product-button signup-closed" to="/call-memory/">
-        {fallback}
-      </A>
-    </>
-  );
-}
 
 const sampleClock = (seconds) =>
   "0:" + String(Math.floor(seconds)).padStart(2, "0");
 
 export function ProductHome() {
-  const { href } = useRoute();
   const audio = useRef(null);
   const pendingSeek = useRef(null);
   const transcript = useRef(null);
@@ -79,10 +63,7 @@ export function ProductHome() {
     }
   }
 
-  function toggle(event) {
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
-      return;
-    event.preventDefault();
+  function toggle() {
     if (audio.current && !audio.current.paused) audio.current.pause();
     else void play();
   }
@@ -108,27 +89,21 @@ export function ProductHome() {
             whenever you’re needed.
           </p>
           <div className="gb-hero-actions product-actions">
-            <A to="/signup/" className="product-button signup-open">
-              Sign me up
-            </A>
-            <a
-              className="product-button signup-closed"
-              href={href("/call-memory/")}
-              onClick={toggle}
-              aria-controls="hero-audio"
-            >
-              <Icon name={playing ? "pause" : "play"} />
-              {playLabel}
-            </a>
-            <A to="/studio/" className="product-text-action">
-              Open Studio
+            <SignupLink />
+            <A to="/#sample-call" className="product-text-action">
+              <Icon name="headphones" size={18} /> Hear a sample call
             </A>
           </div>
         </div>
         <WorldNetwork />
       </section>
 
-      <section className="sample-desk frame" aria-labelledby="sample-name">
+      <section
+        id="sample-call"
+        tabIndex={-1}
+        className="sample-desk frame"
+        aria-labelledby="sample-name"
+      >
         <div className="sample-player">
           <div className="sample-cover" aria-hidden="true" />
           <div className="sample-controller">
@@ -198,22 +173,15 @@ export function ProductHome() {
             </span>
             <p>{reception.text}</p>
           </div>
-          <details ref={transcript} className="specimen-transcript">
-            <summary>
-              Read transcript <Icon name="chevron" size={14} />
-            </summary>
-            <ol>
-              {sample.transcript.map((line) => (
-                <li key={line.id}>
-                  <small>
-                    {sampleClock(line.start)} ·{" "}
-                    {line.speaker === "Agent" ? "Your agent" : "Reception"}
-                  </small>
-                  <p>{line.text}</p>
-                </li>
-              ))}
-            </ol>
-          </details>
+          <A
+            to="/#transcript"
+            className="sample-transcript-link"
+            onClick={() => {
+              if (transcript.current) transcript.current.open = true;
+            }}
+          >
+            Read transcript <Icon name="transcript" size={16} />
+          </A>
           {error && (
             <p role="status">
               Audio couldn’t play here. The full transcript is open.
@@ -240,21 +208,15 @@ export function ProductHome() {
 
       <CallStory
         hearingMoment={playing && playingFromTranscript}
-        onHearMoment={() => void play(sample.transcript[2].start)}
+        onHearMoment={(second = sample.transcript[2].start) =>
+          void play(second)
+        }
+        audioFile={audioFile}
+        transcriptRef={transcript}
+        audioError={error && playingFromTranscript}
         onPause={() => audio.current?.pause()}
       />
-      <section className="reach-invitation frame">
-        <div>
-          <h2>Same agent, bigger reach</h2>
-          <p>
-            Check the destination, see which phone rings first and review the
-            two call legs before you dial.
-          </p>
-        </div>
-        <A to="/international-calling/" className="product-button quiet">
-          Explore international calling
-        </A>
-      </section>
+      <ProductDetails />
     </main>
   );
 }

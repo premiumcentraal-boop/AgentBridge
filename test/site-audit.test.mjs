@@ -4,6 +4,8 @@ import {scan,internalPaths,audit,PAGES} from '../scripts/audit-site.mjs';
 import { createApp } from '../server/app.mjs';
 import { openStore } from '../server/store.mjs';
 import { openAccountDatabase } from '../server/accounts/node-database.mjs';
+import { marketingSections } from '../shared/marketing-routes.mjs';
+import { readFile } from 'node:fs/promises';
 const page=(body,extra='')=>'<!doctype html><html lang="en"><head><title>Test</title><meta name="description" content="Example"></head><body><a href="#main">Skip</a><main id="main"><h1>Test</h1>'+body+'</main>'+extra+'</body></html>';
 test('valid accessible markup passes structural checks',()=>{assert.deepEqual(scan(page('<label for="tel">Number</label><input id="tel" type="tel"><button>Send</button>'),'test'),[]);});
 test('missing input labels, image alt and duplicate ids fail',()=>{
@@ -29,6 +31,24 @@ test('website audit covers public pages, direct studio routes and the original g
 test('build artifact audit passes for actual built website',async()=>{
  const errors=await audit('dist',process.env.BASE_PATH||'');
  assert.deepEqual(errors,[]);
+});
+
+test('old marketing bookmarks resolve to real chapters on Railway and on static hosts', async (t) => {
+  const server = createApp({store:openStore(':memory:'), env:{}});
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const origin = 'http://127.0.0.1:' + server.address().port;
+  const home = await (await fetch(origin)).text();
+  const base = process.env.BASE_PATH || '';
+  for (const [path, id] of Object.entries(marketingSections)) {
+    assert.ok(home.includes('id="' + id + '"'), id);
+    const link = await fetch(origin + path.slice(0, -1) + '?ref=guide', {redirect:'manual'});
+    assert.equal(link.status, 301);
+    assert.equal(link.headers.get('location'), '/?ref=guide#' + id);
+    const fallback = await readFile('dist' + path + 'index.html', 'utf8');
+    assert.ok(fallback.includes('content="0;url=' + base + '/#' + id + '"'));
+    assert.ok(fallback.includes('href="' + base + '/#' + id + '"'));
+  }
 });
 
 test('the marketing entry reflects public email signup readiness without loading a private session', async (t) => {

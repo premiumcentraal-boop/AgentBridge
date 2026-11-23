@@ -87,6 +87,19 @@ export function AccountAuth({ signup = false, embedded = false }) {
             Open the hosted site to create or sign in to an account. You can
             explore the sample Studio here.
           </p>
+          <a
+            href={
+              signup
+                ? "https://agentbridge.victor.ceo/signup/"
+                : "https://agentbridge.victor.ceo/signin/"
+            }
+            target="_top"
+            className="gb-secondary-link"
+          >
+            {signup
+              ? "Continue to hosted signup"
+              : "Continue to hosted sign-in"}
+          </a>
           <A to="/studio/demo/" className="gb-secondary-link">
             Open the sample studio <Icon name="arrow" size={16} />
           </A>
@@ -125,7 +138,7 @@ export function AccountAuth({ signup = false, embedded = false }) {
               ? "Email signup is being configured. Please try again shortly."
               : "Public signup is currently closed. You can hear a sample call or sign in to an existing account."}
           </p>
-          <A to="/call-memory/" className="gb-secondary-link">
+          <A to="/#sample-call" className="gb-secondary-link">
             Hear a sample call <Icon name="play" size={16} />
           </A>
           <A to="/signin/" className="gb-secondary-link">

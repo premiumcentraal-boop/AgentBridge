@@ -1,4 +1,5 @@
 import { sampleAudioResponse } from "../../shared/sample-audio.mjs";
+import { marketingSection } from "../../shared/marketing-routes.mjs";
 import { createAccountService } from './service.mjs';
 import { d1Database } from './database.mjs';
 import { assets, pages } from 'agentbridge:assets';
@@ -17,6 +18,8 @@ export default {
         return new Response(JSON.stringify({error:{code:'NOT_FOUND',message:'Endpoint not found.'}}),{status:404,headers:{...baseHeaders,'Content-Type':'application/json'}});
       }
       if (!['GET','HEAD'].includes(request.method)) return new Response('Method not allowed',{status:405,headers:baseHeaders});
+      const chapter = marketingSection(path);
+      if (chapter) return new Response(null, {status:301, headers:{...baseHeaders, Location:'/' + url.search + '#' + chapter}});
       if (path === '/health') {
         await env.DB.prepare('SELECT id FROM ab_accounts LIMIT 1').first();
         return new Response(JSON.stringify({ service:'agentbridge-accounts',mode:'account-demo',database_ready:true,routing_enabled:false,purchase_enabled:false,secure_provider_storage:vaultAvailable(env.PROVIDER_CREDENTIALS_KEY),carrier_access:'per-account-opt-in' }),{headers:{...baseHeaders,'Content-Type':'application/json'}});
