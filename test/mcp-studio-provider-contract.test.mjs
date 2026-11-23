@@ -9,7 +9,7 @@ const DID = '+16185550123';
 const account = {id:'offline-operator',status:'active',did:DID};
 const env = {
   US_BRIDGE_DID:DID, SIGNALWIRE_SPACE:'offline-test',
-  SIGNALWIRE_PROJECT_ID:'offline-project', SIGNALWIRE_API_TOKEN:'offline-token-value',
+  SIGNALWIRE_PROJECT_ID:'123e4567-e89b-42d3-a456-426614174000', SIGNALWIRE_API_TOKEN:'offline-token-value',
   AGENTBRIDGE_BACKEND_URL:'https://backend.example.test/',
   AGENTBRIDGE_ACCOUNT_TOKEN:'offline-account-token'
 };
