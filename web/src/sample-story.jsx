@@ -264,8 +264,8 @@ export function CallStory(props) {
           >
             <h3 id="transcript-title">Go straight to the words that matter.</h3>
             <p>
-              With everyone’s permission, record the call and transcribe it.
-              Pick a line to hear the moment it was said.
+              With everyone’s permission, record the call. You can transcribe it
+              later and pick a timestamp to hear a line again.
             </p>
             <TranscriptExample {...props} />
           </section>
@@ -277,8 +277,9 @@ export function CallStory(props) {
           >
             <h3 id="room-title">Join the conversation.</h3>
             <p>
-              Open a call room to see who’s there. Listen with your microphone
-              off, speak when you’re ready, and leave the phones connected.
+              Enable a room when you set up the call. Join with your microphone
+              off to listen, turn it on to speak, and leave while the phone
+              call continues.
             </p>
             <RoomExample />
           </section>

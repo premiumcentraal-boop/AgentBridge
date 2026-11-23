@@ -15,6 +15,7 @@ scripts/**
 !shared/
 shared/**
 !shared/call-plans.mjs
+!shared/marketing-routes.mjs
 !shared/numbers.mjs
 !shared/conversations.mjs
 !shared/phone.mjs
