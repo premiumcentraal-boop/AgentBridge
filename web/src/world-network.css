@@ -21,57 +21,53 @@
   background-image: linear-gradient(115deg, #667d6f, #557e8a 55%, #81718b);
 }
 .world-network {
+  --map-surface: var(--page-soft);
   position: relative;
+  width: 100%;
   min-width: 0;
   isolation: isolate;
-  padding: 16px 0 56px;
-}
-.world-map-plane {
-  position: relative;
-  width: 100%;
   overflow: hidden;
-  border-radius: 28px;
+  border-radius: var(--corner);
+  background: var(--map-surface);
+  color: var(--fg);
+}
+.foundation-app[data-mode="dark"] .world-network {
+  --map-surface: oklch(19% 0.016 263);
 }
 .world-network-svg {
+  display: block;
   width: 100%;
   height: auto;
-  display: block;
-  overflow: hidden;
 }
 .world-static-scene {
   display: none;
 }
 .world-call-label {
-  fill: var(--fg);
+  paint-order: stroke fill;
+  stroke: var(--map-surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
   font-family: inherit;
   letter-spacing: -0.035em;
 }
-.world-map-footer {
-  position: absolute;
-  inset: auto 1% 0 1%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 15px;
-  color: var(--quiet);
-  font-size: 10px;
-}
 .world-motion-control.ab-icon-button {
-  width: 40px;
-  min-width: 40px;
-  height: 40px;
-  min-height: 40px;
+  position: absolute;
+  inset-inline-end: 12px;
+  inset-block-end: 12px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
   border: 1px solid var(--line-strong);
+  border-radius: 50%;
   background: var(--panel);
-  color: var(--muted);
-}
-.world-motion-control.ab-icon-button svg {
-  width: 13px;
-  height: 13px;
-}
-.world-motion-control:hover {
   color: var(--fg);
-  background: var(--panel-raised);
+}
+@media (hover: hover) {
+  .world-motion-control.ab-icon-button:hover {
+    background: var(--panel-raised);
+  }
 }
 @media (min-width: 1700px) {
   .hero-section.hero-worldwide {
@@ -110,13 +106,6 @@
     max-width: 440px;
     font-size: 14px;
   }
-  .world-network {
-    width: min(780px, 100%);
-    margin-inline: auto;
-  }
-  .world-map-footer {
-    font-size: 11px;
-  }
 }
 @media (max-width: 600px) {
   .hero-section.hero-worldwide {
@@ -135,17 +124,6 @@
   }
   .hero-worldwide .hero-copy > .hero-assurance {
     margin-top: 20px;
-  }
-  .world-network {
-    padding: 8px 0 52px;
-  }
-  .world-map-plane {
-    border-radius: 20px;
-  }
-  .world-map-footer {
-    left: 1%;
-    right: 1%;
-    font-size: 9px;
   }
 }
 @media (max-width: 360px) {

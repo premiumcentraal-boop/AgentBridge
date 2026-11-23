@@ -183,6 +183,10 @@ test("working preview navigates real pages and keeps call state in the floating 
     "60",
   );
   const svg = document.querySelector(".world-network-svg");
+  const map = svg.closest(".world-network");
+  assert.doesNotMatch(map.textContent, /Newest route/i);
+  assert.ok(named(map, "Pause connection animation"));
+
   assert.equal(svg.dataset.sequence, "composed-edge-to-call");
   assert.equal(svg.dataset.pairCount, "12");
   const layers = document.querySelectorAll(
@@ -1996,7 +2000,6 @@ test("the homepage sample plays the chosen transcript moment and the example roo
   const audio = document.querySelector("#hero-audio");
   let loads = 0;
   audio.load = () => { loads++; };
-  assert.ok(document.querySelectorAll(".route-key .route-stop").length >= 2);
   assert.equal(document.querySelector(".sample-bars").children.length, 72);
 
   named(story, "Follow the words").click();

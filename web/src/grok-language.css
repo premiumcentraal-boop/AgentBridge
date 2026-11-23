@@ -779,9 +779,6 @@ body {
 .gb-world-section .world-network {
   padding-top: 0;
 }
-.gb-world-section .world-map-plane {
-  border-radius: 24px;
-}
 .gb-control-section {
   display: grid;
   grid-template-columns: 1fr 1fr;
