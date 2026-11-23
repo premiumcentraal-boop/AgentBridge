@@ -227,14 +227,10 @@ async function ownerRoute(request,url,env){
           audit={action_id:entries[0].id,created_at:entries[0].created_at,carrier_code:entries[0].carrier_code};
         }else recovery='ambiguous';
       }else if(row.status==='completed'){
-        // A completed state alone does not prove carrier billing finality.
-        const legs=await env.DB.prepare('SELECT reconciled_at,actual_cost_cents FROM reservation_carrier_legs WHERE reservation_id=? LIMIT 2')
-          .bind(row.id).all();
-        const evidence=legs?.results;
-        recovery=entries.length===0&&Array.isArray(evidence)&&evidence.length===1&&
-          Number.isInteger(evidence[0].reconciled_at)&&evidence[0].reconciled_at>0&&
-          Number.isInteger(evidence[0].actual_cost_cents)&&evidence[0].actual_cost_cents>=0
-          ?'verified_carrier_completion':'ambiguous';
+        // A persisted reconciliation snapshot cannot prove final billing:
+        // later provider legs/charges may still appear. The carrier-finality
+        // contract is explicitly unverified, so never claim verified completion.
+        recovery='ambiguous';
       }else if(entries.length)recovery='ambiguous';
       return json({reservation_id:row.id,status:row.status,completed_at:row.completed_at??null,recovery,...(audit?{audit}:{})});
     }catch{
