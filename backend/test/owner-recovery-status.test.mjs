@@ -144,5 +144,5 @@ test('real owner force-unlock path remains diagnosable after a committed batch l
   assert.equal((await again.json()).recovery,'verified_force_unlock');
   assert.equal((await worker.fetch(unlockRequest(),env)).status,409);
   assert.equal(DB.raw.prepare("SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?").get(id).n,1);
-  assert.equal(carrierReads,1,'diagnosis and rejected retry must not contact the carrier');
+  assert.equal(carrierReads,0,'force-unlock, diagnosis and rejected retry must not contact the carrier in this offline path');
 });
