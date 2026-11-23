@@ -155,9 +155,11 @@ test('stdio: inventory + assigned-number + search against mocked SignalWire (GET
     assert.match(inv.content[0].text,/\+13125550100/);
 
     const mine=await c.client.callTool({name:'list_my_numbers',arguments:{}});
-    assert.equal(mine.structuredContent.card_type,'owned_number');
-    assert.equal(mine.structuredContent.state,'project_inventory_match');
-    assert.match(mine.content[0].text,/\+12025550123/);
+    // The unfiltered project inventory is deliberately ambiguous for an exact DID lookup.
+    // The provider must not report a positive match merely because one record matches.
+    assert.equal(mine.structuredContent.state,'incomplete_inventory');
+    assert.deepEqual(mine.structuredContent.numbers,[]);
+    assert.equal(mine.structuredContent.routing_enabled,false);
 
     const s=await c.client.callTool({name:'search_available_numbers',arguments:{area_code:'618'}});
     assert.equal(s.structuredContent.card_type,'number_choices');

@@ -87,3 +87,92 @@ test('real hosted Worker rejects unknown tools and malformed RPC without carrier
   }
   assert.ok(f.sql.every(s => s.startsWith('SELECT ')));
 });
+
+
+test('combined Worker MCP and Studio fail closed on ambiguous SignalWire pagination', { concurrency: false }, async () => {
+  const f = await fixture();
+  const secret = 'synthetic-provider-secret-never-display';
+  Object.assign(f.env, {
+    SIGNALWIRE_SPACE: 'offline-space',
+    SIGNALWIRE_PROJECT_ID: '271cda55-9a69-4513-b6de-67271d08b9bf',
+    SIGNALWIRE_API_TOKEN: secret,
+  });
+  const originalFetch = globalThis.fetch;
+  const cases = [
+    { name: 'terminal match', data: [{ number: DID, capabilities: ['voice'] }], links: { next: null }, expected: 'connected' },
+    { name: 'duplicate matching DID', data: [{ number: DID, capabilities: ['voice'] }, { number: DID, capabilities: ['voice'] }], links: { next: null }, expected: 'needs_setup' },
+    { name: 'matching and unrelated DID', data: [{ number: DID, capabilities: ['voice'] }, { number: '+12025550124', capabilities: ['voice'] }], links: { next: null }, expected: 'needs_setup' },
+    { name: 'matching DID with continuation', data: [{ number: DID, capabilities: ['voice'] }], links: { next: 'page-two' }, expected: 'needs_setup' },
+    { name: 'missing links', data: [{ number: DID, capabilities: ['voice'] }], expected: 'needs_setup' },
+    { name: 'missing next', data: [{ number: DID, capabilities: ['voice'] }], links: {}, expected: 'needs_setup' },
+    { name: 'false continuation', data: [{ number: DID, capabilities: ['voice'] }], links: { next: false }, expected: 'needs_setup' },
+    { name: 'full page', data: Array.from({ length: 10 }, () => ({ number: DID, capabilities: ['voice'] })), links: { next: null }, expected: 'needs_setup' },
+    { name: 'provider unavailable', status: 503, expected: 'error' },
+  ];
+  try {
+    for (const scenario of cases) {
+      const providerRequests = [];
+      globalThis.fetch = async (url, options) => {
+        providerRequests.push({ url: String(url), options });
+        assert.equal(options.method, 'GET', scenario.name);
+        assert.equal(options.redirect, 'error', scenario.name);
+        assert.equal(new URL(String(url)).hostname, 'offline-space.signalwire.com');
+        assert.equal(new URL(String(url)).searchParams.get('filter_number'), DID);
+        return scenario.status
+          ? new Response('secret upstream failure', { status: scenario.status })
+          : Response.json({ data: scenario.data, ...(Object.hasOwn(scenario, 'links') ? { links: scenario.links } : {}) });
+      };
+      const start = f.requests.length;
+      const result = await inspectIntegration({
+        AGENTBRIDGE_BACKEND_URL: origin,
+        AGENTBRIDGE_ACCOUNT_TOKEN: TOKEN,
+      }, f.fetcher);
+      assert.equal(result.status, scenario.expected, scenario.name);
+      assert.equal(f.requests.length - start, 2, scenario.name);
+      assert.equal(providerRequests.length, 1, scenario.name);
+      assert.ok(!JSON.stringify(result).includes(secret), scenario.name);
+      assert.ok(!JSON.stringify(result).includes(TOKEN), scenario.name);
+      assert.ok(!JSON.stringify(result).includes('secret upstream failure'), scenario.name);
+      if (scenario.expected !== 'connected') {
+        assert.ok(result.status !== 'connected', scenario.name);
+      } else {
+        assert.equal(result.numbers.numbers[0].number, DID);
+        assert.equal(result.numbers.routing_enabled, false);
+        assert.equal(result.numbers.purchase_enabled, false);
+      }
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.ok(f.sql.every(s => s.startsWith('SELECT ')));
+});
+
+
+test('invalid account bearer cannot trigger even read-only provider inventory lookup', { concurrency: false }, async () => {
+  const f = await fixture();
+  const originalFetch = globalThis.fetch;
+  let providerCalls = 0;
+  Object.assign(f.env, {
+    SIGNALWIRE_SPACE: 'offline-space',
+    SIGNALWIRE_PROJECT_ID: '271cda55-9a69-4513-b6de-67271d08b9bf',
+    SIGNALWIRE_API_TOKEN: 'synthetic-secret',
+  });
+  try {
+    globalThis.fetch = async () => {
+      providerCalls++;
+      throw new Error('Unauthorized request must never reach provider');
+    };
+    const result = await inspectIntegration({
+      AGENTBRIDGE_BACKEND_URL: origin,
+      AGENTBRIDGE_ACCOUNT_TOKEN: 'ab_' + 'x'.repeat(48),
+    }, f.fetcher);
+    assert.equal(result.status, 'error');
+    assert.equal(result.setup, null);
+    assert.equal(f.requests.length, 1);
+    assert.equal(providerCalls, 0);
+    assert.ok(f.sql.every(s => s.startsWith('SELECT ')));
+    assert.ok(!JSON.stringify(result).includes('synthetic-secret'));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

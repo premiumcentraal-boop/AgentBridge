@@ -620,3 +620,31 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Added `server/test/hosted-mcp-transport-contract.test.mjs` to invoke the real Cloudflare Worker `/mcp` entrypoint from Studio's `inspectIntegration`, with synthetic account lookup and no SignalWire credentials or provider network. This closes a transport-layer test gap beyond direct producer function calls and synthetic JSON-RPC fixtures.
 - Asserts two correlated read-only `tools/call` requests for valid account setup, generic denial after invalid bearer authentication, malformed/forbidden tool rejection, and no database writes or credential echo. No provider calls, routing activation, purchases, merges or deployment.
 - This does not exercise a deployed HTTP listener, actual provider pagination or real Grok compatibility. Exact-head GitHub Actions and independent review pending at commit time; do not infer beta readiness.
+
+## 2026-11-21 — Cross-PR hosted MCP / SignalWire pagination contract (draft PR #72)
+- Added an offline Worker `/mcp` → Studio inspector regression using synthetic credential-configured SignalWire GET responses: terminal matching DID, continuation cursor, missing/malformed pagination metadata, full page and upstream 503.
+- The test asserts read-only provider access, fail-closed Studio status, no credentials or provider error leakage, and no database writes. No carrier requests or paid routing authorized.
+- This integration-only branch stages PR #68 and PR #70; it must not be merged as an independent feature. Test execution and exact-head CI verification are pending; provider schema and real Grok Bot compatibility remain unverified.
+
+## 2026-11-21 — Preserve provider-side pagination regressions in cross-PR integration draft
+- Restored three provider-level fail-closed test cases from PR #70 to the integration draft: matching DID on a partial page, falsey continuation cursors, and missing/ambiguous pagination metadata. The earlier integration draft copied the production guard but omitted these direct backend tests; the new test file now matches PR #70's test blob.
+- Combined Worker → Studio transport scenarios remain separate. This is a non-merged integration staging branch; do not treat this as independent approval for paid routing or production compatibility. CI must be rerun against the new exact head.
+
+## 2026-11-22 — Reject ambiguous exact-filter SignalWire inventory (draft PR #72, pending)
+- Issue #73: a terminal inventory response with duplicate or unrelated DID records could be reported as a positive project match. The read-only producer now requires exactly one record matching the assigned DID with voice capability; ambiguous results return no numbers and an incomplete-inventory state.
+- Updated the existing positive producer fixture to use a single exact match, added duplicate/mixed/unrelated regression cases and two actual Worker MCP → Studio scenarios. No provider writes, routing, purchases, calls or deployment.
+- These changes remain on the dependent integration draft, not merged. Exact-head CI and provider API schema verification remain required; synthetic fixtures do not prove live carrier behavior.
+
+## 2026-11-22 — Local MCP fail-closed inventory contract reconciliation (draft PR #72)
+- Exact-head GitHub Actions run #44989833043 found `npm run ci` green but the separate `npm --prefix local-mcp test` step failing: its legacy fixture returned three project DIDs while expecting `list_my_numbers` to confirm one assigned DID. This expectation conflicts with issue #73's intentional exact-filter fail-closed behavior.
+- Updated the local stdio MCP regression to require `incomplete_inventory`, empty number list and routing disabled for ambiguous mixed-DID responses; preserved the broader read-only `list_project_numbers` inventory assertions.
+- This is a test-contract correction, not a relaxation of the provider guard. Fresh exact-head CI is required; no provider calls, routing activation, merge or deployment occurred.
+
+## 2026-11-23 — MCP producer → Studio inventory contract regression (draft PR #72)
+- Added `test/mcp-studio-provider-contract.test.mjs` to exercise the real `getBridgeSetup` and `listMyNumbers` producer functions through a synthetic JSON-RPC `tools/call` response consumed by `inspectIntegration`. Offline provider GET fixtures cover one exact voice DID and six fail-closed variants: duplicate, mixed, wrong DID, SMS-only, paginated, and empty inventory.
+- Acceptance: only one exact, complete voice-capable project inventory match may yield Studio `connected` (preview only); all other fixtures must yield `needs_setup`, zero confirmed numbers, and disabled purchase/routing. No actual provider calls or credentials.
+- Test is committed on the unmerged integration branch; exact-head CI and independent execution are pending. Real SignalWire pagination/ownership semantics and live Grok Bot interoperability remain unverified. No calls, payments, carrier provisioning, routing activation, merges, or deployment.
+
+## 2026-11-23 — MCP authentication-to-provider isolation regression (PR #72, pending)
+- Added an offline Worker `/mcp` → Studio inspector regression with synthetically configured SignalWire credentials and an invalid account bearer. The test requires an error, no setup disclosure, exactly one MCP request, zero upstream provider requests, read-only account SQL and no credential disclosure.
+- This is a proposed test assertion, not an observed pass: local GitHub clone failed DNS resolution and exact-head CI is pending. No production behavior was changed, no provider resources were used, and paid routing remains disabled.
