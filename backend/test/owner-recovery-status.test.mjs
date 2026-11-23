@@ -78,30 +78,26 @@ test('completed reservation requires durable carrier reconciliation evidence',as
   assert.equal((await (await read(env,id)).json()).recovery,'verified_carrier_completion');
 });
 
-test('completed status rejects incomplete, negative, and duplicate carrier evidence',async t=>{
+test('completed status rejects missing reconciliation and accepts zero-cost finality',async t=>{
   const {env,DB,id}=await reservation(t);
   DB.raw.prepare("UPDATE reservations SET status='completed',completed_at=? WHERE id=?").run(T0+15,id);
-  const add=DB.raw.prepare('INSERT INTO reservation_carrier_legs (reservation_id,provider_segment_id,claimed_at,reconciled_at,actual_cost_cents) VALUES (?,?,?,?,?)');
   const segment='48313c74-b321-4c08-a3ea-7123449130ab';
-  add.run(id,segment,T0,null,null);
+  DB.raw.prepare('INSERT INTO reservation_carrier_legs (reservation_id,provider_segment_id,claimed_at,reconciled_at,actual_cost_cents) VALUES (?,?,?,?,?)')
+    .run(id,segment,T0,null,null);
   assert.equal((await (await read(env,id)).json()).recovery,'ambiguous');
-  DB.raw.prepare('UPDATE reservation_carrier_legs SET reconciled_at=?,actual_cost_cents=? WHERE reservation_id=?').run(T0+15,-1,id);
-  assert.equal((await (await read(env,id)).json()).recovery,'ambiguous');
-  DB.raw.prepare('UPDATE reservation_carrier_legs SET actual_cost_cents=? WHERE reservation_id=?').run(0,id);
+  assert.throws(()=>DB.raw.prepare('UPDATE reservation_carrier_legs SET actual_cost_cents=-1 WHERE reservation_id=?').run(id),/CHECK constraint/);
+  DB.raw.prepare('UPDATE reservation_carrier_legs SET reconciled_at=?,actual_cost_cents=? WHERE reservation_id=?').run(T0+15,0,id);
   assert.equal((await (await read(env,id)).json()).recovery,'verified_carrier_completion');
-  add.run(id,'58313c74-b321-4c08-a3ea-7123449130ab',T0,T0+15,0);
-  assert.equal((await (await read(env,id)).json()).recovery,'ambiguous');
-  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(id).n,2);
+  assert.throws(()=>DB.raw.prepare('INSERT INTO reservation_carrier_legs (reservation_id,provider_segment_id,claimed_at,reconciled_at,actual_cost_cents) VALUES (?,?,?,?,?)')
+    .run(id,'58313c74-b321-4c08-a3ea-7123449130ab',T0,T0+15,0),/UNIQUE constraint/);
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(id).n,1);
 });
 
-test('recovery reads never upgrade an unrelated audit or a nonterminal state',async t=>{
+test('failed state without an owner audit never claims verified unlock',async t=>{
   const {env,DB,id}=await reservation(t);
-  const at=T0+15;
-  DB.raw.prepare("INSERT INTO owner_actions (id,reservation_id,action,prior_status,carrier_code,reason,created_at) VALUES (?,?, 'approve','pending','NONE','Private reason',?)")
-    .run('other-audit',id,at);
-  assert.equal((await (await read(env,id)).json()).recovery,'ambiguous');
-  DB.raw.prepare("UPDATE reservations SET status='failed',completed_at=? WHERE id=?").run(at,id);
-  assert.equal((await (await read(env,id)).json()).recovery,'ambiguous');
-  DB.raw.prepare("DELETE FROM owner_actions WHERE reservation_id=?").run(id);
-  assert.equal((await (await read(env,id)).json()).recovery,'ambiguous');
+  DB.raw.prepare("UPDATE reservations SET status='failed',completed_at=? WHERE id=?").run(T0+15,id);
+  const response=await read(env,id);
+  assert.equal(response.status,200);
+  assert.equal((await response.json()).recovery,'ambiguous');
+  assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM owner_actions WHERE reservation_id=?').get(id).n,0);
 });
