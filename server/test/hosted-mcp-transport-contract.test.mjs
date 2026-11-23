@@ -146,3 +146,33 @@ test('combined Worker MCP and Studio fail closed on ambiguous SignalWire paginat
   }
   assert.ok(f.sql.every(s => s.startsWith('SELECT ')));
 });
+
+
+test('invalid account bearer cannot trigger even read-only provider inventory lookup', { concurrency: false }, async () => {
+  const f = await fixture();
+  const originalFetch = globalThis.fetch;
+  let providerCalls = 0;
+  Object.assign(f.env, {
+    SIGNALWIRE_SPACE: 'offline-space',
+    SIGNALWIRE_PROJECT_ID: '271cda55-9a69-4513-b6de-67271d08b9bf',
+    SIGNALWIRE_API_TOKEN: 'synthetic-secret',
+  });
+  try {
+    globalThis.fetch = async () => {
+      providerCalls++;
+      throw new Error('Unauthorized request must never reach provider');
+    };
+    const result = await inspectIntegration({
+      AGENTBRIDGE_BACKEND_URL: origin,
+      AGENTBRIDGE_ACCOUNT_TOKEN: 'ab_' + 'x'.repeat(48),
+    }, f.fetcher);
+    assert.equal(result.status, 'error');
+    assert.equal(result.setup, null);
+    assert.equal(f.requests.length, 1);
+    assert.equal(providerCalls, 0);
+    assert.ok(f.sql.every(s => s.startsWith('SELECT ')));
+    assert.ok(!JSON.stringify(result).includes('synthetic-secret'));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
