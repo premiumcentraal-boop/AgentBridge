@@ -9,7 +9,6 @@ import {
   BAND_WIDTH,
   COUNTRY_RADIUS,
   NETWORK_LOOP_SECONDS,
-  SCENE_PHASE_SECONDS,
   approachAnimation,
   lineAnimation,
   flagAnimation,
@@ -191,7 +190,7 @@ function ConnectedCall({ pair, still }) {
           className="world-call-label"
           textAnchor="middle"
           y="94"
-          fill="#c5ead5"
+          fill="currentColor"
           fontSize="24"
           fontWeight="500"
         >
@@ -255,7 +254,7 @@ function PairScene({ layer, prefix, still }) {
               className="world-crossing-clearance"
               d={arm.path}
               fill="none"
-              stroke="var(--page)"
+              stroke="var(--map-surface)"
               strokeWidth={BAND_WIDTH + 12}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -352,14 +351,6 @@ const Scene = memo(function Scene({ prefix, svgRef }) {
     </svg>
   );
 });
-function illustratedRoute(seconds) {
-  const clock = (seconds + SCENE_PHASE_SECONDS) % NETWORK_LOOP_SECONDS;
-  return (
-    CONNECTION_PAIRS.findLast((pair) => pair.startAt <= clock) ||
-    CONNECTION_PAIRS.at(-1)
-  );
-}
-
 export function WorldNetwork() {
   const prefix = "network-" + useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const svgRef = useRef(null),
@@ -368,7 +359,6 @@ export function WorldNetwork() {
     [motionConsent, setMotionConsent] = useState(false),
     [inView, setInView] = useState(true),
     [pageVisible, setPageVisible] = useState(true);
-  const [route, setRoute] = useState(() => illustratedRoute(0));
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     const change = () => {
@@ -399,19 +389,7 @@ export function WorldNetwork() {
     const svg = svgRef.current;
     if (paused || !inView || !pageVisible) svg?.pauseAnimations?.();
     else svg?.unpauseAnimations?.();
-    if (
-      !motionConsent &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    ) {
-      setRoute(illustratedRoute(0));
-      return;
-    }
-    if (paused || !inView || !pageVisible || !svg?.getCurrentTime) return;
-    const update = () => setRoute(illustratedRoute(svg.getCurrentTime()));
-    update();
-    const timer = setInterval(update, 400);
-    return () => clearInterval(timer);
-  }, [paused, motionConsent, inView, pageVisible]);
+  }, [paused, inView, pageVisible]);
   return (
     <div
       className="world-network"
@@ -419,41 +397,19 @@ export function WorldNetwork() {
       data-paused={paused}
       data-motion-consent={motionConsent}
     >
-      <div className="world-map-plane">
-        <Scene prefix={prefix} svgRef={svgRef} />
-      </div>
-      <div className="world-map-footer">
-        <div className="route-key">
-          <span>Newest route</span>
-          <div>
-            {route.arms.map((arm) => (
-              <span className="route-stop" key={arm.id}>
-                <i style={{ backgroundColor: arm.colour }} />
-                <span className="route-country-name">{arm.country.name}</span>
-                <abbr
-                  className="route-country-code"
-                  title={arm.country.name}
-                  aria-hidden="true"
-                >
-                  {arm.country.code}
-                </abbr>
-              </span>
-            ))}
-          </div>
-        </div>
-        <IconBtn
-          label={
-            paused ? "Play connection animation" : "Pause connection animation"
-          }
-          name={paused ? "play" : "pause"}
-          onClick={() => {
-            setMotionConsent(true);
-            setPaused((value) => !value);
-          }}
-          aria-pressed={paused}
-          className="world-motion-control"
-        />
-      </div>
+      <Scene prefix={prefix} svgRef={svgRef} />
+      <IconBtn
+        label={
+          paused ? "Play connection animation" : "Pause connection animation"
+        }
+        name={paused ? "play" : "pause"}
+        onClick={() => {
+          setMotionConsent(true);
+          setPaused((value) => !value);
+        }}
+        aria-pressed={paused}
+        className="world-motion-control"
+      />
     </div>
   );
 }
