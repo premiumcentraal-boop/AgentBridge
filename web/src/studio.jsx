@@ -1539,7 +1539,9 @@ function Connection({ integration, checking, check, isDemo }) {
                 ? "Connected"
                 : integration.status === "error"
                   ? "Needs attention"
-                  : "Not connected"}
+                  : integration.status === "needs_setup"
+                    ? "Setup needed"
+                    : "Not connected"}
             </Pill>
           </div>
           <div className="backend-symbol">
