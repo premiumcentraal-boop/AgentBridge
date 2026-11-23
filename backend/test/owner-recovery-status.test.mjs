@@ -69,16 +69,16 @@ test('failed without matching audit and duplicate audit fail closed',async t=>{
   assert.equal((await response.json()).error.code,'RECOVERY_EVIDENCE_UNAVAILABLE');
 });
 
-test('completed reservation requires durable carrier reconciliation evidence',async t=>{
+test('completed reservation remains ambiguous despite persisted carrier reconciliation',async t=>{
   const {env,DB,id}=await reservation(t);
   DB.raw.prepare("UPDATE reservations SET status='completed',completed_at=? WHERE id=?").run(T0+15,id);
   assert.equal((await (await read(env,id)).json()).recovery,'ambiguous');
   DB.raw.prepare('INSERT INTO reservation_carrier_legs (reservation_id,provider_segment_id,claimed_at,reconciled_at,actual_cost_cents) VALUES (?,?,?,?,?)')
     .run(id,'48313c74-b321-4c08-a3ea-7123449130ab',T0,T0+15,3);
-  assert.equal((await (await read(env,id)).json()).recovery,'verified_carrier_completion');
+  assert.equal((await (await read(env,id)).json()).recovery,'ambiguous');
 });
 
-test('completed status rejects missing reconciliation and accepts zero-cost finality',async t=>{
+test('completed status never treats zero-cost snapshot as carrier billing finality',async t=>{
   const {env,DB,id}=await reservation(t);
   DB.raw.prepare("UPDATE reservations SET status='completed',completed_at=? WHERE id=?").run(T0+15,id);
   const segment='48313c74-b321-4c08-a3ea-7123449130ab';
@@ -87,7 +87,7 @@ test('completed status rejects missing reconciliation and accepts zero-cost fina
   assert.equal((await (await read(env,id)).json()).recovery,'ambiguous');
   assert.throws(()=>DB.raw.prepare('UPDATE reservation_carrier_legs SET actual_cost_cents=-1 WHERE reservation_id=?').run(id),/CHECK constraint/);
   DB.raw.prepare('UPDATE reservation_carrier_legs SET reconciled_at=?,actual_cost_cents=? WHERE reservation_id=?').run(T0+15,0,id);
-  assert.equal((await (await read(env,id)).json()).recovery,'verified_carrier_completion');
+  assert.equal((await (await read(env,id)).json()).recovery,'ambiguous');
   assert.throws(()=>DB.raw.prepare('INSERT INTO reservation_carrier_legs (reservation_id,provider_segment_id,claimed_at,reconciled_at,actual_cost_cents) VALUES (?,?,?,?,?)')
     .run(id,'58313c74-b321-4c08-a3ea-7123449130ab',T0,T0+15,0),/UNIQUE constraint/);
   assert.equal(DB.raw.prepare('SELECT COUNT(*) AS n FROM reservation_carrier_legs WHERE reservation_id=?').get(id).n,1);
