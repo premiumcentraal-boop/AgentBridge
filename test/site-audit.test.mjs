@@ -78,7 +78,10 @@ test('the marketing entry reflects public email signup readiness without loading
     assert.match(page.headers.get('content-security-policy'), /connect-src 'none'/);
     if (mailReady) {
       const samplePath = html.match(/src="([^"]+\.mp3)"/)[1];
-      const audio = await fetch(origin + samplePath, {headers:{Range:'bytes=0-1'}});
+      // GitHub Pages prefixes asset links. The Node fixture serves dist at /.
+      const base = (process.env.BASE_PATH || '').replace(/\/+$/, '');
+      assert.ok(samplePath.startsWith(base + '/assets/'));
+      const audio = await fetch(origin + samplePath.slice(base.length), {headers:{Range:'bytes=0-1'}});
       assert.equal(audio.status, 206);
       assert.equal(audio.headers.get('content-type'), 'audio/mpeg');
       assert.match(audio.headers.get('content-range'), /^bytes 0-1\/\d+$/);
