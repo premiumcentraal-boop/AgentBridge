@@ -489,7 +489,8 @@ test("public navigation keeps a native top-level studio link across the CSP boun
     false,
   );
   t.after(() => dom.window.close());
-  await pause(150);
+  // The portable fixture renders a static shell before React mounts.
+  await waitFor(() => document.title === "AgentBridge — Connect agents worldwide");
   const studio = document.querySelector('.public-header a[href="/studio/"]');
   assert.equal(studio.target, "_top");
   let prevented;
