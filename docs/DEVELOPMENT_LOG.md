@@ -571,3 +571,26 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Tightened fail-closed pagination validation: only absent or explicit null `links.next` is terminal; false, zero and object cursors no longer bypass the pagination guard.
 - Added offline regression inputs for these malformed cursor shapes. A non-null cursor remains untrusted and never triggers a follow-up fetch or unlock.
 - Previous exact-head `f432ae2` Quality gate #43359731037 passed before this change. New commits require exact-head CI. Real SignalWire response semantics and D1 validation remain manual release gates; no calls, routing activation, deployment or merges.
+
+## 2026-11-21 — Partial SignalWire inventory cannot confirm assigned DID (unmerged PR)
+- The read-only `listMyNumbers` producer previously returned `project_inventory_match` when the assigned DID appeared on a provider page even if `links.next` indicated more pages. This overstated inventory completeness and could mislead Studio's downstream readiness indicator.
+- A partial page now returns `incomplete_inventory` and no confirmed number, even when the assigned voice DID appears on that page. Added a regression for the matching-DID-plus-continuation case. No provider pagination is followed, and no routing, purchases or credentials are changed.
+- Exact-head CI, independent provider-contract review and real SignalWire semantics remain unverified at commit time. This change is proposed only; no merge, calls or deployment.
+
+## 2026-11-21 — Malformed falsey DID inventory continuation guard (draft PR #70)
+- Review of the previous pagination guard found that Boolean(links.next) accepted false, zero and empty-string continuation values as terminal, allowing a matching DID to be reported as confirmed on malformed provider pagination metadata.
+- Treat any present non-null continuation value as incomplete and withhold the confirmed DID; add offline regression inputs for false, zero and empty-string cursors. This is a conservative read-only validation change, not a proof of actual SignalWire pagination semantics.
+- Exact-head CI and independent review required; no live calls, paid routing, provider changes, merges or deployments.
+
+## 2026-11-21 — Ambiguous SignalWire number pagination (draft PR #70)
+- Read-only `listMyNumbers` now withholds `project_inventory_match` when `links` or its explicit `next` field is missing, or when the response fills the requested 10-entry page. Explicit `next:null` with fewer than 10 entries remains the offline terminal fixture.
+- Added negative offline cases for absent/null/partial metadata and full-page truncation, plus a positive explicit-terminal control. No provider calls, paid routing, purchases or deployment.
+- Provider pagination semantics and exact-head CI still require independent verification; a matching inventory record does not prove carrier ownership. This PR remains unmerged pending human review.
+
+### 2026-11-23 — Fail closed on ambiguous filtered DID inventory (pending review)
+Extended PR #70 after issue #73 identified duplicate and unrelated records falsely confirming a SignalWire project DID. `listMyNumbers` now requires exactly one exact, voice-capable record on an explicitly terminal, non-full page; ambiguous rows yield `incomplete_inventory`, no numbers and no routing. Added offline regression fixtures for duplicates, mixed DIDs, malformed rows and SMS-only responses. This is read-only provider inspection; not proof of carrier ownership, live calling or verified SignalWire response contracts. Source changes are committed but tests, exact-head CI and real provider schema verification remain pending. No merge, deployment or chargeable routing authorized.
+
+## 2026-11-23 — PR #70 stdio MCP mixed-inventory regression repair (pending)
+- Exact-head GitHub Actions Quality gate #45184465863 on `6e947a0f` failed in `npm --prefix local-mcp test` (12/13 passed); root `npm run ci`, secret scan, and Railway image jobs passed. The stdio fixture returned three project DIDs for a filtered assigned-DID request, yet asserted `project_inventory_match`.
+- Updated `local-mcp/test/local-mcp.test.mjs` to assert `incomplete_inventory`, an empty confirmed-number list, and disabled purchase/routing for that mixed inventory. This preserves the security behavior rather than weakening the production filter to satisfy an outdated expectation.
+- New commit requires exact-head CI and actual Worker `/mcp` to Studio inspector fixture verification; no local tests could run because GitHub clone DNS resolution failed. No carrier calls, purchases, secrets, merges, deployments or paid routing.

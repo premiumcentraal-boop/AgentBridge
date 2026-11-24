@@ -56,11 +56,7 @@ test('owned-number lookup requests only the assigned DID, returns no other proje
   const seen=[];
   const fake=async(url,opts)=>{
     seen.push({url,opts});
-    return response({data:[
-      {number:DID,capabilities:['voice','sms']},
-      {number:'+12025550124',capabilities:['voice']},
-      {number:DID,capabilities:['sms']}
-    ],links:{next:null}});
+    return response({data:[{number:DID,capabilities:['voice','sms']}],links:{next:null}});
   };
   const result=await listMyNumbers(account,base,fake);
   assert.equal(result.status,200);
@@ -95,6 +91,72 @@ test('owned-number lookup never confuses missing, partial or SMS-only results wi
   }));
   assert.equal(partial.body.state,'incomplete_inventory');
   assert.deepEqual(partial.body.numbers,[]);
+});
+
+test('ambiguous filtered provider inventory never confirms DID ownership',async()=>{
+  const valid={number:DID,capabilities:['voice']};
+  for(const data of [
+    [valid,valid],
+    [valid,{number:'+12025550124',capabilities:['voice']}],
+    [{number:'+12025550124',capabilities:['voice']}],
+    [valid,{number:DID,capabilities:['sms']}],
+    [null,valid]
+  ]){
+    const result=await listMyNumbers(account,base,async()=>response({data,links:{next:null}}));
+    assert.equal(result.status,200);
+    assert.equal(result.body.state,'incomplete_inventory');
+    assert.deepEqual(result.body.numbers,[]);
+    assert.equal(result.body.routing_enabled,false);
+    assert.ok(!JSON.stringify(result).includes(SECRET));
+  }
+  const sms=await listMyNumbers(account,base,async()=>response({
+    data:[{number:DID,capabilities:['sms']}],links:{next:null}
+  }));
+  assert.equal(sms.body.state,'not_confirmed');
+});
+
+test('matching DID on a partial provider page remains unconfirmed',async()=>{
+  const result=await listMyNumbers(account,base,async()=>response({
+    data:[{number:DID,capabilities:['voice']}],links:{next:'page-2'}
+  }));
+  assert.equal(result.status,200);
+  assert.equal(result.body.state,'incomplete_inventory');
+  assert.deepEqual(result.body.numbers,[]);
+  assert.equal(result.body.routing_enabled,false);
+});
+
+test('malformed falsey continuation cursors cannot confirm an assigned DID',async()=>{
+  for(const next of [false,0,'']){
+    const result=await listMyNumbers(account,base,async()=>response({
+      data:[{number:DID,capabilities:['voice']}],links:{next}
+    }));
+    assert.equal(result.status,200);
+    assert.equal(result.body.state,'incomplete_inventory');
+    assert.deepEqual(result.body.numbers,[]);
+    assert.equal(result.body.routing_enabled,false);
+  }
+});
+
+test('missing or ambiguous pagination metadata cannot confirm owned DID',async()=>{
+  const owned={number:DID,capabilities:['voice']};
+  const cases=[
+    {data:[owned]},
+    {data:[owned],links:{}},
+    {data:[owned],links:null},
+    {data:[owned],links:{self:'first'}},
+    {data:[owned,...Array.from({length:9},(_,i)=>({number:'+12025550'+String(200+i),capabilities:['voice']}))],links:{next:null}}
+  ];
+  for(const payload of cases){
+    const result=await listMyNumbers(account,base,async()=>response(payload));
+    assert.equal(result.status,200);
+    assert.equal(result.body.state,'incomplete_inventory');
+    assert.deepEqual(result.body.numbers,[]);
+    assert.equal(result.body.routing_enabled,false);
+  }
+  const complete=await listMyNumbers(account,base,async()=>response({
+    data:[owned],links:{next:null}
+  }));
+  assert.equal(complete.body.state,'project_inventory_match');
 });
 
 test('provider searches are read-only, bounded to five local voice candidates and never show prices',async()=>{

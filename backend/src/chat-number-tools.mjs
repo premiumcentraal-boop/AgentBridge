@@ -89,17 +89,35 @@ export async function listMyNumbers(account,env,fetchImpl=fetch){
   try{
     payload=await readOnlyProvider('',{filter_number:account.did,page_size:10},env,fetchImpl);
   }catch{return unavailable();}
-  const matching=payload.data.some(n=>n&&n.number===account.did &&
-    Array.isArray(n.capabilities)&&n.capabilities.includes('voice'));
-  const incomplete=Boolean(payload.links?.next);
+  // A matching entry on a partial provider page is not complete evidence.
+  // Never present it as a confirmed project inventory match until the
+  // provider's full result set has been accounted for.
+  // Only an absent or null continuation is terminal; malformed falsey cursors
+  // must not be mistaken for evidence that the provider list is complete.
+  // Require explicit terminal pagination metadata. Missing links or next,
+  // and a full requested page, cannot establish an exhaustive inventory.
+  const links=payload.links;
+  const completeLinks=links!==null && typeof links==='object' &&
+    !Array.isArray(links) && Object.hasOwn(links,'next');
+  const incomplete=!completeLinks || links.next!==null || payload.data.length>=10;
+  // The filtered inventory must contain exactly one exact DID with voice.
+  // Duplicates, unrelated rows and malformed records make the provider
+  // response ambiguous; never promote them to a positive inventory match.
+  const uniqueExact=payload.data.length===1 &&
+    payload.data[0]?.number===account.did &&
+    Array.isArray(payload.data[0]?.capabilities) &&
+    payload.data[0].capabilities.includes('voice');
+  const ambiguous=!incomplete && payload.data.length>0 &&
+    (payload.data.length!==1 || payload.data[0]?.number!==account.did);
+  const matching=!incomplete && uniqueExact;
   return {status:200,body:{
     card_type:'owned_number',mode:'preview',provider:'SignalWire',
-    state:matching?'project_inventory_match':incomplete?'incomplete_inventory':'not_confirmed',
+    state:matching?'project_inventory_match':incomplete||ambiguous?'incomplete_inventory':'not_confirmed',
     numbers:matching?[{number:account.did,voice:true,
       ownership:'matched_in_operator_project',routing_enabled:false}]:[],
     purchase_enabled:false,routing_enabled:false,price_verified:false,
     next_step:matching?'The operator must separately verify the customer/provider relationship and secure inbound routing.':
-      incomplete?'The provider returned more results; ownership remains unconfirmed.':
+      incomplete||ambiguous?'The provider inventory was incomplete or ambiguous; ownership remains unconfirmed.':
         'Check the assigned number and the provider project; no ownership was established.',
     warning:'A matching provider Project inventory entry does not authenticate a Grok Bot call or activate forwarding.'
   }};
