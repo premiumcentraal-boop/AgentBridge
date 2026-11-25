@@ -571,3 +571,36 @@ GitHub Actions Quality gate run 42895716997 failed (123/124 Node tests passed) a
 - Tightened fail-closed pagination validation: only absent or explicit null `links.next` is terminal; false, zero and object cursors no longer bypass the pagination guard.
 - Added offline regression inputs for these malformed cursor shapes. A non-null cursor remains untrusted and never triggers a follow-up fetch or unlock.
 - Previous exact-head `f432ae2` Quality gate #43359731037 passed before this change. New commits require exact-head CI. Real SignalWire response semantics and D1 validation remain manual release gates; no calls, routing activation, deployment or merges.
+
+## 2026-11-22 — Cross-stage offline approval and ambiguous claim regression (draft PR #75)
+- Added a Worker+D1-stand-in regression combining independent owner approval, denied inbound, signed PIN challenge, wrong PIN, committed-but-response-lost claim, replay and new-inbound denial in one scenario (issue #74).
+- Asserted the connecting lock and single durable carrier-leg claim after the simulated D1 response failure. This is synthetic test coverage, not proof of production D1 semantics, carrier reconciliation, or real Grok compatibility.
+- Targeted test, full npm CI and exact-head GitHub Actions verification pending at commit time. No paid routing enabled, calls placed, carrier credentials used, merges or deployments.
+
+## 2026-11-22 — Offline lifecycle network isolation and forged-callback guard (draft PR #75)
+- Extended the Worker+D1 lifecycle regression to reject a forged SignalWire signature before owner approval and assert reservation state and leg count remain unchanged.
+- Installed a test-scoped global fetch trap so unexpected external carrier/network requests fail the synthetic scenario instead of escaping the harness.
+- These assertions are committed but not yet proven passing in local Node or exact-head GitHub Actions. They do not establish production D1 concurrency, real carrier finality or live Grok Bot compatibility. Paid routing remains default-deny; no calls, merges or deployments.
+
+## 2026-11-22 — Offline carrier-finality lifecycle increment (draft PR #75)
+- Extended the cross-stage Worker/D1-stand-in test with owner-only read-only Voice Logs reconciliation after a synthetic connecting claim: provider 503 and contradictory duplicate outbound children must retain the lock and reject new reservations; exact terminal inbound/outbound evidence can finalize once, persist synthetic charge, and reject repeat finalization.
+- All network calls are intercepted by a synthetic SignalWire-only GET mock; no real provider resources or credentials are used. This is a committed regression, not a claim of successful tests or production D1/provider semantics. Exact-head CI required; no calls, payments, routing activation, merges or deployment.
+
+## 2026-11-22 — Offline carrier reconciliation negative-path expansion (draft PR #75)
+- Expanded the synthetic owner force-unlock lifecycle regression to cover provider HTTP 401, HTTP 429 with Retry-After, and a successful carrier response missing the outbound child leg, alongside existing 503 and contradictory duplicate-child evidence.
+- Each negative case must retain `connecting`, preserve exactly one carrier-leg claim, avoid owner-action finality writes, and reject a new reservation. The verified terminal-evidence case still requires one completion and idempotent denial of a second finalization.
+- Commit is pending exact-head CI; no local Node tests were executed in this run. This is mocked GET-only provider evidence, not production provider-contract or D1-concurrency validation. Paid routing stays default-deny; no calls, merges or deployments.
+
+## 2026-11-22 — Owner authorization before carrier reconciliation (draft PR #75, unmerged)
+- Added an offline cross-stage assertion that a forged owner token cannot invoke the force-unlock reconciliation endpoint, cannot read SignalWire Voice Logs, cannot record an owner finalization and cannot release the connecting reservation. This closes an explicit authorization-test gap in the existing synthetic carrier-finality fixture; no routing behavior or production settings changed.
+- Prior commit `9cd7716` passed GitHub Actions Quality gate run 45033183963. This new assertion requires fresh exact-head CI and does not establish production D1 isolation, provider contract fidelity or actual carrier authorization. No calls, purchases, payments, routing activation, merge or deployment.
+
+## 2026-11-22 — Offline two-account reservation isolation (draft PR #75)
+- Added a shared-SQLite/D1-stand-in regression creating two active accounts with distinct API tokens and assigned US DIDs. Each account is verified unable to read or cancel the other account's active reservation; independent owner approval of the first leaves the second ready and neither emits a carrier leg.
+- The test uses synthetic configuration and rejects unexpected external fetch calls. This covers REST account-token isolation, **not** account-scoped owner credentials, cross-isolate D1 concurrency, real carrier callbacks, or Grok Bot compatibility.
+- Exact-head GitHub Actions and targeted test execution are required before acceptance. No paid routing, real calls, merge, or deployment authorized.
+
+
+## 2026-11-22 — Shared-key cross-account idempotency isolation (draft PR #75)
+- Strengthened the two-account Worker/D1-stand-in regression so both accounts deliberately submit the *same* idempotency key. Asserted distinct account-owned reservations, independent same-key retries returning the correct original reservation, exactly two durable rows, and existing cross-account read/cancel denial.
+- This is a committed offline regression, not proof of passing execution or production D1 concurrency. Owner approval remains a global operator-token boundary in this prototype; per-customer owner authorization is not established. Exact-head Node tests and CI required. No carrier actions, purchases, routing activation, merges or deployments.
